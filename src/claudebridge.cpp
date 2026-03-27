@@ -19,7 +19,19 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
 
 void ClaudeBridge::sendMessage(const QString &text) {
     if (text.trimmed().isEmpty()) return;
-    m_claude->send(text.trimmed(), m_cwd, m_sessionId);
+    m_claude->send(text.trimmed(), m_cwd, m_sessionId, m_model, m_yolo);
+}
+
+void ClaudeBridge::setModel(const QString &model) {
+    if (m_model == model) return;
+    m_model = model;
+    emit modelChanged(model);
+}
+
+void ClaudeBridge::setYolo(bool enabled) {
+    if (m_yolo == enabled) return;
+    m_yolo = enabled;
+    emit yoloChanged(enabled);
 }
 
 void ClaudeBridge::abort() {

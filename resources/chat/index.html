@@ -3,535 +3,565 @@
 <head>
   <meta charset="UTF-8">
   <title>Claudian Qt</title>
+  <link rel="stylesheet" href="qrc:///chat/claudian.css">
   <style>
+    /* ── Obsidian variable substitutes (dark theme) ──────────────── */
+    :root {
+      --font-text:                    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-monospace:               "SF Mono", "Fira Code", "Consolas", monospace;
+      --text-normal:                  #dcddde;
+      --text-muted:                   #999;
+      --text-faint:                   #666;
+      --text-accent:                  #D97757;
+      --text-error:                   #ff453a;
+      --background-primary:           #1c1c1e;
+      --background-secondary:         #2c2c2e;
+      --background-secondary-alt:     #3a3a3c;
+      --background-modifier-border:       #48484a;
+      --background-modifier-border-hover: #6e6e73;
+      --background-modifier-hover:    rgba(255,255,255,0.06);
+      --interactive-accent:           #D97757;
+      --interactive-accent-hover:     rgba(217,119,87,0.18);
+      --color-green:   #30d158;
+      --color-red:     #ff453a;
+      --color-yellow:  #ffd60a;
+      --color-orange:  #ff9f0a;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg:          #1c1c1e;
-      --bg2:         #2c2c2e;
-      --bg3:         #3a3a3c;
-      --text:        #f2f2f7;
-      --text-muted:  #8e8e93;
-      --accent:      #0a84ff;
-      --green:       #30d158;
-      --red:         #ff453a;
-      --border:      #48484a;
-      --radius:      14px;
-      --font:        -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --mono:        "SF Mono", "Fira Code", "Consolas", monospace;
-    }
-
     body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      background: var(--background-primary);
+      color: var(--text-normal);
+      font-family: var(--font-text);
       font-size: 14px;
+      height: 100vh;
+      overflow: hidden;
     }
 
-    /* ── Header ──────────────────────────────────────────────── */
-    #header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
-      background: var(--bg2);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-      min-height: 42px;
+    /* ── Container fills full viewport ──────────────────────────── */
+    .claudian-container {
+      height: 100vh;
     }
 
-    #header .folder-icon { color: var(--text-muted); flex-shrink: 0; }
+    /* ── Header ──────────────────────────────────────────────────── */
+    .claudian-header {
+      background: var(--background-secondary);
+      border-bottom: 1px solid var(--background-modifier-border);
+      padding: 10px 14px;
+    }
 
     #cwd-label {
-      flex: 1;
-      font-family: var(--mono);
+      font-family: var(--font-monospace);
       font-size: 11px;
       color: var(--text-muted);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      flex: 1;
     }
 
-    #pick-btn {
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      color: var(--text);
+    .pick-btn {
+      background: var(--background-secondary-alt);
+      border: 1px solid var(--background-modifier-border);
+      color: var(--text-normal);
       cursor: pointer;
       padding: 4px 10px;
-      border-radius: 7px;
+      border-radius: 6px;
       font-size: 12px;
-      font-family: var(--font);
+      font-family: var(--font-text);
       white-space: nowrap;
       flex-shrink: 0;
     }
-    #pick-btn:hover { background: var(--border); }
+    .pick-btn:hover { background: var(--background-modifier-hover); }
 
-    /* ── Messages ────────────────────────────────────────────── */
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
+    /* ── Tab content fills remaining height ─────────────────────── */
+    .claudian-tab-content { flex: 1; min-height: 0; }
 
-    /* ── Empty state ─────────────────────────────────────────── */
-    #empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
+    /* ── Messages side padding ───────────────────────────────────── */
+    .claudian-messages { padding: 12px 14px; }
+
+    /* ── Welcome state ───────────────────────────────────────────── */
+    .claudian-welcome-sub {
+      font-size: 13px;
       color: var(--text-muted);
-      pointer-events: none;
-      text-align: center;
+      line-height: 1.5;
+      margin-top: 6px;
     }
-    #empty-state svg { opacity: 0.4; }
-    #empty-state .title   { font-size: 17px; font-weight: 600; color: var(--text); }
-    #empty-state .sub     { font-size: 13px; line-height: 1.5; }
-    #empty-state .hint    { font-size: 12px; font-family: var(--mono);
-                            background: var(--bg2); padding: 4px 10px;
-                            border-radius: 6px; margin-top: 4px; }
-
-    /* ── Message rows ────────────────────────────────────────── */
-    .msg-row { display: flex; flex-direction: column; gap: 6px; }
-    .msg-row.user      { align-items: flex-end; }
-    .msg-row.assistant { align-items: flex-start; }
-
-    /* ── Bubbles ─────────────────────────────────────────────── */
-    .bubble {
-      max-width: 72%;
-      padding: 10px 14px;
-      border-radius: var(--radius);
-      line-height: 1.55;
-      white-space: pre-wrap;
-      word-break: break-word;
+    .claudian-welcome-hint {
+      font-size: 12px;
+      font-family: var(--font-monospace);
+      background: var(--background-secondary);
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-top: 10px;
+      color: var(--text-muted);
     }
 
-    .msg-row.user .bubble {
-      background: var(--accent);
-      color: #fff;
-      border-bottom-right-radius: 4px;
-    }
-    .msg-row.assistant .bubble {
-      background: var(--bg2);
-      border-bottom-left-radius: 4px;
-    }
-
-    /* ── Typing indicator ────────────────────────────────────── */
-    .typing {
+    /* ── Typing indicator ────────────────────────────────────────── */
+    .claudian-typing {
       display: flex;
       gap: 5px;
       align-items: center;
-      padding: 12px 16px;
-      background: var(--bg2);
-      border-radius: var(--radius);
-      border-bottom-left-radius: 4px;
-      width: fit-content;
+      padding: 8px 0;
     }
-    .typing-dot {
+    .claudian-typing-dot {
       width: 7px; height: 7px;
       background: var(--text-muted);
       border-radius: 50%;
       animation: bounce 1.2s infinite ease-in-out;
     }
-    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    .claudian-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .claudian-typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes bounce {
       0%, 60%, 100% { transform: translateY(0);    opacity: 0.35; }
       30%            { transform: translateY(-5px); opacity: 1;    }
     }
 
-    /* ── Tool call block ─────────────────────────────────────── */
-    .tool-block {
-      max-width: 72%;
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--green);
-      border-radius: 8px;
-      overflow: hidden;
-      font-size: 12px;
-    }
-
-    .tool-header {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 7px 10px;
-      cursor: pointer;
-      user-select: none;
-    }
-    .tool-header:hover { background: rgba(255,255,255,0.04); }
-
-    .tool-spinner {
-      width: 8px; height: 8px;
-      border: 2px solid var(--green);
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      flex-shrink: 0;
-    }
-    .tool-spinner.done { animation: none; border-color: var(--green); border-top-color: var(--green); background: var(--green); }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .tool-name { color: var(--green); font-family: var(--mono); font-weight: 600; }
-
-    .tool-chevron {
-      margin-left: auto;
-      color: var(--text-muted);
-      font-size: 14px;
-      transition: transform 0.18s;
-      line-height: 1;
-    }
-    .tool-block.open .tool-chevron { transform: rotate(90deg); }
-
-    .tool-body {
-      display: none;
-      padding: 8px 10px;
-      border-top: 1px solid var(--border);
-    }
-    .tool-block.open .tool-body { display: block; }
-
-    .tool-body pre {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--text-muted);
-      white-space: pre-wrap;
-      word-break: break-all;
-      line-height: 1.5;
-    }
-
-    /* ── Error ───────────────────────────────────────────────── */
-    .error-msg {
+    /* ── Error message ───────────────────────────────────────────── */
+    .claudian-error-msg {
       padding: 9px 13px;
       background: rgba(255, 69, 58, 0.12);
-      border: 1px solid var(--red);
+      border: 1px solid var(--color-red);
       border-radius: 8px;
-      color: var(--red);
+      color: var(--color-red);
       font-size: 13px;
-      max-width: 72%;
     }
 
-    /* ── Input area ──────────────────────────────────────────── */
-    #input-area {
-      padding: 12px 14px;
-      background: var(--bg2);
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
+    /* ── Input outer padding ─────────────────────────────────────── */
+    .claudian-input-outer {
+      padding: 0 14px 14px 14px;
       flex-shrink: 0;
     }
 
-    #input {
-      flex: 1;
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 14px;
-      line-height: 1.45;
-      padding: 10px 13px;
-      resize: none;
-      outline: none;
-      min-height: 42px;
-      max-height: 160px;
-      overflow-y: auto;
+    /* Override min-height: Claudian's default is sized for context row */
+    .claudian-input-wrapper {
+      min-height: 100px;
     }
-    #input:focus { border-color: var(--accent); }
-    #input::placeholder { color: var(--text-muted); }
-    #input:disabled { opacity: 0.5; }
 
-    #send-btn {
-      width: 42px; height: 42px;
-      background: var(--accent);
+    .claudian-input:disabled { opacity: 0.5; }
+
+    /* Focus ring on wrapper instead of textarea */
+    .claudian-input-wrapper:focus-within {
+      border-color: var(--interactive-accent);
+    }
+
+    /* ── Send / Abort button ─────────────────────────────────────── */
+    .claudian-send-btn {
+      width: 32px; height: 32px;
+      background: var(--interactive-accent);
       border: none;
-      border-radius: 10px;
+      border-radius: 6px;
       color: #fff;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      margin-left: auto;
       transition: opacity 0.15s, background 0.15s;
     }
-    #send-btn:hover:not(:disabled) { opacity: 0.85; }
-    #send-btn:disabled { background: var(--bg3); cursor: not-allowed; }
-    #send-btn svg { pointer-events: none; }
+    .claudian-send-btn:hover:not(:disabled) { opacity: 0.85; }
+    .claudian-send-btn:disabled { background: var(--background-secondary-alt); cursor: not-allowed; opacity: 1; }
+    .claudian-send-btn.abort { background: var(--color-red); }
+    .claudian-send-btn svg { pointer-events: none; }
 
-    /* Abort button shown while streaming */
-    #send-btn.abort { background: var(--red); }
-
-    /* ── Scrollbar ───────────────────────────────────────────── */
+    /* ── Scrollbar ───────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: var(--background-modifier-border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--background-modifier-border-hover); }
   </style>
 </head>
 <body>
 
-  <!-- Header -->
-  <div id="header">
-    <svg class="folder-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-    </svg>
-    <span id="cwd-label">~/</span>
-    <button id="pick-btn">Open Folder</button>
-  </div>
+<div class="claudian-container">
 
-  <!-- Messages -->
-  <div id="messages">
-    <div id="empty-state">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-        <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <div class="claudian-header">
+    <div class="claudian-title-slot">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+           style="color:var(--text-muted);flex-shrink:0">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
       </svg>
-      <div class="title">Claudian Qt</div>
-      <div class="sub">Claude Code running in your Qt app.<br>Open a folder and start chatting.</div>
-      <div class="hint">Ctrl+Enter to send</div>
+      <span id="cwd-label">~/</span>
+    </div>
+    <div class="claudian-header-actions">
+      <button class="pick-btn" id="pick-btn">Open Folder</button>
     </div>
   </div>
 
-  <!-- Input -->
-  <div id="input-area">
-    <textarea id="input" placeholder="Message Claude… (Ctrl+Enter to send)" rows="1" disabled></textarea>
-    <button id="send-btn" disabled title="Send (Ctrl+Enter)">
-      <!-- Send icon -->
-      <svg id="icon-send" width="18" height="18" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="22" y1="2" x2="11" y2="13"/>
-        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-      </svg>
-      <!-- Stop icon (shown while streaming) -->
-      <svg id="icon-stop" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"
-           style="display:none">
-        <rect x="4" y="4" width="16" height="16" rx="2"/>
-      </svg>
-    </button>
+  <!-- ── Messages ───────────────────────────────────────────────── -->
+  <div class="claudian-tab-content">
+    <div class="claudian-messages-wrapper">
+      <div class="claudian-messages" id="messages">
+        <div class="claudian-welcome" id="welcome">
+          <div class="claudian-welcome-greeting">How can I help?</div>
+          <div class="claudian-welcome-sub">Open a folder and start chatting with Claude Code.</div>
+          <div class="claudian-welcome-hint">Ctrl+Enter to send</div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-  <script>
-    // ── State ─────────────────────────────────────────────────────
-    let bridge       = null;
-    let streaming    = false;
-    let currentRow   = null;  // assistant row being built
-    let currentBubble = null; // text bubble inside currentRow
+  <!-- ── Input ──────────────────────────────────────────────────── -->
+  <div class="claudian-input-outer">
+    <div class="claudian-input-container">
+      <div class="claudian-input-wrapper" id="input-wrapper">
+        <textarea class="claudian-input" id="input"
+                  placeholder="Message Claude… (Ctrl+Enter to send)"
+                  rows="1" disabled></textarea>
+        <div class="claudian-input-toolbar">
 
-    // ── DOM refs ──────────────────────────────────────────────────
-    const messagesEl = document.getElementById('messages');
-    const emptyState = document.getElementById('empty-state');
-    const inputEl    = document.getElementById('input');
-    const sendBtn    = document.getElementById('send-btn');
-    const cwdLabel   = document.getElementById('cwd-label');
-    const iconSend   = document.getElementById('icon-send');
-    const iconStop   = document.getElementById('icon-stop');
+          <!-- Model selector -->
+          <div class="claudian-model-selector" id="model-selector">
+            <div class="claudian-model-btn ready" id="model-btn">
+              <span class="claudian-model-label" id="model-label">sonnet</span>
+              <span class="claudian-model-chevron">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+            </div>
+            <div class="claudian-model-dropdown">
+              <div class="claudian-model-option selected" data-model="">sonnet 4.6</div>
+              <div class="claudian-model-option" data-model="claude-opus-4-5">opus 4.5</div>
+              <div class="claudian-model-option" data-model="claude-haiku-4-5-20251001">haiku 4.5</div>
+            </div>
+          </div>
 
-    // ── Helpers ───────────────────────────────────────────────────
-    function esc(s) {
-      return String(s)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
+          <!-- YOLO toggle -->
+          <div class="claudian-permission-toggle" id="yolo-toggle" title="YOLO mode: skip all permission prompts">
+            <span class="claudian-permission-label" id="yolo-label">yolo</span>
+            <div class="claudian-toggle-switch" id="yolo-switch"></div>
+          </div>
 
-    function scrollBottom() {
-      messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
-    }
+          <!-- Send / Abort -->
+          <button class="claudian-send-btn" id="send-btn" disabled title="Send (Ctrl+Enter)">
+            <svg id="icon-send" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            <svg id="icon-stop" width="14" height="14" viewBox="0 0 24 24"
+                 fill="currentColor" style="display:none">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
+          </button>
 
-    function hideEmpty() {
-      if (emptyState.parentNode) emptyState.remove();
-    }
+        </div>
+      </div>
+    </div>
+  </div>
 
-    function setStreaming(on) {
-      streaming = on;
-      inputEl.disabled = on;
-      sendBtn.disabled = !on && !inputEl.value.trim();
-      sendBtn.classList.toggle('abort', on);
-      iconSend.style.display = on ? 'none' : '';
-      iconStop.style.display = on ? ''     : 'none';
-      sendBtn.title = on ? 'Stop (Esc)' : 'Send (Ctrl+Enter)';
-      if (!on) inputEl.focus();
-    }
+</div>
 
-    // ── User bubble ───────────────────────────────────────────────
-    function appendUserBubble(text) {
-      hideEmpty();
-      const row = document.createElement('div');
-      row.className = 'msg-row user';
-      const b = document.createElement('div');
-      b.className = 'bubble';
-      b.textContent = text;
-      row.appendChild(b);
-      messagesEl.appendChild(row);
-      scrollBottom();
-    }
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+  // ── State ────────────────────────────────────────────────────────
+  let bridge        = null;
+  let streaming     = false;
+  let currentMsg    = null;  // current assistant .claudian-message div
+  let currentContent = null; // .claudian-message-content inside it
+  let currentText   = '';    // accumulated raw text for the current turn
 
-    // ── Begin assistant turn ──────────────────────────────────────
-    function beginAssistantTurn() {
-      hideEmpty();
-      currentRow    = document.createElement('div');
-      currentRow.className = 'msg-row assistant';
-      currentBubble = null;
+  // ── DOM refs ─────────────────────────────────────────────────────
+  const messagesEl = document.getElementById('messages');
+  const welcome    = document.getElementById('welcome');
+  const inputEl    = document.getElementById('input');
+  const sendBtn    = document.getElementById('send-btn');
+  const cwdLabel   = document.getElementById('cwd-label');
+  const iconSend   = document.getElementById('icon-send');
+  const iconStop   = document.getElementById('icon-stop');
 
-      // Typing indicator until first content arrives
-      const typing  = document.createElement('div');
-      typing.className = 'typing';
-      typing.id = 'typing-indicator';
-      typing.innerHTML =
-        '<div class="typing-dot"></div>' +
-        '<div class="typing-dot"></div>' +
-        '<div class="typing-dot"></div>';
-      currentRow.appendChild(typing);
-      messagesEl.appendChild(currentRow);
-      scrollBottom();
-    }
+  // ── Simple markdown renderer ──────────────────────────────────────
+  function renderMarkdown(text) {
+    // Escape HTML first, then re-apply markdown
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    function removeTyping() {
-      const t = document.getElementById('typing-indicator');
-      if (t) t.remove();
-    }
-
-    function ensureBubble() {
-      if (currentBubble) return;
-      removeTyping();
-      currentBubble = document.createElement('div');
-      currentBubble.className = 'bubble';
-      // Insert before any tool blocks
-      currentRow.insertBefore(currentBubble, currentRow.firstChild);
-    }
-
-    // ── Signal handlers (called from C++ via QWebChannel) ─────────
-    function onTextReady(text) {
-      if (!currentRow) beginAssistantTurn();
-      ensureBubble();
-      currentBubble.textContent += text;
-      scrollBottom();
-    }
-
-    function onToolUse(name, inputJson) {
-      if (!currentRow) beginAssistantTurn();
-      removeTyping();
-
-      let formatted = inputJson;
-      try { formatted = JSON.stringify(JSON.parse(inputJson), null, 2); } catch (_) {}
-
-      const block = document.createElement('div');
-      block.className = 'tool-block';
-      block.innerHTML =
-        '<div class="tool-header">' +
-          '<div class="tool-spinner"></div>' +
-          '<span class="tool-name">' + esc(name) + '</span>' +
-          '<span class="tool-chevron">›</span>' +
-        '</div>' +
-        '<div class="tool-body"><pre>' + esc(formatted) + '</pre></div>';
-
-      block.querySelector('.tool-header').addEventListener('click', () => {
-        block.classList.toggle('open');
-      });
-
-      currentRow.appendChild(block);
-      scrollBottom();
-    }
-
-    function onTurnComplete() {
-      removeTyping();
-      if (currentRow) {
-        currentRow.querySelectorAll('.tool-spinner').forEach(s => s.classList.add('done'));
-      }
-      currentRow    = null;
-      currentBubble = null;
-      setStreaming(false);
-    }
-
-    function onErrorOccurred(msg) {
-      removeTyping();
-      currentRow    = null;
-      currentBubble = null;
-
-      hideEmpty();
-      const err = document.createElement('div');
-      err.className = 'error-msg';
-      err.textContent = '⚠ ' + msg;
-      messagesEl.appendChild(err);
-      scrollBottom();
-      setStreaming(false);
-    }
-
-    function onCwdChanged(path) {
-      // Shorten home dir to ~
-      const home = path.match(/^\/Users\/[^/]+/) || path.match(/^\/home\/[^/]+/);
-      cwdLabel.textContent = home ? path.replace(home[0], '~') : path;
-    }
-
-    // ── Send / Abort ──────────────────────────────────────────────
-    function sendMessage() {
-      const text = inputEl.value.trim();
-      if (!text || !bridge) return;
-
-      inputEl.value = '';
-      autoResize();
-      setStreaming(true);
-
-      appendUserBubble(text);
-      beginAssistantTurn();
-
-      bridge.sendMessage(text);
-    }
-
-    function handleSendBtn() {
-      if (streaming) {
-        bridge.abort();
+    // Split into code-block vs normal sections
+    const parts = text.split(/(```[\s\S]*?```)/g);
+    let html = '';
+    for (const part of parts) {
+      if (part.startsWith('```')) {
+        const inner = part.slice(3, -3);
+        const nl    = inner.indexOf('\n');
+        const lang  = nl > 0 ? inner.slice(0, nl).trim() : '';
+        const code  = nl > 0 ? inner.slice(nl + 1) : inner;
+        html += `<div class="claudian-code-wrapper${lang ? ' has-language' : ''}">` +
+                  (lang ? `<span class="claudian-code-lang-label">${esc(lang)}</span>` : '') +
+                  `<pre><code>${esc(code)}</code></pre></div>`;
       } else {
-        sendMessage();
+        // Inline formatting
+        let s = esc(part);
+        s = s.replace(/`([^`]+)`/g, '<code class="claudian-inline-code" ' +
+                      'style="font-family:var(--font-monospace);font-size:13px;' +
+                      'background:rgba(0,0,0,0.2);padding:1px 4px;border-radius:3px">$1</code>');
+        s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        // Headers
+        s = s.replace(/^### (.+)$/gm, '<h3 style="font-size:14px;margin:8px 0 4px">$1</h3>');
+        s = s.replace(/^## (.+)$/gm,  '<h2 style="font-size:15px;margin:10px 0 4px">$1</h2>');
+        s = s.replace(/^# (.+)$/gm,   '<h1 style="font-size:17px;margin:12px 0 6px">$1</h1>');
+        // Lists
+        s = s.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+        s = s.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+        s = s.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul style="padding-left:20px;margin:6px 0">$1</ul>');
+        // Paragraphs (double newlines)
+        s = s.replace(/\n\n+/g, '</p><p>');
+        // Single newlines
+        s = s.replace(/\n/g, '<br>');
+        html += `<p>${s}</p>`;
       }
     }
+    return html;
+  }
 
-    // ── Input auto-resize ─────────────────────────────────────────
-    function autoResize() {
-      inputEl.style.height = 'auto';
-      inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+  // ── Helpers ──────────────────────────────────────────────────────
+  function scrollBottom() {
+    messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+  }
+
+  function hideWelcome() {
+    if (welcome && welcome.parentNode) welcome.remove();
+  }
+
+  function setStreaming(on) {
+    streaming        = on;
+    inputEl.disabled = on;
+    sendBtn.disabled = !on && !inputEl.value.trim();
+    sendBtn.classList.toggle('abort', on);
+    iconSend.style.display = on ? 'none' : '';
+    iconStop.style.display = on ? ''     : 'none';
+    sendBtn.title = on ? 'Stop (Esc)' : 'Send (Ctrl+Enter)';
+    if (!on) inputEl.focus();
+  }
+
+  // ── User message ─────────────────────────────────────────────────
+  function appendUserMessage(text) {
+    hideWelcome();
+    const msg = document.createElement('div');
+    msg.className = 'claudian-message claudian-message-user';
+    const content = document.createElement('div');
+    content.className = 'claudian-message-content';
+    content.textContent = text;
+    msg.appendChild(content);
+    messagesEl.appendChild(msg);
+    scrollBottom();
+  }
+
+  // ── Begin assistant turn ─────────────────────────────────────────
+  function beginAssistantTurn() {
+    hideWelcome();
+    currentText = '';
+
+    currentMsg = document.createElement('div');
+    currentMsg.className = 'claudian-message claudian-message-assistant';
+
+    // Typing indicator
+    const typing = document.createElement('div');
+    typing.className = 'claudian-typing';
+    typing.id = 'typing-indicator';
+    typing.innerHTML =
+      '<div class="claudian-typing-dot"></div>' +
+      '<div class="claudian-typing-dot"></div>' +
+      '<div class="claudian-typing-dot"></div>';
+    currentMsg.appendChild(typing);
+    messagesEl.appendChild(currentMsg);
+    scrollBottom();
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('typing-indicator');
+    if (t) t.remove();
+  }
+
+  function ensureContent() {
+    if (currentContent) return;
+    removeTyping();
+    currentContent = document.createElement('div');
+    currentContent.className = 'claudian-message-content claudian-text-block';
+    currentMsg.insertBefore(currentContent, currentMsg.firstChild);
+  }
+
+  // ── Signal handlers (called from C++ via QWebChannel) ────────────
+  function onTextReady(text) {
+    if (!currentMsg) beginAssistantTurn();
+    ensureContent();
+    currentText += text;
+    currentContent.innerHTML = renderMarkdown(currentText);
+    scrollBottom();
+  }
+
+  function onToolUse(name, inputJson) {
+    if (!currentMsg) beginAssistantTurn();
+    removeTyping();
+
+    let formatted = inputJson;
+    try { formatted = JSON.stringify(JSON.parse(inputJson), null, 2); } catch (_) {}
+
+    // Tool call using Claudian's class structure
+    const call = document.createElement('div');
+    call.className = 'claudian-tool-call';
+
+    const header = document.createElement('div');
+    header.className = 'claudian-tool-header';
+    header.innerHTML =
+      '<div class="claudian-tool-icon claudian-tool-status status-running">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+             'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+             'style="animation:claudian-spin 0.7s linear infinite">' +
+          '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83' +
+                  'M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>' +
+        '</svg>' +
+      '</div>' +
+      `<span class="claudian-tool-name">${name}</span>` +
+      '<span class="claudian-tool-chevron" style="margin-left:auto;color:var(--text-muted);' +
+            'font-size:14px;transition:transform 0.18s">›</span>';
+
+    const body = document.createElement('div');
+    body.className = 'claudian-tool-content claudian-tool-lines';
+    body.style.display = 'none';
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font-family:var(--font-monospace);font-size:11px;' +
+                        'color:var(--text-muted);white-space:pre-wrap;word-break:break-all;line-height:1.5';
+    pre.textContent = formatted;
+    body.appendChild(pre);
+
+    header.addEventListener('click', () => {
+      const open  = body.style.display !== 'none';
+      body.style.display = open ? 'none' : 'block';
+      const chev  = header.querySelector('.claudian-tool-chevron');
+      if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+    });
+
+    call.appendChild(header);
+    call.appendChild(body);
+    currentMsg.appendChild(call);
+    scrollBottom();
+  }
+
+  function onTurnComplete() {
+    removeTyping();
+    if (currentMsg) {
+      // Mark all tool spinners as done
+      currentMsg.querySelectorAll('.claudian-tool-status.status-running').forEach(el => {
+        el.classList.remove('status-running');
+        el.classList.add('status-completed');
+        el.innerHTML =
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+               'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+            '<polyline points="20 6 9 17 4 12"/>' +
+          '</svg>';
+      });
     }
+    currentMsg     = null;
+    currentContent = null;
+    currentText    = '';
+    setStreaming(false);
+  }
 
-    inputEl.addEventListener('input', () => {
-      autoResize();
-      if (!streaming) sendBtn.disabled = !inputEl.value.trim();
+  function onErrorOccurred(msg) {
+    removeTyping();
+    currentMsg     = null;
+    currentContent = null;
+    currentText    = '';
+
+    hideWelcome();
+    const err = document.createElement('div');
+    err.className = 'claudian-error-msg';
+    err.textContent = '⚠ ' + msg;
+    messagesEl.appendChild(err);
+    scrollBottom();
+    setStreaming(false);
+  }
+
+  function onCwdChanged(path) {
+    const home = path.match(/^\/Users\/[^/]+/) || path.match(/^\/home\/[^/]+/);
+    cwdLabel.textContent = home ? path.replace(home[0], '~') : path;
+  }
+
+  // ── Send / Abort ─────────────────────────────────────────────────
+  function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text || !bridge) return;
+
+    inputEl.value = '';
+    autoResize();
+    setStreaming(true);
+
+    appendUserMessage(text);
+    beginAssistantTurn();
+
+    bridge.sendMessage(text);
+  }
+
+  inputEl.addEventListener('input', () => {
+    autoResize();
+    if (!streaming) sendBtn.disabled = !inputEl.value.trim();
+  });
+
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Escape' && streaming) { bridge.abort(); }
+  });
+
+  sendBtn.addEventListener('click', () => {
+    if (streaming) bridge.abort();
+    else           sendMessage();
+  });
+
+  document.getElementById('pick-btn').addEventListener('click', () => {
+    if (bridge) bridge.pickFolder();
+  });
+
+  // ── Model selector ────────────────────────────────────────────────
+  document.querySelectorAll('.claudian-model-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.claudian-model-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      const modelId = opt.dataset.model;
+      const label   = opt.textContent.split(' ')[0]; // "sonnet", "opus", "haiku"
+      document.getElementById('model-label').textContent = label;
+      if (bridge) bridge.setModel(modelId);
     });
+  });
 
-    inputEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); }
-      if (e.key === 'Escape' && streaming) { bridge.abort(); }
-    });
+  // ── YOLO toggle ───────────────────────────────────────────────────
+  const yoloSwitch = document.getElementById('yolo-switch');
+  const yoloLabel  = document.getElementById('yolo-label');
+  yoloSwitch.addEventListener('click', () => {
+    const active = yoloSwitch.classList.toggle('active');
+    yoloLabel.classList.toggle('plan-active', active);
+    if (bridge) bridge.setYolo(active);
+  });
 
-    sendBtn.addEventListener('click', handleSendBtn);
-    document.getElementById('pick-btn').addEventListener('click', () => {
-      if (bridge) bridge.pickFolder();
-    });
+  // ── Input auto-resize ─────────────────────────────────────────────
+  function autoResize() {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+  }
 
-    // ── QWebChannel bootstrap ─────────────────────────────────────
-    new QWebChannel(qt.webChannelTransport, function(channel) {
-      bridge = channel.objects.claude;
+  // ── QWebChannel bootstrap ─────────────────────────────────────────
+  new QWebChannel(qt.webChannelTransport, function(channel) {
+    bridge = channel.objects.claude;
 
-      bridge.textReady.connect(onTextReady);
-      bridge.toolUse.connect(onToolUse);
-      bridge.turnComplete.connect(onTurnComplete);
-      bridge.errorOccurred.connect(onErrorOccurred);
-      bridge.cwdChanged.connect(onCwdChanged);
+    bridge.textReady.connect(onTextReady);
+    bridge.toolUse.connect(onToolUse);
+    bridge.turnComplete.connect(onTurnComplete);
+    bridge.errorOccurred.connect(onErrorOccurred);
+    bridge.cwdChanged.connect(onCwdChanged);
 
-      // Sync initial CWD (Q_PROPERTY value sent on init)
-      onCwdChanged(bridge.cwd);
-
-      setStreaming(false);
-      inputEl.focus();
-    });
-  </script>
+    onCwdChanged(bridge.cwd);
+    // Sync initial model/yolo state from bridge properties
+    if (bridge.model) bridge.setModel(bridge.model);
+    if (bridge.yolo)  { yoloSwitch.classList.add('active'); yoloLabel.classList.add('plan-active'); }
+    setStreaming(false);
+    inputEl.focus();
+  });
+</script>
 </body>
 </html>
