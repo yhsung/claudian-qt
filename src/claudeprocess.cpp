@@ -17,7 +17,8 @@ void ClaudeProcess::killCurrent() {
     m_buffer.clear();
 }
 
-void ClaudeProcess::send(const QString &prompt, const QString &cwd, const QString &sessionId) {
+void ClaudeProcess::send(const QString &prompt, const QString &cwd,
+                         const QString &sessionId, const QString &model, bool yolo) {
     killCurrent();
 
     m_proc = new QProcess(this);
@@ -27,6 +28,10 @@ void ClaudeProcess::send(const QString &prompt, const QString &cwd, const QStrin
     QStringList args{"--output-format", "stream-json", "--verbose", "--print", prompt};
     if (!sessionId.isEmpty())
         args << "--resume" << sessionId;
+    if (!model.isEmpty())
+        args << "--model" << model;
+    if (yolo)
+        args << "--dangerously-skip-permissions";
 
     connect(m_proc, &QProcess::readyReadStandardOutput, this, &ClaudeProcess::onReadyRead);
     connect(m_proc, &QProcess::errorOccurred,           this, &ClaudeProcess::onProcessError);

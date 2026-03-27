@@ -9,7 +9,10 @@ public:
     explicit ClaudeProcess(QObject *parent = nullptr);
     ~ClaudeProcess();
 
-    void send(const QString &prompt, const QString &cwd, const QString &sessionId = {});
+    void send(const QString &prompt, const QString &cwd,
+              const QString &sessionId = {},
+              const QString &model = {},
+              bool yolo = false);
     void abort();
 
 signals:
