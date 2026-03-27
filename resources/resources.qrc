@@ -3,5 +3,10 @@
   <qresource prefix="/chat">
     <file alias="index.html">chat/index.html</file>
     <file alias="claudian.css">chat/claudian.css</file>
+    <file alias="obsidian-shim.js">chat/obsidian-shim.js</file>
+  </qresource>
+  <qresource prefix="/claudian">
+    <file alias="main.js">claudian/main.js</file>
+    <file alias="styles.css">claudian/styles.css</file>
   </qresource>
 </RCC>

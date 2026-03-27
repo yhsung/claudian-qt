@@ -3,565 +3,514 @@
 <head>
   <meta charset="UTF-8">
   <title>Claudian Qt</title>
-  <link rel="stylesheet" href="qrc:///chat/claudian.css">
+  <!-- Claudian design system styles -->
+  <link rel="stylesheet" href="qrc:///claudian/styles.css">
   <style>
-    /* ── Obsidian variable substitutes (dark theme) ──────────────── */
+    /* Obsidian CSS variable defaults — Claudian's styles.css relies on these */
     :root {
-      --font-text:                    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --font-monospace:               "SF Mono", "Fira Code", "Consolas", monospace;
-      --text-normal:                  #dcddde;
-      --text-muted:                   #999;
-      --text-faint:                   #666;
-      --text-accent:                  #D97757;
-      --text-error:                   #ff453a;
-      --background-primary:           #1c1c1e;
-      --background-secondary:         #2c2c2e;
-      --background-secondary-alt:     #3a3a3c;
-      --background-modifier-border:       #48484a;
-      --background-modifier-border-hover: #6e6e73;
-      --background-modifier-hover:    rgba(255,255,255,0.06);
-      --interactive-accent:           #D97757;
-      --interactive-accent-hover:     rgba(217,119,87,0.18);
-      --color-green:   #30d158;
-      --color-red:     #ff453a;
-      --color-yellow:  #ffd60a;
-      --color-orange:  #ff9f0a;
+      --background-primary:              #1c1c1e;
+      --background-primary-alt:          #141416;
+      --background-secondary:            #2c2c2e;
+      --background-secondary-alt:        #3a3a3c;
+      --background-modifier-border:      #48484a;
+      --background-modifier-border-hover:#5a5a5c;
+      --background-modifier-border-focus:#7c6af7;
+      --background-modifier-hover:       rgba(255,255,255,0.06);
+      --background-modifier-error:       #3d1f1f;
+      --text-normal:      #dcddde;
+      --text-muted:       #8e8e93;
+      --text-faint:       #636366;
+      --text-accent:      #7c6af7;
+      --text-accent-hover:#9d8fff;
+      --text-error:       #ff453a;
+      --text-on-accent:   #ffffff;
+      --text-selection:   rgba(124,106,247,0.25);
+      --interactive-accent:       #7c6af7;
+      --interactive-accent-hover: #9d8fff;
+      --link-color:               #7c6af7;
+      --color-red:        #ff453a;
+      --color-red-rgb:    255,69,58;
+      --color-orange:     #ff9f0a;
+      --color-yellow:     #ffd60a;
+      --color-green:      #30d158;
+      --font-text:        -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-monospace:   'SF Mono', SFMono-Regular, ui-monospace, monospace;
+      --font-ui-small:    12px;
+      --font-ui-medium:   13px;
+      --font-ui-smaller:  11px;
+      --font-medium:      500;
+      --font-semibold:    600;
+      --radius-s:         4px;
     }
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      background: var(--background-primary);
-      color: var(--text-normal);
-      font-family: var(--font-text);
-      font-size: 14px;
-      height: 100vh;
+    html, body {
+      margin: 0; padding: 0;
+      height: 100vh; width: 100%;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: var(--background-primary, #1c1c1e);
+      color: var(--text-normal, #dcddde);
     }
-
-    /* ── Container fills full viewport ──────────────────────────── */
-    .claudian-container {
-      height: 100vh;
+    /* qt-toolbar is flex-shrink: 0 (set below), claudian-root fills the rest */
+    #claudian-root {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
-
-    /* ── Header ──────────────────────────────────────────────────── */
-    .claudian-header {
-      background: var(--background-secondary);
-      border-bottom: 1px solid var(--background-modifier-border);
-      padding: 10px 14px;
+    /* Ensure ClaudianView fills the root container */
+    #claudian-root > .view-content {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
-
-    #cwd-label {
-      font-family: var(--font-monospace);
+    #claudian-root .claudian-container {
+      height: 100%;
+    }
+    /* Thin cwd / folder bar above the view */
+    #qt-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--background-secondary, #2c2c2e);
+      border-bottom: 1px solid var(--background-modifier-border, #48484a);
+      flex-shrink: 0; /* stays fixed; claudian-root gets remaining height */
       font-size: 11px;
-      color: var(--text-muted);
+      font-family: var(--font-monospace, monospace);
+    }
+    #qt-cwd {
+      flex: 1;
+      color: var(--text-muted, #999);
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
     }
-
-    .pick-btn {
-      background: var(--background-secondary-alt);
-      border: 1px solid var(--background-modifier-border);
-      color: var(--text-normal);
+    #qt-pick-btn {
+      background: var(--background-secondary-alt, #3a3a3c);
+      border: 1px solid var(--background-modifier-border, #48484a);
+      color: var(--text-normal, #dcddde);
       cursor: pointer;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-family: var(--font-text);
+      padding: 3px 9px;
+      border-radius: 5px;
+      font-size: 11px;
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .pick-btn:hover { background: var(--background-modifier-hover); }
-
-    /* ── Tab content fills remaining height ─────────────────────── */
-    .claudian-tab-content { flex: 1; min-height: 0; }
-
-    /* ── Messages side padding ───────────────────────────────────── */
-    .claudian-messages { padding: 12px 14px; }
-
-    /* ── Welcome state ───────────────────────────────────────────── */
-    .claudian-welcome-sub {
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.5;
-      margin-top: 6px;
-    }
-    .claudian-welcome-hint {
+    #qt-pick-btn:hover { opacity: 0.8; }
+    #qt-error {
+      color: #ff453a;
+      padding: 16px;
+      font-family: monospace;
       font-size: 12px;
-      font-family: var(--font-monospace);
-      background: var(--background-secondary);
-      padding: 4px 10px;
-      border-radius: 6px;
-      margin-top: 10px;
-      color: var(--text-muted);
+      white-space: pre-wrap;
     }
-
-    /* ── Typing indicator ────────────────────────────────────────── */
-    .claudian-typing {
-      display: flex;
-      gap: 5px;
-      align-items: center;
-      padding: 8px 0;
-    }
-    .claudian-typing-dot {
-      width: 7px; height: 7px;
-      background: var(--text-muted);
-      border-radius: 50%;
-      animation: bounce 1.2s infinite ease-in-out;
-    }
-    .claudian-typing-dot:nth-child(2) { animation-delay: 0.2s; }
-    .claudian-typing-dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes bounce {
-      0%, 60%, 100% { transform: translateY(0);    opacity: 0.35; }
-      30%            { transform: translateY(-5px); opacity: 1;    }
-    }
-
-    /* ── Error message ───────────────────────────────────────────── */
-    .claudian-error-msg {
-      padding: 9px 13px;
-      background: rgba(255, 69, 58, 0.12);
-      border: 1px solid var(--color-red);
-      border-radius: 8px;
-      color: var(--color-red);
-      font-size: 13px;
-    }
-
-    /* ── Input outer padding ─────────────────────────────────────── */
-    .claudian-input-outer {
-      padding: 0 14px 14px 14px;
-      flex-shrink: 0;
-    }
-
-    /* Override min-height: Claudian's default is sized for context row */
-    .claudian-input-wrapper {
-      min-height: 100px;
-    }
-
-    .claudian-input:disabled { opacity: 0.5; }
-
-    /* Focus ring on wrapper instead of textarea */
-    .claudian-input-wrapper:focus-within {
-      border-color: var(--interactive-accent);
-    }
-
-    /* ── Send / Abort button ─────────────────────────────────────── */
-    .claudian-send-btn {
-      width: 32px; height: 32px;
-      background: var(--interactive-accent);
-      border: none;
-      border-radius: 6px;
-      color: #fff;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
+    /* Send button injected into .claudian-input-toolbar */
+    .qt-send-btn {
       margin-left: auto;
-      transition: opacity 0.15s, background 0.15s;
+      cursor: pointer;
+      padding: 3px 5px;
+      display: flex;
+      align-items: center;
+      color: var(--text-muted, #999);
+      border-radius: 4px;
+      flex-shrink: 0;
+      transition: color 0.1s;
     }
-    .claudian-send-btn:hover:not(:disabled) { opacity: 0.85; }
-    .claudian-send-btn:disabled { background: var(--background-secondary-alt); cursor: not-allowed; opacity: 1; }
-    .claudian-send-btn.abort { background: var(--color-red); }
-    .claudian-send-btn svg { pointer-events: none; }
-
-    /* ── Scrollbar ───────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--background-modifier-border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--background-modifier-border-hover); }
+    .qt-send-btn:hover { color: var(--interactive-accent, #7c6af7); }
   </style>
 </head>
 <body>
 
-<div class="claudian-container">
-
-  <!-- ── Header ─────────────────────────────────────────────────── -->
-  <div class="claudian-header">
-    <div class="claudian-title-slot">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-           style="color:var(--text-muted);flex-shrink:0">
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-      </svg>
-      <span id="cwd-label">~/</span>
-    </div>
-    <div class="claudian-header-actions">
-      <button class="pick-btn" id="pick-btn">Open Folder</button>
-    </div>
-  </div>
-
-  <!-- ── Messages ───────────────────────────────────────────────── -->
-  <div class="claudian-tab-content">
-    <div class="claudian-messages-wrapper">
-      <div class="claudian-messages" id="messages">
-        <div class="claudian-welcome" id="welcome">
-          <div class="claudian-welcome-greeting">How can I help?</div>
-          <div class="claudian-welcome-sub">Open a folder and start chatting with Claude Code.</div>
-          <div class="claudian-welcome-hint">Ctrl+Enter to send</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Input ──────────────────────────────────────────────────── -->
-  <div class="claudian-input-outer">
-    <div class="claudian-input-container">
-      <div class="claudian-input-wrapper" id="input-wrapper">
-        <textarea class="claudian-input" id="input"
-                  placeholder="Message Claude… (Ctrl+Enter to send)"
-                  rows="1" disabled></textarea>
-        <div class="claudian-input-toolbar">
-
-          <!-- Model selector -->
-          <div class="claudian-model-selector" id="model-selector">
-            <div class="claudian-model-btn ready" id="model-btn">
-              <span class="claudian-model-label" id="model-label">sonnet</span>
-              <span class="claudian-model-chevron">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </span>
-            </div>
-            <div class="claudian-model-dropdown">
-              <div class="claudian-model-option selected" data-model="">sonnet 4.6</div>
-              <div class="claudian-model-option" data-model="claude-opus-4-5">opus 4.5</div>
-              <div class="claudian-model-option" data-model="claude-haiku-4-5-20251001">haiku 4.5</div>
-            </div>
-          </div>
-
-          <!-- YOLO toggle -->
-          <div class="claudian-permission-toggle" id="yolo-toggle" title="YOLO mode: skip all permission prompts">
-            <span class="claudian-permission-label" id="yolo-label">yolo</span>
-            <div class="claudian-toggle-switch" id="yolo-switch"></div>
-          </div>
-
-          <!-- Send / Abort -->
-          <button class="claudian-send-btn" id="send-btn" disabled title="Send (Ctrl+Enter)">
-            <svg id="icon-send" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-            <svg id="icon-stop" width="14" height="14" viewBox="0 0 24 24"
-                 fill="currentColor" style="display:none">
-              <rect x="4" y="4" width="16" height="16" rx="2"/>
-            </svg>
-          </button>
-
-        </div>
-      </div>
-    </div>
-  </div>
-
+<div id="qt-toolbar">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+       style="color:var(--text-muted,#999);flex-shrink:0">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+  </svg>
+  <span id="qt-cwd">~/</span>
+  <button id="qt-pick-btn">Open Folder</button>
 </div>
 
+<div id="claudian-root"></div>
+
+<!-- Load order: QWebChannel → Obsidian shim → Claudian bundle → bootstrap -->
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script src="qrc:///chat/obsidian-shim.js"></script>
+<script src="qrc:///claudian/main.js"></script>
 <script>
-  // ── State ────────────────────────────────────────────────────────
-  let bridge        = null;
-  let streaming     = false;
-  let currentMsg    = null;  // current assistant .claudian-message div
-  let currentContent = null; // .claudian-message-content inside it
-  let currentText   = '';    // accumulated raw text for the current turn
+'use strict';
 
-  // ── DOM refs ─────────────────────────────────────────────────────
-  const messagesEl = document.getElementById('messages');
-  const welcome    = document.getElementById('welcome');
-  const inputEl    = document.getElementById('input');
-  const sendBtn    = document.getElementById('send-btn');
-  const cwdLabel   = document.getElementById('cwd-label');
-  const iconSend   = document.getElementById('icon-send');
-  const iconStop   = document.getElementById('icon-stop');
+// ── Qt Bridge Service ──────────────────────────────────────────────────────
+// Replaces ClaudianService. Async-generator query() pumps chunks from C++
+// QWebChannel signals instead of spawning its own claude subprocess.
+class QtBridgeService {
+  constructor(bridge) {
+    this._bridge  = bridge;
+    this._queue   = [];
+    this._waiter  = null;
 
-  // ── Simple markdown renderer ──────────────────────────────────────
-  function renderMarkdown(text) {
-    // Escape HTML first, then re-apply markdown
-    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    this._onText  = (text) => this._enqueue({ type: 'text', content: text });
+    this._onTool  = (name, json) => {
+      let input = {};
+      try { input = JSON.parse(json); } catch (_) {}
+      this._enqueue({ type: 'tool_use', id: String(Date.now()), name, input });
+    };
+    this._onDone  = ()    => this._enqueue({ type: 'done' });
+    this._onError = (msg) => this._enqueue({ type: 'error', msg });
 
-    // Split into code-block vs normal sections
-    const parts = text.split(/(```[\s\S]*?```)/g);
-    let html = '';
-    for (const part of parts) {
-      if (part.startsWith('```')) {
-        const inner = part.slice(3, -3);
-        const nl    = inner.indexOf('\n');
-        const lang  = nl > 0 ? inner.slice(0, nl).trim() : '';
-        const code  = nl > 0 ? inner.slice(nl + 1) : inner;
-        html += `<div class="claudian-code-wrapper${lang ? ' has-language' : ''}">` +
-                  (lang ? `<span class="claudian-code-lang-label">${esc(lang)}</span>` : '') +
-                  `<pre><code>${esc(code)}</code></pre></div>`;
-      } else {
-        // Inline formatting
-        let s = esc(part);
-        s = s.replace(/`([^`]+)`/g, '<code class="claudian-inline-code" ' +
-                      'style="font-family:var(--font-monospace);font-size:13px;' +
-                      'background:rgba(0,0,0,0.2);padding:1px 4px;border-radius:3px">$1</code>');
-        s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-        s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-        // Headers
-        s = s.replace(/^### (.+)$/gm, '<h3 style="font-size:14px;margin:8px 0 4px">$1</h3>');
-        s = s.replace(/^## (.+)$/gm,  '<h2 style="font-size:15px;margin:10px 0 4px">$1</h2>');
-        s = s.replace(/^# (.+)$/gm,   '<h1 style="font-size:17px;margin:12px 0 6px">$1</h1>');
-        // Lists
-        s = s.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
-        s = s.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-        s = s.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul style="padding-left:20px;margin:6px 0">$1</ul>');
-        // Paragraphs (double newlines)
-        s = s.replace(/\n\n+/g, '</p><p>');
-        // Single newlines
-        s = s.replace(/\n/g, '<br>');
-        html += `<p>${s}</p>`;
-      }
+    bridge.textReady.connect(this._onText);
+    bridge.toolUse.connect(this._onTool);
+    bridge.turnComplete.connect(this._onDone);
+    bridge.errorOccurred.connect(this._onError);
+  }
+
+  _enqueue(chunk) {
+    if (this._waiter) {
+      const r = this._waiter; this._waiter = null; r(chunk);
+    } else {
+      this._queue.push(chunk);
     }
-    return html;
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────
-  function scrollBottom() {
-    messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+  _next() {
+    if (this._queue.length) return Promise.resolve(this._queue.shift());
+    return new Promise(r => { this._waiter = r; });
   }
 
-  function hideWelcome() {
-    if (welcome && welcome.parentNode) welcome.remove();
+  async *query(prompt, images, history, opts) {
+    // Flush any stale chunks from a previous aborted turn.
+    this._queue = []; this._waiter = null;
+    this._bridge.sendMessage(prompt);
+    for (;;) {
+      const chunk = await this._next();
+      if (chunk.type === 'done')  return;
+      if (chunk.type === 'error') throw new Error(chunk.msg);
+      yield chunk;
+    }
   }
 
-  function setStreaming(on) {
-    streaming        = on;
-    inputEl.disabled = on;
-    sendBtn.disabled = !on && !inputEl.value.trim();
-    sendBtn.classList.toggle('abort', on);
-    iconSend.style.display = on ? 'none' : '';
-    iconStop.style.display = on ? ''     : 'none';
-    sendBtn.title = on ? 'Stop (Esc)' : 'Send (Ctrl+Enter)';
-    if (!on) inputEl.focus();
+  abort() {
+    this._bridge.abort();
+    this._enqueue({ type: 'done' });
   }
 
-  // ── User message ─────────────────────────────────────────────────
-  function appendUserMessage(text) {
-    hideWelcome();
-    const msg = document.createElement('div');
-    msg.className = 'claudian-message claudian-message-user';
-    const content = document.createElement('div');
-    content.className = 'claudian-message-content';
-    content.textContent = text;
-    msg.appendChild(content);
-    messagesEl.appendChild(msg);
-    scrollBottom();
+  // Stubs expected by InputController / other callers
+  async ensureReady()          {}
+  isReady()                    { return true; }
+  onReadyStateChange(cb)       { return () => {}; }
+  registerResponseHandler()    { return () => {}; }
+  getSessionId()               { return ''; }
+  getEffectiveModel()          { return ''; }
+
+  destroy() {
+    try { this._bridge.textReady.disconnect(this._onText); }    catch (_) {}
+    try { this._bridge.toolUse.disconnect(this._onTool); }      catch (_) {}
+    try { this._bridge.turnComplete.disconnect(this._onDone); } catch (_) {}
+    try { this._bridge.errorOccurred.disconnect(this._onError); } catch (_) {}
+  }
+}
+
+// ── Inject Qt service into a ClaudianView tab ──────────────────────────────
+function injectQtServiceIntoTab(tab, qtService) {
+  if (!tab) return;
+  // Replace the service on the tab
+  tab.service = qtService;
+
+  const ic = tab.controllers?.inputController;
+  if (!ic) return;
+  // Patch whichever property/method InputController uses to retrieve the service
+  if ('getAgentService' in ic) ic.getAgentService = () => qtService;
+  if ('agentService'   in ic) ic.agentService    = qtService;
+  // Also handle stream controller if it holds its own service ref
+  const sc = tab.controllers?.streamController;
+  if (sc && 'service' in sc) sc.service = qtService;
+}
+
+// ── Main bootstrap (async IIFE) ────────────────────────────────────────────
+(async function bootstrap() {
+  // ── 1. Retrieve ClaudianPlugin from main.js CommonJS exports ──────────
+  const ClaudianPlugin = window.module?.exports?.default;
+  if (typeof ClaudianPlugin !== 'function') {
+    document.getElementById('claudian-root').innerHTML =
+      '<div id="qt-error">Failed to load ClaudianPlugin from main.js.\nCheck browser console for errors.</div>';
+    return;
   }
 
-  // ── Begin assistant turn ─────────────────────────────────────────
-  function beginAssistantTurn() {
-    hideWelcome();
-    currentText = '';
+  // ── 2. Build mock App object ───────────────────────────────────────────
+  const mockApp = {
+    vault: {
+      adapter: {
+        basePath: '/',
+        exists:   (p)    => Promise.resolve(false),
+        read:     (p)    => Promise.resolve(''),
+        write:    (p, d) => Promise.resolve(),
+        mkdir:    (p)    => Promise.resolve(),
+        list:     (p)    => Promise.resolve({ files: [], folders: [] }),
+        stat:     (p)    => Promise.resolve({ type: 'file', size: 0, mtime: 0, ctime: 0 }),
+        remove:   (p)    => Promise.resolve(),
+        copy:     (f, t) => Promise.resolve(),
+        rename:   (f, t) => Promise.resolve(),
+      },
+      configDir: '.obsidian',
+      on()      { return { unsubscribe() {} }; },
+      off()     {},
+      read:                (f) => Promise.resolve(''),
+      cachedRead:          (f) => Promise.resolve(''),
+      modify:              (f, d) => Promise.resolve(),
+      create:              (p, d) => Promise.resolve(new window.__obsidian__.TFile(p)),
+      createBinary:        (p, d) => Promise.resolve(new window.__obsidian__.TFile(p)),
+      delete:              (f, force) => Promise.resolve(),
+      trash:               (f, sys) => Promise.resolve(),
+      exists:              (p) => Promise.resolve(false),
+      createFolder:        (p) => Promise.resolve(),
+      rename:              (f, n) => Promise.resolve(),
+      copy:                (f, t) => Promise.resolve(new window.__obsidian__.TFile(t)),
+      getFiles:            () => [],
+      getAllLoadedFiles:    () => [],
+      getMarkdownFiles:    () => [],
+      getAbstractFileByPath: () => null,
+      getFileByPath:       () => null,
+      getFolderByPath:     () => null,
+      getRoot:             () => new window.__obsidian__.TFolder('/'),
+    },
+    workspace: {
+      activeLeaf:   null,
+      activeEditor: null,
+      getLeavesOfType:     () => [],
+      revealLeaf:          () => Promise.resolve(),
+      getActiveFile:       () => null,
+      getActiveViewOfType: () => null,
+      getMostRecentLeaf:   () => null,
+      getLeaf:             () => null,
+      iterateAllLeaves:    () => {},
+      on()     { return { unsubscribe() {} }; },
+      off()    {},
+      trigger() {},
+      openLinkText: () => Promise.resolve(),
+      openPopoutLeaf: () => null,
+    },
+    metadataCache: {
+      getFileCache:       () => null,
+      getCache:           () => null,
+      resolvedLinks:      {},
+      unresolvedLinks:    {},
+      on()   { return { unsubscribe() {} }; },
+      off()  {},
+      trigger() {},
+    },
+    fileManager: {
+      processFrontMatter: () => Promise.resolve(),
+      generateMarkdownLink: () => '',
+    },
+    keymap: { pushScope() {}, popScope() {} },
+    scope:  { register() {} },
+    plugins: { enabledPlugins: new Set(), plugins: {} },
+    internalPlugins: { getPluginById: () => null },
+    commands: { addCommand() {}, removeCommand() {}, executeCommandById() {} },
+    setting:  { open() {}, close() {} },
+  };
 
-    currentMsg = document.createElement('div');
-    currentMsg.className = 'claudian-message claudian-message-assistant';
-
-    // Typing indicator
-    const typing = document.createElement('div');
-    typing.className = 'claudian-typing';
-    typing.id = 'typing-indicator';
-    typing.innerHTML =
-      '<div class="claudian-typing-dot"></div>' +
-      '<div class="claudian-typing-dot"></div>' +
-      '<div class="claudian-typing-dot"></div>';
-    currentMsg.appendChild(typing);
-    messagesEl.appendChild(currentMsg);
-    scrollBottom();
+  // ── 3. Instantiate ClaudianPlugin ──────────────────────────────────────
+  const mockManifest = { id: 'claudian-qt', name: 'Claudian Qt', version: '1.0.0', minAppVersion: '1.0.0', description: '', author: '' };
+  let plugin;
+  try {
+    plugin = new ClaudianPlugin(mockApp, mockManifest);
+  } catch (e) {
+    document.getElementById('claudian-root').innerHTML =
+      `<div id="qt-error">ClaudianPlugin constructor failed:\n${e.stack || e}</div>`;
+    return;
   }
 
-  function removeTyping() {
-    const t = document.getElementById('typing-indicator');
-    if (t) t.remove();
+  // ── 4. Capture registerView factory early in case onload() throws later ─
+  let viewFactory = null;
+  const _origRegisterView = plugin.registerView?.bind(plugin);
+  plugin.registerView = function(type, factory) {
+    plugin._viewFactories = plugin._viewFactories || {};
+    plugin._viewFactories[type] = factory;
+    if (type === 'claudian-view') viewFactory = factory;
+    _origRegisterView?.(type, factory);
+  };
+
+  // ── 5. Call onload() — some async operations may fail silently ─────────
+  try {
+    await plugin.onload();
+  } catch (e) {
+    console.warn('[claudian-qt] plugin.onload() threw (continuing):', e);
   }
 
-  function ensureContent() {
-    if (currentContent) return;
-    removeTyping();
-    currentContent = document.createElement('div');
-    currentContent.className = 'claudian-message-content claudian-text-block';
-    currentMsg.insertBefore(currentContent, currentMsg.firstChild);
+  // Fallback: check _viewFactories if registerView patch didn't fire
+  if (!viewFactory) {
+    viewFactory = plugin._viewFactories?.['claudian-view'];
   }
 
-  // ── Signal handlers (called from C++ via QWebChannel) ────────────
-  function onTextReady(text) {
-    if (!currentMsg) beginAssistantTurn();
-    ensureContent();
-    currentText += text;
-    currentContent.innerHTML = renderMarkdown(currentText);
-    scrollBottom();
+  if (typeof viewFactory !== 'function') {
+    document.getElementById('claudian-root').innerHTML =
+      '<div id="qt-error">ClaudianView factory not registered.\nIs plugin.onload() calling registerView()?</div>';
+    return;
   }
 
-  function onToolUse(name, inputJson) {
-    if (!currentMsg) beginAssistantTurn();
-    removeTyping();
+  // ── 6. Create fake leaf and instantiate ClaudianView ──────────────────
+  const rootEl = document.getElementById('claudian-root');
+  const leaf = {
+    app:            mockApp,
+    containerEl:    rootEl,
+    parent:         null,
+    view:           null,
+    tabHeaderEl:    null,
+    getDisplayText: () => 'Claudian',
+    getViewType:    () => 'claudian-view',
+  };
 
-    let formatted = inputJson;
-    try { formatted = JSON.stringify(JSON.parse(inputJson), null, 2); } catch (_) {}
-
-    // Tool call using Claudian's class structure
-    const call = document.createElement('div');
-    call.className = 'claudian-tool-call';
-
-    const header = document.createElement('div');
-    header.className = 'claudian-tool-header';
-    header.innerHTML =
-      '<div class="claudian-tool-icon claudian-tool-status status-running">' +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-             'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
-             'style="animation:claudian-spin 0.7s linear infinite">' +
-          '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83' +
-                  'M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>' +
-        '</svg>' +
-      '</div>' +
-      `<span class="claudian-tool-name">${name}</span>` +
-      '<span class="claudian-tool-chevron" style="margin-left:auto;color:var(--text-muted);' +
-            'font-size:14px;transition:transform 0.18s">›</span>';
-
-    const body = document.createElement('div');
-    body.className = 'claudian-tool-content claudian-tool-lines';
-    body.style.display = 'none';
-    const pre = document.createElement('pre');
-    pre.style.cssText = 'font-family:var(--font-monospace);font-size:11px;' +
-                        'color:var(--text-muted);white-space:pre-wrap;word-break:break-all;line-height:1.5';
-    pre.textContent = formatted;
-    body.appendChild(pre);
-
-    header.addEventListener('click', () => {
-      const open  = body.style.display !== 'none';
-      body.style.display = open ? 'none' : 'block';
-      const chev  = header.querySelector('.claudian-tool-chevron');
-      if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
-    });
-
-    call.appendChild(header);
-    call.appendChild(body);
-    currentMsg.appendChild(call);
-    scrollBottom();
+  let view;
+  try {
+    view = viewFactory(leaf);
+    leaf.view = view;
+  } catch (e) {
+    rootEl.innerHTML = `<div id="qt-error">ClaudianView instantiation failed:\n${e.stack || e}</div>`;
+    return;
   }
 
-  function onTurnComplete() {
-    removeTyping();
-    if (currentMsg) {
-      // Mark all tool spinners as done
-      currentMsg.querySelectorAll('.claudian-tool-status.status-running').forEach(el => {
-        el.classList.remove('status-running');
-        el.classList.add('status-completed');
-        el.innerHTML =
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-               'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-            '<polyline points="20 6 9 17 4 12"/>' +
-          '</svg>';
+  // ── 7. Open the view (builds DOM) ─────────────────────────────────────
+  try {
+    await view.onOpen();
+  } catch (e) {
+    console.warn('[claudian-qt] view.onOpen() threw (continuing):', e);
+  }
+
+  // ── 8. Bootstrap QWebChannel ──────────────────────────────────────────
+  new QWebChannel(qt.webChannelTransport, function(channel) {
+    const bridge = channel.objects.claude;
+    window.__qtBridge__ = bridge;
+
+    // ── cwd display and pick button ──────────────────────────────────────
+    const cwdEl   = document.getElementById('qt-cwd');
+    const pickBtn = document.getElementById('qt-pick-btn');
+
+    function updateCwd(path) {
+      mockApp.vault.adapter.basePath = path;
+      if (cwdEl) {
+        const home = path.match(/^\/Users\/[^/]+/) || path.match(/^\/home\/[^/]+/);
+        cwdEl.textContent = home ? path.replace(home[0], '~') : path;
+      }
+      // Propagate to plugin if it caches vault path
+      try { if (plugin.vaultPath !== undefined) plugin.vaultPath = path; } catch (_) {}
+    }
+
+    bridge.cwdChanged.connect(updateCwd);
+    updateCwd(bridge.cwd);
+
+    pickBtn.addEventListener('click', () => bridge.pickFolder());
+
+    // ── Inject Qt service into the active (and future) tabs ───────────
+    const qtService = new QtBridgeService(bridge);
+
+    function injectIntoActiveTab() {
+      const tabManager = view.getTabManager?.();
+      if (!tabManager) return;
+      const tab = tabManager.getActiveTab?.();
+      injectQtServiceIntoTab(tab, qtService);
+    }
+
+    injectIntoActiveTab();
+
+    // Inject into tabs created after initial load
+    // Monkey-patch TabManager.createTab if accessible
+    const tabManager = view.getTabManager?.();
+    if (tabManager && typeof tabManager.createTab === 'function') {
+      const origCreate = tabManager.createTab.bind(tabManager);
+      tabManager.createTab = async function(...args) {
+        const result = await origCreate(...args);
+        injectIntoActiveTab();
+        return result;
+      };
+    }
+
+    // ── Wire model selector → bridge ──────────────────────────────────
+    // Map Claudian display names to claude CLI shorthand values
+    const MODEL_LABEL_MAP = { 'opus': 'opus', 'opus 1m': 'opus', 'sonnet': 'sonnet', 'sonnet 1m': 'sonnet', 'haiku': 'haiku' };
+
+    function syncModelToUI(modelVal) {
+      if (!modelVal) return;
+      const needle = modelVal.toLowerCase();
+      document.querySelectorAll('.claudian-model-option').forEach(opt => {
+        const label = (opt.querySelector('span')?.textContent || '').toLowerCase().trim();
+        const optVal = MODEL_LABEL_MAP[label] || label;
+        const match  = optVal === needle || needle.includes(label);
+        opt.classList.toggle('selected', match);
+        if (match) {
+          const btnLabel = opt.closest('.claudian-model-selector')?.querySelector('.claudian-model-label');
+          if (btnLabel) btnLabel.textContent = opt.querySelector('span')?.textContent || '';
+        }
       });
     }
-    currentMsg     = null;
-    currentContent = null;
-    currentText    = '';
-    setStreaming(false);
-  }
 
-  function onErrorOccurred(msg) {
-    removeTyping();
-    currentMsg     = null;
-    currentContent = null;
-    currentText    = '';
-
-    hideWelcome();
-    const err = document.createElement('div');
-    err.className = 'claudian-error-msg';
-    err.textContent = '⚠ ' + msg;
-    messagesEl.appendChild(err);
-    scrollBottom();
-    setStreaming(false);
-  }
-
-  function onCwdChanged(path) {
-    const home = path.match(/^\/Users\/[^/]+/) || path.match(/^\/home\/[^/]+/);
-    cwdLabel.textContent = home ? path.replace(home[0], '~') : path;
-  }
-
-  // ── Send / Abort ─────────────────────────────────────────────────
-  function sendMessage() {
-    const text = inputEl.value.trim();
-    if (!text || !bridge) return;
-
-    inputEl.value = '';
-    autoResize();
-    setStreaming(true);
-
-    appendUserMessage(text);
-    beginAssistantTurn();
-
-    bridge.sendMessage(text);
-  }
-
-  inputEl.addEventListener('input', () => {
-    autoResize();
-    if (!streaming) sendBtn.disabled = !inputEl.value.trim();
-  });
-
-  inputEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); }
-    if (e.key === 'Escape' && streaming) { bridge.abort(); }
-  });
-
-  sendBtn.addEventListener('click', () => {
-    if (streaming) bridge.abort();
-    else           sendMessage();
-  });
-
-  document.getElementById('pick-btn').addEventListener('click', () => {
-    if (bridge) bridge.pickFolder();
-  });
-
-  // ── Model selector ────────────────────────────────────────────────
-  document.querySelectorAll('.claudian-model-option').forEach(opt => {
-    opt.addEventListener('click', () => {
-      document.querySelectorAll('.claudian-model-option').forEach(o => o.classList.remove('selected'));
-      opt.classList.add('selected');
-      const modelId = opt.dataset.model;
-      const label   = opt.textContent.split(' ')[0]; // "sonnet", "opus", "haiku"
-      document.getElementById('model-label').textContent = label;
-      if (bridge) bridge.setModel(modelId);
+    document.querySelector('.claudian-input-toolbar')?.addEventListener('click', e => {
+      const opt = e.target.closest('.claudian-model-option');
+      if (!opt) return;
+      const label    = (opt.querySelector('span')?.textContent || '').toLowerCase().trim();
+      const modelVal = MODEL_LABEL_MAP[label] || label;
+      bridge.setModel(modelVal);
+      syncModelToUI(modelVal);
     });
+
+    bridge.modelChanged.connect(syncModelToUI);
+    syncModelToUI(bridge.model);
+
+    // ── Wire YOLO toggle → bridge ──────────────────────────────────────
+    const toggleSwitch = document.querySelector('.claudian-permission-toggle .claudian-toggle-switch');
+    let syncingYolo = false;
+    if (toggleSwitch) {
+      new MutationObserver(() => {
+        if (syncingYolo) return;
+        bridge.setYolo(toggleSwitch.classList.contains('active'));
+      }).observe(toggleSwitch, { attributes: true, attributeFilter: ['class'] });
+
+      bridge.yoloChanged.connect(isYolo => {
+        syncingYolo = true;
+        toggleSwitch.classList.toggle('active', isYolo);
+        const lbl = document.querySelector('.claudian-permission-label');
+        if (lbl) lbl.textContent = isYolo ? 'YOLO' : 'Safe';
+        syncingYolo = false;
+      });
+
+      // Sync initial bridge state → UI
+      syncingYolo = true;
+      toggleSwitch.classList.toggle('active', bridge.yolo);
+      const permLabel = document.querySelector('.claudian-permission-label');
+      if (permLabel) permLabel.textContent = bridge.yolo ? 'YOLO' : 'Safe';
+      syncingYolo = false;
+    }
+
+    // ── Polish model button: add chevron + ready class ────────────────
+    const modelBtn = document.querySelector('.claudian-model-btn');
+    if (modelBtn && !modelBtn.querySelector('.claudian-model-chevron')) {
+      modelBtn.classList.add('ready');
+      const chevron = document.createElement('span');
+      chevron.className = 'claudian-model-chevron';
+      chevron.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+      modelBtn.appendChild(chevron);
+    }
+
+    // ── Inject send button into input toolbar ─────────────────────────
+    const inputToolbar = document.querySelector('.claudian-input-toolbar');
+    if (inputToolbar && !inputToolbar.querySelector('.qt-send-btn')) {
+      const sendBtn = document.createElement('div');
+      sendBtn.className  = 'qt-send-btn';
+      sendBtn.title      = 'Send message (Enter)';
+      sendBtn.setAttribute('aria-label', 'Send message');
+      sendBtn.innerHTML  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
+      sendBtn.addEventListener('click', () => {
+        const tm  = view.getTabManager?.();
+        const tab = tm?.getActiveTab?.();
+        tab?.controllers?.inputController?.sendMessage?.();
+      });
+      inputToolbar.appendChild(sendBtn);
+    }
   });
-
-  // ── YOLO toggle ───────────────────────────────────────────────────
-  const yoloSwitch = document.getElementById('yolo-switch');
-  const yoloLabel  = document.getElementById('yolo-label');
-  yoloSwitch.addEventListener('click', () => {
-    const active = yoloSwitch.classList.toggle('active');
-    yoloLabel.classList.toggle('plan-active', active);
-    if (bridge) bridge.setYolo(active);
-  });
-
-  // ── Input auto-resize ─────────────────────────────────────────────
-  function autoResize() {
-    inputEl.style.height = 'auto';
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
-  }
-
-  // ── QWebChannel bootstrap ─────────────────────────────────────────
-  new QWebChannel(qt.webChannelTransport, function(channel) {
-    bridge = channel.objects.claude;
-
-    bridge.textReady.connect(onTextReady);
-    bridge.toolUse.connect(onToolUse);
-    bridge.turnComplete.connect(onTurnComplete);
-    bridge.errorOccurred.connect(onErrorOccurred);
-    bridge.cwdChanged.connect(onCwdChanged);
-
-    onCwdChanged(bridge.cwd);
-    // Sync initial model/yolo state from bridge properties
-    if (bridge.model) bridge.setModel(bridge.model);
-    if (bridge.yolo)  { yoloSwitch.classList.add('active'); yoloLabel.classList.add('plan-active'); }
-    setStreaming(false);
-    inputEl.focus();
-  });
+})();
 </script>
 </body>
 </html>
