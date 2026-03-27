@@ -1,0 +1,6 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+  <qresource prefix="/chat">
+    <file alias="index.html">chat/index.html</file>
+  </qresource>
+</RCC>
