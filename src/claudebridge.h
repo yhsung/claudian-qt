@@ -1,5 +1,6 @@
 #pragma once
 #include <QObject>
+
 #include "claudeprocess.h"
 
 // Registered with QWebChannel as "claude".
@@ -24,6 +25,10 @@ public slots:
     void setModel(const QString &model);
     void setYolo(bool enabled);
     void pickFolder(); // opens native folder dialog, then emits cwdChanged
+    // History management
+    void requestSessions();                        // emits sessionsListed signal with JSON
+    void loadSession(const QString &sessionId);    // resume session and emit its history
+    void newSession();                             // clear session to start fresh
 
 signals:
     void textReady(const QString &text);
@@ -34,6 +39,8 @@ signals:
     void cwdChanged(const QString &path);
     void modelChanged(const QString &model);
     void yoloChanged(bool enabled);
+    void sessionsListed(const QString &json);         // JSON array of {id, preview, timestamp}
+    void sessionHistoryLoaded(const QString &json);   // JSON array of {role, text} turns
 
 private:
     ClaudeProcess *m_claude;
