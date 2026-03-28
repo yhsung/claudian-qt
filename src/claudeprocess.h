@@ -1,5 +1,6 @@
 #pragma once
 #include <QByteArray>
+#include <QJsonObject>
 #include <QObject>
 #include <QProcess>
 
@@ -21,6 +22,7 @@ signals:
     void toolUseStarted(const QString &name, const QString &inputJson);
     void turnFinished();
     void errorOccurred(const QString &msg);
+    void resultReceived(const QJsonObject &result);
 
 private slots:
     void onReadyRead();

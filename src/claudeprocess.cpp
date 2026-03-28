@@ -98,8 +98,12 @@ void ClaudeProcess::parseLine(const QByteArray &line) {
             // "thinking" blocks are intentionally skipped for this POC
         }
 
-    } else if (type == "result" && obj["is_error"].toBool()) {
-        emit errorOccurred(obj["result"].toString());
+    } else if (type == "result") {
+        if (obj["is_error"].toBool()) {
+            emit errorOccurred(obj["result"].toString());
+        } else {
+            emit resultReceived(obj);
+        }
     }
 }
 
