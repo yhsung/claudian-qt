@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Claudian Qt</title>
   <!-- Claudian design system styles -->
   <link rel="stylesheet" href="qrc:///claudian/styles.css">
@@ -175,6 +176,31 @@
       color: var(--text-faint, #636366);
       text-align: center;
     }
+    /* ── Width-fit overrides for desktop window ── */
+    *, *::before, *::after { box-sizing: border-box; }
+    .claudian-messages {
+      padding: 12px 16px;
+      overflow-x: hidden !important;
+    }
+    .claudian-message { max-width: 100%; }
+    .claudian-message-content pre,
+    .claudian-code-wrapper pre,
+    .claudian-code-wrapper.has-language pre {
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      overflow-x: hidden !important;
+      max-width: 100%;
+    }
+    .claudian-code-wrapper { max-width: 100%; overflow: hidden; }
+    /* Diff viewer and tool output also need wrapping */
+    .claudian-diff-content,
+    .claudian-tool-content pre { overflow-x: hidden !important; white-space: pre-wrap !important; word-wrap: break-word !important; }
+    .claudian-input-container { padding: 12px 16px 0; overflow: hidden; }
+    .claudian-input-wrapper { overflow: hidden; }
+    /* Always show copy buttons (no hover required) */
+    .claudian-text-copy-btn,
+    .claudian-code-wrapper .copy-code-button,
+    .claudian-code-wrapper .claudian-code-lang-label { opacity: 1; }
     #qt-error {
       color: #ff453a;
       padding: 16px;
