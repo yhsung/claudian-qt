@@ -77,30 +77,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIG-01 | — | Pending |
-| SIG-02 | — | Pending |
-| CAP-01 | — | Pending |
-| CAP-02 | — | Pending |
-| CAP-03 | — | Pending |
-| CAP-04 | — | Pending |
-| META-01 | — | Pending |
-| META-02 | — | Pending |
-| META-03 | — | Pending |
-| META-04 | — | Pending |
-| FMT-01 | — | Pending |
-| FMT-02 | — | Pending |
-| FMT-03 | — | Pending |
-| FMT-04 | — | Pending |
-| STOR-01 | — | Pending |
-| STOR-02 | — | Pending |
-| STOR-03 | — | Pending |
-| STOR-04 | — | Pending |
+| SIG-01 | Phase 1 | Pending |
+| SIG-02 | Phase 1 | Pending |
+| CAP-01 | Phase 2 | Pending |
+| CAP-02 | Phase 2 | Pending |
+| CAP-03 | Phase 2 | Pending |
+| CAP-04 | Phase 2 | Pending |
+| META-01 | Phase 2 | Pending |
+| META-02 | Phase 2 | Pending |
+| META-03 | Phase 2 | Pending |
+| META-04 | Phase 2 | Pending |
+| FMT-01 | Phase 2 | Pending |
+| FMT-02 | Phase 3 | Pending |
+| FMT-03 | Phase 2 | Pending |
+| FMT-04 | Phase 2 | Pending |
+| STOR-01 | Phase 2 | Pending |
+| STOR-02 | Phase 2 | Pending |
+| STOR-03 | Phase 2 | Pending |
+| STOR-04 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️ (roadmap pending)
+- Mapped to phases: 18
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation*
