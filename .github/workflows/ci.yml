@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          modules: 'qtwebengine qtwebchannel qtpositioning'
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel $(sysctl -n hw.ncpu)
+
+      - name: Verify app bundle
+        run: |
+          test -d build/ClaudianQt.app
+          test -f build/ClaudianQt.app/Contents/MacOS/ClaudianQt
+          test -f build/ClaudianQt.app/Contents/PlugIns/platforms/libqcocoa.dylib
+          test -f build/ClaudianQt.app/Contents/Resources/qt.conf
