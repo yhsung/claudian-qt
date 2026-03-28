@@ -1,7 +1,36 @@
 #include "claudeprocess.h"
+#include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcessEnvironment>
+#include <QStandardPaths>
+
+// macOS GUI apps get a minimal PATH that excludes typical npm/node locations.
+// Augment PATH with directories where 'claude' is commonly installed.
+static QString findClaudeBinary() {
+    const QString home = QDir::homePath();
+    const QStringList extraDirs = {
+        home + "/.local/bin",
+        home + "/.nvm/current/bin",
+        home + "/.volta/bin",
+        home + "/.fnm/current/bin",
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+        home + "/.npm-global/bin",
+    };
+
+    // Check extra dirs first (they're the ones GUI apps typically miss)
+    for (const QString &dir : extraDirs) {
+        const QString path = dir + "/claude";
+        if (QFile::exists(path))
+            return path;
+    }
+
+    // Fall back to QStandardPaths which searches the current PATH
+    return QStandardPaths::findExecutable("claude");
+}
 
 ClaudeProcess::ClaudeProcess(QObject *parent) : QObject(parent) {}
 
@@ -45,9 +74,17 @@ void ClaudeProcess::send(const QString &prompt, const QString &cwd,
         emit turnFinished();
     });
 
-    m_proc->start("claude", args);
+    const QString claudePath = findClaudeBinary();
+    if (claudePath.isEmpty()) {
+        emit errorOccurred("'claude' not found in PATH.\n  npm install -g @anthropic-ai/claude-code");
+        m_proc->deleteLater();
+        m_proc = nullptr;
+        return;
+    }
+
+    m_proc->start(claudePath, args);
     if (!m_proc->waitForStarted(3000)) {
-        emit errorOccurred("Failed to start 'claude'. Is it installed?\n  npm install -g @anthropic-ai/claude-code");
+        emit errorOccurred("Failed to start 'claude' at: " + claudePath);
         m_proc->deleteLater();
         m_proc = nullptr;
     }
@@ -102,6 +139,7 @@ void ClaudeProcess::parseLine(const QByteArray &line) {
         if (obj["is_error"].toBool()) {
             emit errorOccurred(obj["result"].toString());
         } else {
+            qDebug() << "resultReceived:" << obj;
             emit resultReceived(obj);
         }
     }
