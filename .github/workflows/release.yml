@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          modules: 'qtwebengine qtwebchannel qtpositioning'
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel $(sysctl -n hw.ncpu)
+
+      - name: Run macdeployqt
+        run: |
+          macdeployqt build/ClaudianQt.app
+
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "ClaudianQt" \
+            -srcfolder build/ClaudianQt.app \
+            -ov -format UDZO \
+            build/ClaudianQt-${{ github.ref_name }}-arm64.dmg
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/ClaudianQt-${{ github.ref_name }}-arm64.dmg
+          generate_release_notes: true
