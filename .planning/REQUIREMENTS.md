@@ -7,8 +7,8 @@
 
 ### Signal Extension
 
-- [ ] **SIG-01**: System parses the full `result` message from Claude CLI subprocess (currently only `is_error` is read; `usage`, `duration_ms`, `total_cost_usd`, `stop_reason` are discarded)
-- [ ] **SIG-02**: System emits a `resultReceived(QJsonObject)` signal from `ClaudeProcess` when a successful `result` message is parsed
+- [x] **SIG-01**: System parses the full `result` message from Claude CLI subprocess (currently only `is_error` is read; `usage`, `duration_ms`, `total_cost_usd`, `stop_reason` are discarded)
+- [x] **SIG-02**: System emits a `resultReceived(QJsonObject)` signal from `ClaudeProcess` when a successful `result` message is parsed
 
 ### Capture
 
@@ -77,8 +77,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIG-01 | Phase 1 | Pending |
-| SIG-02 | Phase 1 | Pending |
+| SIG-01 | Phase 1 | Complete |
+| SIG-02 | Phase 1 | Complete |
 | CAP-01 | Phase 2 | Pending |
 | CAP-02 | Phase 2 | Pending |
 | CAP-03 | Phase 2 | Pending |

@@ -12,7 +12,7 @@ This milestone adds always-on conversation logging to an existing Qt6/WebEngine 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Signal Extension** - Expose the full `result` message from ClaudeProcess so token counts, cost, and duration are available to the logger
+- [x] **Phase 1: Signal Extension** - Expose the full `result` message from ClaudeProcess so token counts, cost, and duration are available to the logger (completed 2026-03-28)
 - [ ] **Phase 2: Core Logger (JSONL)** - Introduce ConversationLogger with session lifecycle, turn state model, and JSONL output including all capture, metadata, and storage requirements
 - [ ] **Phase 3: Markdown Sidecar** - Add the human-readable `.md` companion file driven from the same Turn struct established in Phase 2
 
@@ -26,9 +26,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. A breakpoint or log statement on `resultReceived` fires after every successful Claude turn
   2. The emitted QJsonObject contains `usage.input_tokens`, `usage.output_tokens`, `duration_ms`, and `total_cost_usd` fields
   3. Existing error handling behavior (is_error path) is unchanged — error turns still emit errorOccurred as before
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 01-01-PLAN.md — Add resultReceived(QJsonObject) signal to ClaudeProcess and emit from parseLine()
+- [x] 01-01-PLAN.md — Add resultReceived(QJsonObject) signal to ClaudeProcess and emit from parseLine()
 
 ### Phase 2: Core Logger (JSONL)
 **Goal**: Every conversation is captured to a JSONL file with complete turn data, session metadata, and safe handling of aborted and crashed turns
@@ -59,6 +59,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Signal Extension | 0/1 | Planning complete | - |
+| 1. Signal Extension | 1/1 | Complete   | 2026-03-28 |
 | 2. Core Logger (JSONL) | 0/? | Not started | - |
 | 3. Markdown Sidecar | 0/? | Not started | - |
