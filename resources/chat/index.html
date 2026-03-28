@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Claudian Qt</title>
   <!-- Claudian design system styles -->
   <link rel="stylesheet" href="qrc:///claudian/styles.css">
@@ -77,7 +78,6 @@
       padding: 6px 12px;
       background: var(--background-secondary, #2c2c2e);
       border-bottom: 1px solid var(--background-modifier-border, #48484a);
-      flex-shrink: 0; /* stays fixed; claudian-root gets remaining height */
       font-size: 11px;
       font-family: var(--font-monospace, monospace);
     }
@@ -88,7 +88,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    #qt-pick-btn {
+    #qt-pick-btn, #qt-history-btn {
       background: var(--background-secondary-alt, #3a3a3c);
       border: 1px solid var(--background-modifier-border, #48484a);
       color: var(--text-normal, #dcddde);
@@ -99,7 +99,108 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
-    #qt-pick-btn:hover { opacity: 0.8; }
+    #qt-pick-btn:hover, #qt-history-btn:hover { opacity: 0.8; }
+    #qt-history-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+    }
+    #qt-history-btn.active {
+      border-color: var(--interactive-accent, #7c6af7);
+      color: var(--interactive-accent, #7c6af7);
+    }
+    /* History panel — in-flow so it pushes the chat area down (avoids z-index/clip issues) */
+    #qt-toolbar-wrapper { flex-shrink: 0; }
+    #qt-history-panel {
+      max-height: 50vh;
+      background: var(--background-secondary, #2c2c2e);
+      border-bottom: 1px solid var(--background-modifier-border, #48484a);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #qt-history-panel.hidden { display: none; }
+    #qt-history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--background-modifier-border, #48484a);
+      flex-shrink: 0;
+    }
+    .qt-history-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted, #999);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #qt-new-chat-btn {
+      background: var(--interactive-accent, #7c6af7);
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    #qt-new-chat-btn:hover { opacity: 0.85; }
+    #qt-history-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+    .qt-history-item {
+      padding: 8px 10px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--background-modifier-border, #48484a);
+    }
+    .qt-history-item:last-child { border-bottom: none; }
+    .qt-history-item:hover { background: var(--background-modifier-hover, rgba(255,255,255,0.06)); }
+    .qt-history-item.active { background: rgba(124,106,247,0.12); border-left: 2px solid var(--interactive-accent, #7c6af7); }
+    .qt-history-preview {
+      font-size: 12px;
+      color: var(--text-normal, #dcddde);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .qt-history-time {
+      font-size: 10px;
+      color: var(--text-faint, #636366);
+      margin-top: 2px;
+    }
+    .qt-history-empty {
+      padding: 16px 10px;
+      font-size: 12px;
+      color: var(--text-faint, #636366);
+      text-align: center;
+    }
+    /* ── Width-fit overrides for desktop window ── */
+    *, *::before, *::after { box-sizing: border-box; }
+    .claudian-messages {
+      padding: 12px 16px;
+      overflow-x: hidden !important;
+    }
+    .claudian-message { max-width: 100%; }
+    .claudian-message-content pre,
+    .claudian-code-wrapper pre,
+    .claudian-code-wrapper.has-language pre {
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      overflow-x: hidden !important;
+      max-width: 100%;
+    }
+    .claudian-code-wrapper { max-width: 100%; overflow: hidden; }
+    /* Diff viewer and tool output also need wrapping */
+    .claudian-diff-content,
+    .claudian-tool-content pre { overflow-x: hidden !important; white-space: pre-wrap !important; word-wrap: break-word !important; }
+    .claudian-input-container { padding: 12px 16px 0; overflow: hidden; }
+    .claudian-input-wrapper { overflow: hidden; }
+    /* Always show copy buttons (no hover required) */
+    .claudian-text-copy-btn,
+    .claudian-code-wrapper .copy-code-button,
+    .claudian-code-wrapper .claudian-code-lang-label { opacity: 1; }
     #qt-error {
       color: #ff453a;
       padding: 16px;
@@ -124,14 +225,31 @@
 </head>
 <body>
 
-<div id="qt-toolbar">
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-       stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-       style="color:var(--text-muted,#999);flex-shrink:0">
-    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-  </svg>
-  <span id="qt-cwd">~/</span>
-  <button id="qt-pick-btn">Open Folder</button>
+<div id="qt-toolbar-wrapper">
+  <div id="qt-toolbar">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+         style="color:var(--text-muted,#999);flex-shrink:0">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </svg>
+    <span id="qt-cwd">~/</span>
+    <button id="qt-history-btn" title="Conversation history">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+      History
+    </button>
+    <button id="qt-pick-btn">Open Folder</button>
+  </div>
+
+  <div id="qt-history-panel" class="hidden">
+    <div id="qt-history-header">
+      <span class="qt-history-title">Conversations</span>
+      <button id="qt-new-chat-btn">+ New Chat</button>
+    </div>
+    <div id="qt-history-list"></div>
+  </div>
 </div>
 
 <div id="claudian-root"></div>
@@ -403,6 +521,126 @@ function injectQtServiceIntoTab(tab, qtService) {
     updateCwd(bridge.cwd);
 
     pickBtn.addEventListener('click', () => bridge.pickFolder());
+
+    // ── History panel ──────────────────────────────────────────────────
+    const historyBtn   = document.getElementById('qt-history-btn');
+    const historyPanel = document.getElementById('qt-history-panel');
+    const historyList  = document.getElementById('qt-history-list');
+    const newChatBtn   = document.getElementById('qt-new-chat-btn');
+    console.log('[history] elements:', {historyBtn, historyPanel, historyList, newChatBtn});
+    console.log('[history] bridge.requestSessions:', typeof bridge.requestSessions);
+    console.log('[history] bridge.sessionsListed:', typeof bridge.sessionsListed);
+
+    let activeHistoryId = null;
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function relativeTime(iso) {
+      if (!iso) return '';
+      const diff = Date.now() - new Date(iso).getTime();
+      const m = Math.floor(diff / 60000);
+      if (m < 1) return 'just now';
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      const d = Math.floor(h / 24);
+      return d < 7 ? `${d}d ago` : new Date(iso).toLocaleDateString();
+    }
+
+    function renderHistory(sessions) {
+      historyList.innerHTML = '';
+      if (!sessions || sessions.length === 0) {
+        historyList.innerHTML = '<div class="qt-history-empty">No conversations yet</div>';
+        return;
+      }
+      sessions.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'qt-history-item' + (s.id === activeHistoryId ? ' active' : '');
+        item.dataset.sid = s.id;
+        item.innerHTML =
+          `<div class="qt-history-preview">${escHtml(s.preview)}</div>` +
+          `<div class="qt-history-time">${relativeTime(s.timestamp)}</div>`;
+        item.addEventListener('click', () => {
+          activeHistoryId = s.id;
+          bridge.loadSession(s.id);
+          historyList.querySelectorAll('.qt-history-item')
+            .forEach(el => el.classList.toggle('active', el.dataset.sid === s.id));
+          closeHistory();
+        });
+        historyList.appendChild(item);
+      });
+    }
+
+    // ── Render loaded session history into the Claudian messages container ──
+    bridge.sessionHistoryLoaded.connect(json => {
+      let turns;
+      try { turns = JSON.parse(json); } catch(e) { return; }
+      const container = document.querySelector('.claudian-messages');
+      if (!container) return;
+      container.innerHTML = '';
+      turns.forEach(turn => {
+        const msg = document.createElement('div');
+        msg.className = 'claudian-message ' +
+          (turn.role === 'user' ? 'claudian-message-user' : 'claudian-message-assistant');
+        const content = document.createElement('div');
+        content.className = 'claudian-message-content';
+        const p = document.createElement('p');
+        p.style.whiteSpace = 'pre-wrap';
+        p.style.margin = '0';
+        p.textContent = turn.text;
+        content.appendChild(p);
+        msg.appendChild(content);
+        container.appendChild(msg);
+      });
+      container.scrollTop = container.scrollHeight;
+    });
+
+    // Sessions arrive via signal (more reliable than slot return-value callback)
+    bridge.sessionsListed.connect(json => {
+      try { renderHistory(JSON.parse(json)); }
+      catch(e) { console.error('[history] parse error:', e); }
+    });
+
+    function openHistory() {
+      console.log('[history] openHistory called');
+      historyList.innerHTML = '<div class="qt-history-empty">Loading…</div>';
+      historyPanel.classList.remove('hidden');
+      historyBtn.classList.add('active');
+      console.log('[history] panel hidden after remove:', historyPanel.classList.contains('hidden'));
+      bridge.requestSessions();
+    }
+
+    function closeHistory() {
+      historyPanel.classList.add('hidden');
+      historyBtn.classList.remove('active');
+    }
+
+    historyBtn.addEventListener('click', e => {
+      console.log('[history] button clicked, panel hidden:', historyPanel.classList.contains('hidden'));
+      e.stopPropagation();
+      historyPanel.classList.contains('hidden') ? openHistory() : closeHistory();
+    });
+
+    newChatBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      activeHistoryId = null;
+      bridge.newSession();
+      historyList.querySelectorAll('.qt-history-item').forEach(el => el.classList.remove('active'));
+      closeHistory();
+    });
+
+    historyPanel.addEventListener('click', e => e.stopPropagation());
+
+    // When cwd changes, reset active session tracking
+    bridge.cwdChanged.connect(() => { activeHistoryId = null; });
+
+    // When a new session is created by the process, track it as active
+    bridge.sessionReady.connect(id => {
+      if (id) activeHistoryId = id;
+      else activeHistoryId = null;
+    });
 
     // ── Inject Qt service into the active (and future) tabs ───────────
     const qtService = new QtBridgeService(bridge);
