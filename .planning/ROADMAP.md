@@ -26,7 +26,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. A breakpoint or log statement on `resultReceived` fires after every successful Claude turn
   2. The emitted QJsonObject contains `usage.input_tokens`, `usage.output_tokens`, `duration_ms`, and `total_cost_usd` fields
   3. Existing error handling behavior (is_error path) is unchanged — error turns still emit errorOccurred as before
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 01-01-PLAN.md — Add resultReceived(QJsonObject) signal to ClaudeProcess and emit from parseLine()
 
 ### Phase 2: Core Logger (JSONL)
 **Goal**: Every conversation is captured to a JSONL file with complete turn data, session metadata, and safe handling of aborted and crashed turns
@@ -57,6 +59,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Signal Extension | 0/? | Not started | - |
+| 1. Signal Extension | 0/1 | Planning complete | - |
 | 2. Core Logger (JSONL) | 0/? | Not started | - |
 | 3. Markdown Sidecar | 0/? | Not started | - |
