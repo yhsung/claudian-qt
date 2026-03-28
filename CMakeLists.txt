@@ -16,6 +16,14 @@ qt_add_executable(ClaudianQt
     resources/resources.qrc
 )
 
+set_target_properties(ClaudianQt PROPERTIES
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME "ClaudianQt"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.claudianqt.app"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+)
+
 target_include_directories(ClaudianQt PRIVATE src)
 
 target_link_libraries(ClaudianQt PRIVATE
@@ -24,4 +32,21 @@ target_link_libraries(ClaudianQt PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
     Qt6::WebChannel
+)
+
+# Bundle the cocoa platform plugin and qt.conf so the app launches without QT_PLUGIN_PATH
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/qt.conf"
+    CONTENT "[Paths]\nPlugins = PlugIns\n")
+
+add_custom_command(TARGET ClaudianQt POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/PlugIns/platforms"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:Qt6::QCocoaIntegrationPlugin>"
+        "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/PlugIns/platforms/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_BINARY_DIR}/qt.conf"
+        "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/qt.conf"
 )
