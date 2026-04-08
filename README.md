@@ -1,6 +1,6 @@
 # Claudian Qt
 
-A native macOS desktop wrapper for the [Claude Code](https://claude.ai/code) CLI, built with Qt6 and WebEngine. It renders the [Claudian](https://github.com/claudian) chat interface inside a native window and bridges it to the `claude` subprocess via `QWebChannel`.
+A native macOS desktop wrapper for the [Claude Code](https://claude.ai/code) CLI, built with Qt6 and WebEngine. It renders the [Claudian]([https://github.com/claudian](https://github.com/YishenTu/claudian)) chat interface inside a native window and bridges it to the `claude` subprocess via `QWebChannel`.
 
 ## How it works
 
