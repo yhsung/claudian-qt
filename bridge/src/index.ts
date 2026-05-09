@@ -32,6 +32,10 @@ async function main(): Promise<void> {
   try {
     const cmd = await readStdinCommand();
 
+    if (!cmd.prompt || typeof cmd.prompt !== "string") {
+      throw new Error("Missing required field: prompt must be a non-empty string");
+    }
+
     const queryResult = query({
       prompt: cmd.prompt,
       options: {

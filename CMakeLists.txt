@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.26)
 project(ClaudianQt VERSION 0.1 LANGUAGES CXX)
 
+enable_testing()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -79,6 +81,12 @@ if(NPM_EXECUTABLE)
         DEPENDS "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
     )
     add_dependencies(ClaudianQt ClaudeBridge)
+
+    add_test(
+        NAME BridgeTests
+        COMMAND ${NPM_EXECUTABLE} test
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bridge
+    )
 
     # Copy dist/index.js into app bundle Resources/bridge/
     add_custom_command(TARGET ClaudianQt POST_BUILD
