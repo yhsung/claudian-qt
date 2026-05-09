@@ -1,0 +1,75 @@
+#include "attachmentstore.h"
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QImageReader>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMimeDatabase>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QUuid>
+#include <QUrl>
+
+AttachmentStore::AttachmentStore(QObject *parent)
+    : QObject(parent)
+{
+}
+
+QString AttachmentStore::stagingRoot() const {
+    const QString home = QDir::homePath();
+    return home + "/.claudian-qt/attachments/staging";
+}
+
+QString AttachmentStore::importBytes(
+    const QByteArray &bytes,
+    const QString &originalName,
+    const QString &mimeType
+) {
+    if (!isSupportedImageMime(mimeType)) return {};
+
+    QDir().mkpath(stagingRoot());
+    const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const QString path = stagingRoot() + "/" + id + "-" + QFileInfo(originalName).fileName();
+
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) return {};
+    file.write(bytes);
+    if (!file.commit()) return {};
+
+    QImageReader reader(path);
+    const QSize size = reader.size();
+
+    return QString::fromUtf8(QJsonDocument(QJsonObject{
+        {"id", id},
+        {"originalName", originalName},
+        {"mimeType", mimeType},
+        {"stagedPath", path},
+        {"fileUrl", QUrl::fromLocalFile(path).toString()},
+        {"sizeBytes", static_cast<qint64>(bytes.size())},
+        {"width", size.isValid() ? size.width() : QJsonValue()},
+        {"height", size.isValid() ? size.height() : QJsonValue()}
+    }).toJson(QJsonDocument::Compact));
+}
+
+QString AttachmentStore::importFile(const QString &sourcePath) {
+    QFile file(sourcePath);
+    if (!file.open(QIODevice::ReadOnly)) return {};
+    const QString mimeType = QMimeDatabase().mimeTypeForFile(sourcePath).name();
+    return importBytes(file.readAll(), QFileInfo(sourcePath).fileName(), mimeType);
+}
+
+QString AttachmentStore::importBase64Image(
+    const QString &originalName,
+    const QString &mimeType,
+    const QString &base64Data
+) {
+    return importBytes(QByteArray::fromBase64(base64Data.toUtf8()), originalName, mimeType);
+}
+
+bool AttachmentStore::isSupportedImageMime(const QString &mimeType) const {
+    return mimeType == "image/png"
+        || mimeType == "image/jpeg"
+        || mimeType == "image/gif"
+        || mimeType == "image/webp";
+}

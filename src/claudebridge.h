@@ -1,5 +1,6 @@
 #pragma once
 #include <QObject>
+#include "attachmentstore.h"
 #include "bridgedaemon.h"
 
 // Registered with QWebChannel as "claude".
@@ -19,12 +20,19 @@ public:
     bool    yolo()  const { return m_yolo; }
 
 public slots:
-    void sendMessage(const QString &text);
+    void sendMessage(const QString &text, const QString &attachmentsJson = "[]");
     void abort();
     void setCwd(const QString &path);
     void setModel(const QString &model);
     void setYolo(bool enabled);
     void pickFolder();
+    void pickImages();
+    void importImageData(
+        const QString &requestId,
+        const QString &originalName,
+        const QString &mimeType,
+        const QString &base64Data
+    );
     void requestSessions();
     void loadSession(const QString &sessionId);
     void newSession();
@@ -40,10 +48,13 @@ signals:
     void yoloChanged(bool enabled);
     void sessionsListed(const QString &json);
     void sessionHistoryLoaded(const QString &json);
+    void imagesPicked(const QString &json);
+    void imageImported(const QString &requestId, const QString &json);
 
 private:
-    BridgeDaemon *m_daemon;
-    QString       m_cwd;
-    QString       m_model;
-    bool          m_yolo = false;
+    BridgeDaemon    *m_daemon;
+    AttachmentStore *m_attachmentStore;
+    QString          m_cwd;
+    QString          m_model;
+    bool             m_yolo = false;
 };

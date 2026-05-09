@@ -17,6 +17,11 @@ MainWindow::MainWindow(QWidget *parent)
     // Remote debugging on port 9222 — connect via chrome://inspect or DevTools
     qputenv("QTWEBENGINE_REMOTE_DEBUGGING", "9222");
 
+    m_webView->settings()->setAttribute(
+        QWebEngineSettings::LocalContentCanAccessFileUrls,
+        true
+    );
+
     m_webView->load(QUrl("qrc:/chat/index.html"));
 
     setCentralWidget(m_webView);

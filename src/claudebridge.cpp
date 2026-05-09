@@ -1,11 +1,14 @@
 #include "claudebridge.h"
 #include <QDir>
 #include <QFileDialog>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 
 ClaudeBridge::ClaudeBridge(QObject *parent)
     : QObject(parent)
     , m_daemon(new BridgeDaemon(this))
+    , m_attachmentStore(new AttachmentStore(this))
     , m_cwd(QDir::homePath())
 {
     connect(m_daemon, &BridgeDaemon::sessionInitialized,   this, &ClaudeBridge::sessionReady);
@@ -27,9 +30,19 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     m_daemon->start();
 }
 
-void ClaudeBridge::sendMessage(const QString &text) {
-    if (text.trimmed().isEmpty()) return;
-    m_daemon->sendCommand(QJsonObject{{"type", "send"}, {"prompt", text.trimmed()}});
+void ClaudeBridge::sendMessage(const QString &text, const QString &attachmentsJson) {
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(attachmentsJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isArray()) {
+        emit errorOccurred("Invalid attachment payload.");
+        return;
+    }
+    if (text.trimmed().isEmpty() && doc.array().isEmpty()) return;
+    m_daemon->sendCommand(QJsonObject{
+        {"type", "send"},
+        {"prompt", text.trimmed()},
+        {"attachments", doc.array()}
+    });
 }
 
 void ClaudeBridge::abort() {
@@ -66,6 +79,36 @@ void ClaudeBridge::pickFolder() {
     );
     if (!dir.isEmpty())
         setCwd(dir);
+}
+
+void ClaudeBridge::pickImages() {
+    const QStringList paths = QFileDialog::getOpenFileNames(
+        nullptr,
+        "Select Images",
+        m_cwd,
+        "Images (*.png *.jpg *.jpeg *.gif *.webp)"
+    );
+
+    QJsonArray imported;
+    for (const QString &path : paths) {
+        const QString json = m_attachmentStore->importFile(path);
+        if (!json.isEmpty()) imported.append(QJsonDocument::fromJson(json.toUtf8()).object());
+    }
+    emit imagesPicked(QString::fromUtf8(QJsonDocument(imported).toJson(QJsonDocument::Compact)));
+}
+
+void ClaudeBridge::importImageData(
+    const QString &requestId,
+    const QString &originalName,
+    const QString &mimeType,
+    const QString &base64Data
+) {
+    const QString json = m_attachmentStore->importBase64Image(originalName, mimeType, base64Data);
+    if (json.isEmpty()) {
+        emit errorOccurred("Failed to import image data.");
+        return;
+    }
+    emit imageImported(requestId, json);
 }
 
 void ClaudeBridge::requestSessions() {

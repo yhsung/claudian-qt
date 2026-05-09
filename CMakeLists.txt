@@ -15,6 +15,7 @@ qt_add_executable(ClaudianQt
     src/mainwindow.cpp
     src/bridgedaemon.cpp
     src/claudebridge.cpp
+    src/attachmentstore.cpp
     resources/resources.qrc
 )
 
