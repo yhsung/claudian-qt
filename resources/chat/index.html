@@ -325,24 +325,24 @@
 
 // ── Qt Bridge Service ──────────────────────────────────────────────────────
 // Replaces ClaudianService. Async-generator query() pumps chunks from C++
-// QWebChannel signals and emits the Anthropic SSE streaming event sequence
-// so the Claudian plugin renders tokens incrementally.
+// QWebChannel signals. The Claudian plugin's StreamController handles:
+//   case "text": await this.appendText(chunk.content)
+// so we must use { type:'text', content } for the field name.
 //
-// SSE event order per turn:
-//   message_start → content_block_start → content_block_delta* →
-//   content_block_stop → message_delta → message_stop
+// Progressive rendering fix: each textReady signal enqueues via setTimeout(0)
+// so every token is delivered as a separate macrotask, giving the browser a
+// repaint slot between each one (otherwise batched Qt signals fire in one
+// synchronous pass and the DOM only updates after the full response).
 class QtBridgeService {
   constructor(bridge) {
     this._bridge  = bridge;
     this._queue   = [];
     this._waiter  = null;
 
-    // Emit content_block_delta / text_delta — the Anthropic streaming format
-    this._onText  = (text) => this._enqueue({
-      type: 'content_block_delta',
-      index: 0,
-      delta: { type: 'text_delta', text }
-    });
+    // setTimeout(0) separates each token into its own macrotask → browser repaints
+    this._onText  = (text) => {
+      setTimeout(() => this._enqueue({ type: 'text', content: text }), 0);
+    };
     this._onTool  = (name, json) => {
       let input = {};
       try { input = JSON.parse(json); } catch (_) {}
@@ -374,37 +374,12 @@ class QtBridgeService {
     // Flush any stale chunks from a previous aborted turn.
     this._queue = []; this._waiter = null;
     this._bridge.sendMessage(prompt);
-
-    // 1. message_start — initialises the assistant message context
-    yield {
-      type: 'message_start',
-      message: {
-        id: `msg_qt_${Date.now()}`,
-        type: 'message',
-        role: 'assistant',
-        content: [],
-        model: '',
-        stop_reason: null,
-        stop_sequence: null,
-        usage: { input_tokens: 0, output_tokens: 0 }
-      }
-    };
-
-    // 2. content_block_start — opens the text block at index 0
-    yield { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } };
-
-    // 3. Stream content_block_delta events as tokens arrive
     for (;;) {
       const chunk = await this._next();
-      if (chunk.type === 'done') break;
+      if (chunk.type === 'done')  return;
       if (chunk.type === 'error') throw new Error(chunk.msg);
-      yield chunk; // { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } }
+      yield chunk;
     }
-
-    // 4. Close the content block and message
-    yield { type: 'content_block_stop', index: 0 };
-    yield { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 0 } };
-    yield { type: 'message_stop' };
   }
 
   abort() {
