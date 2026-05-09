@@ -38,7 +38,7 @@ static QString findBridgeScript() {
     // Development: <project-root>/bridge/dist/index.js
     // Binary is at build/ClaudianQt.app/Contents/MacOS/ClaudianQt (4 levels up)
     const QString devPath = QCoreApplication::applicationDirPath()
-                            + "/../../../bridge/dist/index.js";
+                            + "/../../../../bridge/dist/index.js";
     const QFileInfo devInfo(devPath);
     if (devInfo.exists())
         return devInfo.canonicalFilePath();
@@ -99,6 +99,7 @@ void ClaudeProcess::send(const QString &prompt, const QString &cwd,
     m_proc->start(nodePath, {bridgePath});
     if (!m_proc->waitForStarted(3000)) {
         emit errorOccurred("Failed to start bridge: " + bridgePath);
+        m_proc->disconnect();
         m_proc->deleteLater();
         m_proc = nullptr;
         return;
