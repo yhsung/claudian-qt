@@ -796,6 +796,24 @@ function injectQtServiceIntoTab(tab, qtService) {
     setupAutoScroll();
     setTimeout(setupAutoScroll, 500);
 
+    // ── Enter-key guard during streaming ─────────────────────────────
+    // Belt-and-suspenders: block submit keydown while streaming
+    // even if pointer-events lock doesn't stop the Claudian plugin.
+    document.addEventListener('keydown', (e) => {
+      if (!isStreaming) return;
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const active = document.activeElement;
+        const isInInput = active && (
+          active.tagName === 'TEXTAREA' ||
+          active.closest('.claudian-input-container')
+        );
+        if (isInInput) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }
+    }, true); // capture phase — runs before Claudian plugin's listener
+
     function injectIntoActiveTab() {
       const tabManager = view.getTabManager?.();
       if (!tabManager) return;
