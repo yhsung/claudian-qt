@@ -1,35 +1,49 @@
 #include "claudeprocess.h"
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
 
-// macOS GUI apps get a minimal PATH that excludes typical npm/node locations.
-// Augment PATH with directories where 'claude' is commonly installed.
-static QString findClaudeBinary() {
+static QString findNodeBinary() {
     const QString home = QDir::homePath();
     const QStringList extraDirs = {
-        home + "/.local/bin",
         home + "/.nvm/current/bin",
         home + "/.volta/bin",
         home + "/.fnm/current/bin",
-        "/usr/local/bin",
         "/opt/homebrew/bin",
-        home + "/.npm-global/bin",
+        "/usr/local/bin",
+        "/usr/bin",
     };
-
-    // Check extra dirs first (they're the ones GUI apps typically miss)
     for (const QString &dir : extraDirs) {
-        const QString path = dir + "/claude";
+        const QString path = dir + "/node";
         if (QFile::exists(path))
             return path;
     }
+    return QStandardPaths::findExecutable("node");
+}
 
-    // Fall back to QStandardPaths which searches the current PATH
-    return QStandardPaths::findExecutable("claude");
+static QString findBridgeScript() {
+    // Production: inside app bundle at Contents/Resources/bridge/index.js
+    const QString bundlePath = QCoreApplication::applicationDirPath()
+                               + "/../Resources/bridge/index.js";
+    const QFileInfo bundleInfo(bundlePath);
+    if (bundleInfo.exists())
+        return bundleInfo.canonicalFilePath();
+
+    // Development: <project-root>/bridge/dist/index.js
+    // Binary is at build/ClaudianQt.app/Contents/MacOS/ClaudianQt (4 levels up)
+    const QString devPath = QCoreApplication::applicationDirPath()
+                            + "/../../../bridge/dist/index.js";
+    const QFileInfo devInfo(devPath);
+    if (devInfo.exists())
+        return devInfo.canonicalFilePath();
+
+    return {};
 }
 
 ClaudeProcess::ClaudeProcess(QObject *parent) : QObject(parent) {}
@@ -54,19 +68,27 @@ void ClaudeProcess::send(const QString &prompt, const QString &cwd,
     m_proc->setWorkingDirectory(cwd);
     m_proc->setProcessChannelMode(QProcess::SeparateChannels);
 
-    QStringList args{"--output-format", "stream-json", "--verbose", "--print", prompt};
-    if (!sessionId.isEmpty())
-        args << "--resume" << sessionId;
-    if (!model.isEmpty())
-        args << "--model" << model;
-    if (yolo)
-        args << "--dangerously-skip-permissions";
+    const QString nodePath   = findNodeBinary();
+    const QString bridgePath = findBridgeScript();
+
+    if (nodePath.isEmpty()) {
+        emit errorOccurred("'node' not found.\n  Install Node.js 18+ to use the TypeScript bridge.");
+        m_proc->deleteLater();
+        m_proc = nullptr;
+        return;
+    }
+    if (bridgePath.isEmpty()) {
+        emit errorOccurred("Bridge script not found.\n  Run: cd bridge && npm install && npm run build");
+        m_proc->deleteLater();
+        m_proc = nullptr;
+        return;
+    }
 
     connect(m_proc, &QProcess::readyReadStandardOutput, this, &ClaudeProcess::onReadyRead);
     connect(m_proc, &QProcess::errorOccurred,           this, &ClaudeProcess::onProcessError);
     connect(m_proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, [this](int exitCode, QProcess::ExitStatus) {
-        onReadyRead(); // flush remaining buffer
+        onReadyRead();
         if (exitCode != 0) {
             const QString err = QString::fromUtf8(m_proc->readAllStandardError()).trimmed();
             if (!err.isEmpty()) emit errorOccurred(err);
@@ -74,20 +96,22 @@ void ClaudeProcess::send(const QString &prompt, const QString &cwd,
         emit turnFinished();
     });
 
-    const QString claudePath = findClaudeBinary();
-    if (claudePath.isEmpty()) {
-        emit errorOccurred("'claude' not found in PATH.\n  npm install -g @anthropic-ai/claude-code");
+    m_proc->start(nodePath, {bridgePath});
+    if (!m_proc->waitForStarted(3000)) {
+        emit errorOccurred("Failed to start bridge: " + bridgePath);
         m_proc->deleteLater();
         m_proc = nullptr;
         return;
     }
 
-    m_proc->start(claudePath, args);
-    if (!m_proc->waitForStarted(3000)) {
-        emit errorOccurred("Failed to start 'claude' at: " + claudePath);
-        m_proc->deleteLater();
-        m_proc = nullptr;
-    }
+    QJsonObject cmd;
+    cmd["prompt"]    = prompt;
+    cmd["cwd"]       = cwd;
+    cmd["sessionId"] = sessionId;
+    cmd["model"]     = model;
+    cmd["yolo"]      = yolo;
+    m_proc->write(QJsonDocument(cmd).toJson(QJsonDocument::Compact) + "\n");
+    m_proc->closeWriteChannel();
 }
 
 void ClaudeProcess::abort() {
@@ -147,5 +171,5 @@ void ClaudeProcess::parseLine(const QByteArray &line) {
 
 void ClaudeProcess::onProcessError(QProcess::ProcessError error) {
     if (error == QProcess::FailedToStart)
-        emit errorOccurred("'claude' not found in PATH.\n  npm install -g @anthropic-ai/claude-code");
+        emit errorOccurred("'node' not found in PATH.\n  Install Node.js 18+ to use the TypeScript bridge.");
 }
