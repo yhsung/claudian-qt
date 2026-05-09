@@ -325,87 +325,12 @@
 'use strict';
 
 // ── Progressive Markdown Rendering (marked) ───────────────────────────────
-// Configure marked once: GFM, no single-newline <br> (Claude uses paragraph breaks).
+// Replace the shim's hand-rolled parser with marked so the plugin's
+// MarkdownRenderer.renderMarkdown gets full GFM support (tables, task lists,
+// strikethrough, etc.) for both streaming and static message rendering.
 if (window.marked) {
-  window.marked.use({ gfm: true, breaks: false });
-}
-
-// Replicate the Claudian plugin's code-block wrapper enhancement using standard DOM APIs.
-function enhanceCodeBlocks(el) {
-  el.querySelectorAll('pre').forEach(pre => {
-    if (pre.parentElement?.classList.contains('claudian-code-wrapper')) return;
-    const wrapper = document.createElement('div');
-    wrapper.className = 'claudian-code-wrapper';
-    pre.parentElement?.insertBefore(wrapper, pre);
-    wrapper.appendChild(pre);
-    const code = pre.querySelector('code[class*="language-"]');
-    if (!code) return;
-    const match = code.className.match(/language-(\w+)/);
-    if (!match) return;
-    wrapper.classList.add('has-language');
-    const label = document.createElement('span');
-    label.className = 'claudian-code-lang-label';
-    label.textContent = match[1];
-    wrapper.appendChild(label);
-    label.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(code.textContent || '');
-        label.textContent = 'copied!';
-        setTimeout(() => { label.textContent = match[1]; }, 1500);
-      } catch (_) {}
-    });
-  });
-}
-
-// Render accumulated markdown into el using marked (synchronous, fast).
-function renderWithMarked(el, markdown) {
-  el.innerHTML = window.marked.parse(markdown);
-  enhanceCodeBlocks(el);
-}
-
-// Patch a tab's StreamController to use marked for progressive rendering.
-// - appendText: accumulate tokens, schedule one rAF render per frame (batches tokens).
-// - finalizeCurrentTextBlock: flush synchronously before the plugin reads state.
-function patchStreamControllerForMarked(tab) {
-  if (!window.marked) return;
-  const sc = tab?.controllers?.streamController;
-  if (!sc || typeof sc.appendText !== 'function' || !sc.deps) return;
-
-  const origAppendText = sc.appendText;
-  sc.appendText = async function markedAppendText(text) {
-    const { state } = this.deps;
-    if (!state.currentContentEl) return;
-    this.hideThinkingIndicator();
-    if (!state.currentTextEl) {
-      state.currentTextEl = state.currentContentEl.createDiv({ cls: 'claudian-text-block' });
-      state.currentTextContent = '';
-    }
-    state.currentTextContent += text;
-    // One rAF per frame: if a render is already scheduled, just update the text and
-    // the pending RAF will pick up the latest value when it fires.
-    if (!state._markedRafPending) {
-      state._markedRafPending = true;
-      requestAnimationFrame(() => {
-        state._markedRafPending = false;
-        if (state.currentTextEl) {
-          renderWithMarked(state.currentTextEl, state.currentTextContent || '');
-        }
-      });
-    }
-  };
-
-  const origFinalize = sc.finalizeCurrentTextBlock;
-  sc.finalizeCurrentTextBlock = function markedFinalize(msg) {
-    const { state } = this.deps;
-    // Flush any pending rAF render synchronously so the plugin reads fully-rendered DOM.
-    if (state._markedRafPending) {
-      state._markedRafPending = false;
-      if (state.currentTextEl && state.currentTextContent) {
-        renderWithMarked(state.currentTextEl, state.currentTextContent);
-      }
-    }
-    origFinalize.call(this, msg);
-  };
+  window.marked.use({ gfm: true, breaks: true });
+  window.__renderMarkdown = (text) => window.marked.parse(text || '');
 }
 
 // ── Qt Bridge Service ──────────────────────────────────────────────────────
@@ -502,9 +427,6 @@ function injectQtServiceIntoTab(tab, qtService) {
   // Also handle stream controller if it holds its own service ref
   const sc = tab.controllers?.streamController;
   if (sc && 'service' in sc) sc.service = qtService;
-
-  // Replace the plugin's async MarkdownRenderer with synchronous marked + rAF batching.
-  patchStreamControllerForMarked(tab);
 }
 
 // ── Main bootstrap (async IIFE) ────────────────────────────────────────────
