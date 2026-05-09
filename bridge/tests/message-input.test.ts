@@ -14,7 +14,14 @@ describe("buildUserMessage", () => {
     await writeFile(stagedPath, pngBytes);
 
     const message = await buildUserMessage("look at this", [
-      { mediaType: "image/png", stagedPath },
+      {
+        id: "att-sample",
+        originalName: "sample.png",
+        mimeType: "image/png",
+        stagedPath,
+        fileUrl: "file://" + stagedPath,
+        sizeBytes: pngBytes.length,
+      },
     ]);
 
     expect(message).toEqual({

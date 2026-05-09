@@ -12,7 +12,7 @@ export async function buildUserMessage(prompt: string, attachments: OutboundAtta
       type: "image",
       source: {
         type: "base64",
-        media_type: attachment.mediaType,
+        media_type: attachment.mimeType,
         data: bytes.toString("base64"),
       },
     });

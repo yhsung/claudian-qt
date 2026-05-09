@@ -1,13 +1,25 @@
 export type ImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
 
 export interface OutboundAttachment {
-  mediaType: ImageMediaType;
+  id: string;
+  originalName: string;
+  mimeType: ImageMediaType;
   stagedPath: string;
+  fileUrl: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
 }
 
 export interface HistoryAttachment {
-  mediaType: ImageMediaType;
-  stagedPath: string;
+  id: string;
+  originalName: string;
+  mimeType: ImageMediaType;
+  relativePath: string;
+  fileUrl: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
 }
 
 export interface HistoryTurn {
