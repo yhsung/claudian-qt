@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include <QWebEngineSettings>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -12,6 +13,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_webView = new QWebEngineView(this);
     m_webView->page()->setWebChannel(m_channel);
+
+    // Remote debugging on port 9222 — connect via chrome://inspect or DevTools
+    qputenv("QTWEBENGINE_REMOTE_DEBUGGING", "9222");
+
     m_webView->load(QUrl("qrc:/chat/index.html"));
 
     setCentralWidget(m_webView);

@@ -90,14 +90,14 @@ if(NPM_EXECUTABLE)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bridge
     )
 
-    # Copy dist/daemon.js into app bundle Resources/bridge/
+    # Copy entire dist/ into app bundle Resources/bridge/ (daemon.js imports session-history.js etc.)
     add_custom_command(TARGET ClaudianQt POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/bridge/dist/daemon.js"
-            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge/daemon.js"
-        COMMENT "Bundling TypeScript daemon into app bundle"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+            "${CMAKE_SOURCE_DIR}/bridge/dist"
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
+        COMMENT "Bundling TypeScript daemon dist into app bundle"
         VERBATIM
     )
     # Copy node_modules into app bundle so Node can resolve imports at runtime
