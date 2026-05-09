@@ -83,7 +83,7 @@ void ClaudeBridge::pickFolder() {
 
 void ClaudeBridge::pickImages() {
     const QStringList paths = QFileDialog::getOpenFileNames(
-        nullptr,
+        qobject_cast<QWidget*>(parent()),
         "Select Images",
         m_cwd,
         "Images (*.png *.jpg *.jpeg *.gif *.webp)"

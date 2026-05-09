@@ -34,7 +34,10 @@ QString AttachmentStore::importBytes(
 
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) return {};
-    file.write(bytes);
+    if (file.write(bytes) != static_cast<qint64>(bytes.size())) {
+        file.cancelWriting();
+        return {};
+    }
     if (!file.commit()) return {};
 
     QImageReader reader(path);
@@ -64,7 +67,12 @@ QString AttachmentStore::importBase64Image(
     const QString &mimeType,
     const QString &base64Data
 ) {
-    return importBytes(QByteArray::fromBase64(base64Data.toUtf8()), originalName, mimeType);
+    const QByteArray bytes = QByteArray::fromBase64(
+        base64Data.toUtf8(),
+        QByteArray::Base64Encoding | QByteArray::AbortOnBase64DecodingErrors
+    );
+    if (bytes.isEmpty()) return {};
+    return importBytes(bytes, originalName, mimeType);
 }
 
 bool AttachmentStore::isSupportedImageMime(const QString &mimeType) const {
