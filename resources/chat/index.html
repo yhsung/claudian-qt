@@ -766,6 +766,36 @@ function injectQtServiceIntoTab(tab, qtService) {
       qtService.abort();
     });
 
+    // ── Auto-scroll during streaming ──────────────────────────────────
+    // Set up observer lazily (.claudian-messages may not exist yet at bootstrap)
+    let scrollObserver = null;
+
+    function setupAutoScroll() {
+      if (scrollObserver) return;
+      const msgContainer = document.querySelector('.claudian-messages');
+      if (!msgContainer) return;
+
+      scrollObserver = new MutationObserver(() => {
+        if (!isStreaming) return;
+        // Only auto-scroll if user is already near the bottom (within 120px)
+        const { scrollTop, scrollHeight, clientHeight } = msgContainer;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        if (distanceFromBottom < 120) {
+          msgContainer.scrollTop = scrollHeight;
+        }
+      });
+
+      scrollObserver.observe(msgContainer, {
+        childList:     true,
+        subtree:       true,
+        characterData: true,
+      });
+    }
+
+    // Try immediately; retry once after 500ms in case the plugin hasn't rendered yet
+    setupAutoScroll();
+    setTimeout(setupAutoScroll, 500);
+
     function injectIntoActiveTab() {
       const tabManager = view.getTabManager?.();
       if (!tabManager) return;
