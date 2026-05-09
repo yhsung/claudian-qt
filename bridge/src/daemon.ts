@@ -32,6 +32,7 @@ async function handleSend(prompt: string): Promise<void> {
         resume:                          state.sessionId || undefined,
         model:                           state.model     || undefined,
         allowDangerouslySkipPermissions: state.yolo,
+        includePartialMessages:          true,
       },
     });
 
@@ -43,12 +44,22 @@ async function handleSend(prompt: string): Promise<void> {
         state.sessionId = m.session_id as string;
         emit({ type: "session_ready", sessionId: state.sessionId });
 
+      } else if (m.type === "stream_event") {
+        // Incremental token streaming: emit each text_delta as a separate text_ready
+        const event = m.event as Record<string, unknown>;
+        if (
+          event.type === "content_block_delta" &&
+          (event.delta as Record<string, unknown>)?.type === "text_delta"
+        ) {
+          const text = (event.delta as Record<string, unknown>).text as string;
+          if (text) emit({ type: "text_ready", text });
+        }
+
       } else if (m.type === "assistant") {
+        // Text was already streamed token-by-token via stream_event; only emit tool_use here.
         const content = (m.message as Record<string, unknown>).content as Array<Record<string, unknown>>;
         for (const block of content ?? []) {
-          if (block.type === "text") {
-            emit({ type: "text_ready", text: block.text as string });
-          } else if (block.type === "tool_use") {
+          if (block.type === "tool_use") {
             emit({ type: "tool_use", name: block.name as string, input: JSON.stringify(block.input) });
           }
         }
