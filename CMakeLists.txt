@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.26)
 project(ClaudianQt VERSION 0.1 LANGUAGES CXX)
+
+enable_testing()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,3 +52,61 @@ add_custom_command(TARGET ClaudianQt POST_BUILD
         "${CMAKE_CURRENT_BINARY_DIR}/qt.conf"
         "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/qt.conf"
 )
+
+# ---------------------------------------------------------------------------
+# TypeScript bridge: build and bundle into app
+# ---------------------------------------------------------------------------
+find_program(NPM_EXECUTABLE npm
+    PATHS
+        /opt/homebrew/bin
+        /usr/local/bin
+        $ENV{HOME}/.nvm/current/bin
+        $ENV{HOME}/.volta/bin
+        $ENV{HOME}/.fnm/current/bin
+)
+if(NPM_EXECUTABLE)
+    add_custom_command(
+        OUTPUT  "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
+        COMMAND ${NPM_EXECUTABLE} install --prefer-offline
+        COMMAND ${NPM_EXECUTABLE} run build
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/bridge/src/index.ts"
+            "${CMAKE_SOURCE_DIR}/bridge/package.json"
+            "${CMAKE_SOURCE_DIR}/bridge/tsconfig.json"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/bridge"
+        COMMENT "Building TypeScript Claude Agent SDK bridge"
+        VERBATIM
+    )
+    add_custom_target(ClaudeBridge ALL
+        DEPENDS "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
+    )
+    add_dependencies(ClaudianQt ClaudeBridge)
+
+    add_test(
+        NAME BridgeTests
+        COMMAND ${NPM_EXECUTABLE} test
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bridge
+    )
+
+    # Copy dist/index.js into app bundle Resources/bridge/
+    add_custom_command(TARGET ClaudianQt POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge/index.js"
+        COMMENT "Bundling TypeScript bridge into app bundle"
+        VERBATIM
+    )
+    # Copy node_modules into app bundle so Node can resolve imports at runtime
+    add_custom_command(TARGET ClaudianQt POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+            "${CMAKE_SOURCE_DIR}/bridge/node_modules"
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge/node_modules"
+        COMMENT "Copying bridge node_modules into app bundle"
+        VERBATIM
+    )
+else()
+    message(WARNING "npm not found — bridge will not be built automatically. "
+                    "Run: cd bridge && npm install && npm run build")
+endif()
