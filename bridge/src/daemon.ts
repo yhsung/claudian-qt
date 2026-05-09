@@ -1,8 +1,10 @@
 import * as readline from "readline";
 import * as os from "os";
 import { query, AbortError } from "@anthropic-ai/claude-agent-sdk";
-import { listSessions, loadSessionHistory } from "./session-history.js";
-import type { DaemonCommand, DaemonEvent } from "./protocol.js";
+import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
+import { buildUserMessage } from "./message-input.js";
+import { countUserTurns, listSessions, loadSessionHistory } from "./session-history.js";
+import type { DaemonCommand, DaemonEvent, OutboundAttachment } from "./protocol.js";
 
 function emit(event: DaemonEvent): void {
   process.stdout.write(JSON.stringify(event) + "\n");
@@ -17,15 +19,17 @@ const state = {
 
 let currentAbort: AbortController | null = null;
 
-async function handleSend(prompt: string): Promise<void> {
+async function handleSend(prompt: string, attachments: OutboundAttachment[]): Promise<void> {
   if (currentAbort) currentAbort.abort();
 
   const abortController = new AbortController();
   currentAbort = abortController;
+  let successful = false;
 
   try {
+    const userMessage = await buildUserMessage(prompt, attachments);
     const queryResult = query({
-      prompt,
+      prompt: (async function* () { yield userMessage; })(),
       options: {
         abortController,
         cwd:                             state.cwd,
@@ -70,9 +74,26 @@ async function handleSend(prompt: string): Promise<void> {
           const msg = errors?.[0] ?? (m.result as string) ?? (m.subtype as string) ?? "unknown error";
           emit({ type: "error", msg });
         } else {
+          successful = true;
           emit({ type: "result", data: m });
         }
       }
+    }
+
+    if (successful && attachments.length > 0 && state.sessionId) {
+      const turnIndex = Math.max(0, (await countUserTurns(state.cwd, state.sessionId)) - 1);
+      const finalized = await finalizeAttachmentsForTurn({
+        rootDir: attachmentRoot(),
+        sessionId: state.sessionId,
+        turnIndex,
+        attachments,
+      });
+      await appendManifestTurn({
+        rootDir: attachmentRoot(),
+        sessionId: state.sessionId,
+        turnIndex,
+        attachments: finalized,
+      });
     }
   } catch (err) {
     if (!(err instanceof AbortError)) {
@@ -87,7 +108,7 @@ async function handleSend(prompt: string): Promise<void> {
 async function handleCommand(cmd: DaemonCommand): Promise<void> {
   switch (cmd.type) {
     case "send":
-      await handleSend(cmd.prompt);
+      await handleSend(cmd.prompt, cmd.attachments ?? []);
       break;
 
     case "abort":

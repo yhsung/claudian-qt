@@ -3,6 +3,8 @@ import * as fs from "fs";
 import { readdir } from "fs/promises";
 import { join } from "path";
 import * as os from "os";
+import { attachmentRoot, loadAttachmentManifest } from "./attachment-store.js";
+import type { HistoryAttachment, HistoryTurn } from "./protocol.js";
 
 export interface SessionEntry {
   id: string;
@@ -10,10 +12,8 @@ export interface SessionEntry {
   timestamp: string;
 }
 
-export interface TurnEntry {
-  role: "user" | "assistant";
-  text: string;
-}
+// Legacy alias kept for backward compatibility within this file
+type TurnEntry = HistoryTurn;
 
 function claudeProjectDir(cwd: string, home = os.homedir()): string {
   return join(home, ".claude", "projects", cwd.replace(/\//g, "-"));
@@ -73,22 +73,29 @@ export async function listSessions(
 export async function loadSessionHistory(
   cwd: string,
   sessionId: string,
-  home = os.homedir()
-): Promise<TurnEntry[]> {
+  home = os.homedir(),
+): Promise<HistoryTurn[]> {
+  const rootDir = attachmentRoot(home);
+  const manifest = await loadAttachmentManifest(rootDir, sessionId);
+  const attachmentsByTurn = new Map<number, HistoryAttachment[]>(
+    manifest.map((turn) => [turn.turnIndex, turn.attachments])
+  );
+
   const filePath = join(claudeProjectDir(cwd, home), sessionId + ".jsonl");
-  const turns: TurnEntry[] = [];
+  const turns: HistoryTurn[] = [];
   let pendingAssistant = "";
+  let userTurnIndex = -1;
 
   const flushAssistant = (): void => {
     if (!pendingAssistant.trim()) return;
-    turns.push({ role: "assistant", text: pendingAssistant.trim() });
+    turns.push({ role: "assistant", text: pendingAssistant.trim(), attachments: [] });
     pendingAssistant = "";
   };
 
   let stream: fs.ReadStream;
   try {
     stream = fs.createReadStream(filePath);
-    // Verify the stream can be opened by waiting for the first event
+    // Wait for stream to be readable or end (to detect ENOENT early)
     await new Promise<void>((resolve, reject) => {
       stream.once("error", reject);
       stream.once("readable", resolve);
@@ -108,24 +115,45 @@ export async function loadSessionHistory(
     if (obj.type === "user") {
       flushAssistant();
       const content = (obj.message as Record<string, unknown>).content;
+
+      // Skip tool_result turns (internal Claude scaffolding)
       if (Array.isArray(content) && (content[0] as Record<string, unknown>)?.type === "tool_result") continue;
+
       let text = "";
-      if (typeof content === "string") text = content;
-      else if (Array.isArray(content)) {
-        for (const b of content) {
-          if ((b as Record<string, unknown>).type === "text") text += (b as Record<string, unknown>).text as string;
+      if (typeof content === "string") {
+        text = content;
+      } else if (Array.isArray(content)) {
+        for (const block of content) {
+          const typed = block as Record<string, unknown>;
+          if (typed.type === "text") text += typed.text as string;
         }
       }
-      if (text.trim()) turns.push({ role: "user", text: text.trim() });
 
+      if (text.trim()) {
+        userTurnIndex += 1;
+        turns.push({
+          role: "user",
+          text: text.trim(),
+          attachments: attachmentsByTurn.get(userTurnIndex) ?? [],
+        });
+      }
     } else if (obj.type === "assistant") {
       const content = (obj.message as Record<string, unknown>).content as Array<Record<string, unknown>>;
-      for (const b of content ?? []) {
-        if (b.type === "text") pendingAssistant += b.text as string;
+      for (const block of content ?? []) {
+        if (block.type === "text") pendingAssistant += block.text as string;
       }
     }
   }
 
   flushAssistant();
   return turns;
+}
+
+export async function countUserTurns(
+  cwd: string,
+  sessionId: string,
+  home = os.homedir(),
+): Promise<number> {
+  const turns = await loadSessionHistory(cwd, sessionId, home);
+  return turns.filter((t) => t.role === "user").length;
 }

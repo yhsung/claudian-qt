@@ -1,7 +1,10 @@
 import { query, AbortError } from "@anthropic-ai/claude-agent-sdk";
+import { buildUserMessage } from "./message-input.js";
+import type { OutboundAttachment } from "./protocol.js";
 
 interface BridgeCommand {
   prompt: string;
+  attachments?: OutboundAttachment[];
   cwd?: string;
   sessionId?: string;
   model?: string;
@@ -32,12 +35,13 @@ async function main(): Promise<void> {
   try {
     const cmd = await readStdinCommand();
 
-    if (!cmd.prompt || typeof cmd.prompt !== "string") {
-      throw new Error("Missing required field: prompt must be a non-empty string");
+    if ((!cmd.prompt || !cmd.prompt.trim()) && !(cmd.attachments && cmd.attachments.length > 0)) {
+      throw new Error("Missing required input: provide prompt text and/or attachments");
     }
 
+    const userMessage = await buildUserMessage(cmd.prompt ?? "", cmd.attachments ?? []);
     const queryResult = query({
-      prompt: cmd.prompt,
+      prompt: (async function* () { yield userMessage; })(),
       options: {
         abortController,
         cwd: cmd.cwd || undefined,
