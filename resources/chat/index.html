@@ -707,6 +707,65 @@ function injectQtServiceIntoTab(tab, qtService) {
     // ── Inject Qt service into the active (and future) tabs ───────────
     const qtService = new QtBridgeService(bridge);
 
+    // ── Streaming state machine ───────────────────────────────────────
+    const typingIndicator = document.getElementById('qt-typing-indicator');
+    const stopBtn         = document.getElementById('qt-stop-btn');
+    let isStreaming        = false;
+    let firstTokenSeen     = false;
+
+    function onStreamingStart() {
+      isStreaming    = true;
+      firstTokenSeen = false;
+      typingIndicator.classList.add('visible');
+      stopBtn.classList.add('visible');
+      document.body.classList.add('qt-input-locked');
+      const sendBtnEl = document.querySelector('.qt-send-btn');
+      if (sendBtnEl) sendBtnEl.classList.add('disabled');
+    }
+
+    function onFirstToken() {
+      if (firstTokenSeen) return;
+      firstTokenSeen = true;
+      typingIndicator.classList.remove('visible');
+    }
+
+    function onStreamingEnd() {
+      isStreaming = false;
+      typingIndicator.classList.remove('visible');
+      stopBtn.classList.remove('visible');
+      document.body.classList.remove('qt-input-locked');
+      const sendBtnEl = document.querySelector('.qt-send-btn');
+      if (sendBtnEl) sendBtnEl.classList.remove('disabled');
+    }
+
+    // Detect first token to switch "thinking" → "writing" state
+    bridge.textReady.connect(() => { if (isStreaming) onFirstToken(); });
+
+    // Clean up if bridge signals complete/error before the generator finishes
+    bridge.turnComplete.connect(() => { if (isStreaming) onStreamingEnd(); });
+    bridge.errorOccurred.connect(() => { if (isStreaming) onStreamingEnd(); });
+
+    // Wrap qtService.query() to hook lifecycle
+    const _origQuery = qtService.query.bind(qtService);
+    qtService.query = async function*(prompt, images, history, opts) {
+      onStreamingStart();
+      try {
+        for await (const chunk of _origQuery(prompt, images, history, opts)) {
+          yield chunk;
+        }
+      } catch (err) {
+        throw err;
+      } finally {
+        // Ensure clean-up even if generator is aborted early
+        if (isStreaming) onStreamingEnd();
+      }
+    };
+
+    // Wire stop button
+    stopBtn.addEventListener('click', () => {
+      qtService.abort();
+    });
+
     function injectIntoActiveTab() {
       const tabManager = view.getTabManager?.();
       if (!tabManager) return;
