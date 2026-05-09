@@ -1,5 +1,23 @@
+export type ImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+
+export interface OutboundAttachment {
+  mediaType: ImageMediaType;
+  stagedPath: string;
+}
+
+export interface HistoryAttachment {
+  mediaType: ImageMediaType;
+  stagedPath: string;
+}
+
+export interface HistoryTurn {
+  role: "user" | "assistant";
+  text: string;
+  attachments?: HistoryAttachment[];
+}
+
 export type DaemonCommand =
-  | { type: "send"; prompt: string }
+  | { type: "send"; prompt: string; attachments?: OutboundAttachment[] }
   | { type: "abort" }
   | { type: "set_cwd"; cwd: string }
   | { type: "set_model"; model: string }
