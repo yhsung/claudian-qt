@@ -307,18 +307,15 @@ A conversation tracing system for ClaudianQt, the Qt6 desktop wrapper for Claude
 - JSONL format: one JSON object per line, each representing a content block with metadata (type, timestamp, role, message)
 <!-- GSD:architecture-end -->
 
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
+## Workflow
 
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+This repository does not require GSD commands for day-to-day development.
 
-Use these entry points:
-- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd:debug` for investigation and bug fixing
-- `/gsd:execute-phase` for planned phase work
-
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
+For changes:
+- Read relevant source files first and keep edits scoped to the task.
+- Prefer small, reviewable commits.
+- Run the relevant build/tests after code changes when feasible.
+- Document any assumptions or follow-up work in your final handoff.
 
 <!-- GSD:profile-start -->
 ## Developer Profile

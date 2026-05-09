@@ -1,54 +1,28 @@
-.DS_Store
-build/
-build*/
-.cache/
-*.user
-*.pro.user
-*.pro.user.*
-*.qbs.user
-*.qbs.user.*
+.qt/
 CMakeCache.txt
 CMakeFiles/
+ClaudianQt.app/
+build/
+Makefile
 cmake_install.cmake
-Makefile*
-compile_commands.json
-CMakeLists.txt.user*
 
-# C++ objects and libs
-*.slo
-*.lo
+# Qt/CMake generated files
+*.autogen/
+*.obj
 *.o
-*.a
-*.la
-*.lai
-*.so
-*.so.*
-*.dll
-*.dylib
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+install_manifest.txt
+cmake_install.cmake
+CMakeScripts/
+CMakeTmp/
+*.cmake.user
+*.cmake.user.*
 
-# Qt-es
-object_script.*.Release
-object_script.*.Debug
-*_plugin_import.cpp
-/.qmake.cache
-/.qmake.stash
-*.moc
-moc_*.cpp
-moc_*.h
-qrc_*.cpp
-ui_*.h
-*.qmlc
-*.jsc
-*build-*
-*.qm
-*.prl
-
-# Qt unit tests
-target_wrapper.*
-
-# QtCreator
-*.autosave
-*.qmlproject.user
-*.qmlproject.user.*
-*creator.user*
-*_qmlcache.qrc
+# TypeScript / Node generated files
+bridge/node_modules/
+bridge/dist/
+bridge/coverage/
+bridge/.vitest/
+*.tsbuildinfo
