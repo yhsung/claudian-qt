@@ -25,7 +25,7 @@ export interface HistoryAttachment {
 export interface HistoryTurn {
   role: "user" | "assistant";
   text: string;
-  attachments?: HistoryAttachment[];
+  attachments: HistoryAttachment[];
 }
 
 export type DaemonCommand =

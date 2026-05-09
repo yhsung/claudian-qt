@@ -3,7 +3,7 @@ import * as os from "os";
 import { query, AbortError } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
-import { countUserTurns, listSessions, loadSessionHistory } from "./session-history.js";
+import { listSessions, loadSessionHistory } from "./session-history.js";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment } from "./protocol.js";
 
 function emit(event: DaemonEvent): void {
@@ -15,6 +15,7 @@ const state = {
   model:     "",
   yolo:      false,
   sessionId: "",
+  turnIndex: -1,
 };
 
 let currentAbort: AbortController | null = null;
@@ -50,7 +51,8 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[]): Pr
 
       } else if (m.type === "stream_event") {
         // Incremental token streaming: emit each text_delta as a separate text_ready
-        const event = m.event as Record<string, unknown>;
+        const event = m.event as Record<string, unknown> | undefined;
+        if (!event) continue;
         if (
           event.type === "content_block_delta" &&
           (event.delta as Record<string, unknown>)?.type === "text_delta"
@@ -61,7 +63,8 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[]): Pr
 
       } else if (m.type === "assistant") {
         // Text was already streamed token-by-token via stream_event; only emit tool_use here.
-        const content = (m.message as Record<string, unknown>).content as Array<Record<string, unknown>>;
+        const msgObj = m.message as Record<string, unknown> | undefined;
+        const content = msgObj?.content as Array<Record<string, unknown>> | undefined;
         for (const block of content ?? []) {
           if (block.type === "tool_use") {
             emit({ type: "tool_use", name: block.name as string, input: JSON.stringify(block.input) });
@@ -80,20 +83,26 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[]): Pr
       }
     }
 
-    if (successful && attachments.length > 0 && state.sessionId) {
-      const turnIndex = Math.max(0, (await countUserTurns(state.cwd, state.sessionId)) - 1);
-      const finalized = await finalizeAttachmentsForTurn({
-        rootDir: attachmentRoot(),
-        sessionId: state.sessionId,
-        turnIndex,
-        attachments,
-      });
-      await appendManifestTurn({
-        rootDir: attachmentRoot(),
-        sessionId: state.sessionId,
-        turnIndex,
-        attachments: finalized,
-      });
+    if (successful) {
+      const turnIndex = state.turnIndex + 1;
+      state.turnIndex = turnIndex;
+      if (attachments.length > 0 && state.sessionId) {
+        const finalized = await finalizeAttachmentsForTurn({
+          rootDir: attachmentRoot(),
+          sessionId: state.sessionId,
+          turnIndex,
+          attachments,
+        });
+        await appendManifestTurn({
+          rootDir: attachmentRoot(),
+          sessionId: state.sessionId,
+          turnIndex,
+          attachments: finalized,
+        }).catch((err) => {
+          // Manifest write failed; log but do not surface as fatal — attachments are finalized on disk
+          emit({ type: "error", msg: `Warning: failed to write attachment manifest: ${err instanceof Error ? err.message : String(err)}` });
+        });
+      }
     }
   } catch (err) {
     if (!(err instanceof AbortError)) {
@@ -123,6 +132,7 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
     case "set_cwd":
       state.cwd       = cmd.cwd;
       state.sessionId = "";
+      state.turnIndex = -1;
       break;
 
     case "set_model":
@@ -135,6 +145,7 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
 
     case "new_session":
       state.sessionId = "";
+      state.turnIndex = -1;
       emit({ type: "session_ready", sessionId: "" });
       break;
 
@@ -144,11 +155,14 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       break;
     }
 
-    case "load_session":
+    case "load_session": {
       state.sessionId = cmd.sessionId;
+      const history = await loadSessionHistory(state.cwd, cmd.sessionId);
+      state.turnIndex = history.filter((t) => t.role === "user").length - 1;
       emit({ type: "session_ready", sessionId: cmd.sessionId });
-      emit({ type: "session_history_loaded", json: JSON.stringify(await loadSessionHistory(state.cwd, cmd.sessionId)) });
+      emit({ type: "session_history_loaded", json: JSON.stringify(history) });
       break;
+    }
   }
 }
 
