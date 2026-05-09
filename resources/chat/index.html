@@ -4,930 +4,110 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Claudian Qt</title>
-  <!-- Claudian design system styles -->
-  <link rel="stylesheet" href="qrc:///claudian/styles.css">
-  <style>
-    /* Obsidian CSS variable defaults — Claudian's styles.css relies on these */
-    :root {
-      --background-primary:              #1c1c1e;
-      --background-primary-alt:          #141416;
-      --background-secondary:            #2c2c2e;
-      --background-secondary-alt:        #3a3a3c;
-      --background-modifier-border:      #48484a;
-      --background-modifier-border-hover:#5a5a5c;
-      --background-modifier-border-focus:#7c6af7;
-      --background-modifier-hover:       rgba(255,255,255,0.06);
-      --background-modifier-error:       #3d1f1f;
-      --text-normal:      #dcddde;
-      --text-muted:       #8e8e93;
-      --text-faint:       #636366;
-      --text-accent:      #7c6af7;
-      --text-accent-hover:#9d8fff;
-      --text-error:       #ff453a;
-      --text-on-accent:   #ffffff;
-      --text-selection:   rgba(124,106,247,0.25);
-      --interactive-accent:       #7c6af7;
-      --interactive-accent-hover: #9d8fff;
-      --link-color:               #7c6af7;
-      --color-red:        #ff453a;
-      --color-red-rgb:    255,69,58;
-      --color-orange:     #ff9f0a;
-      --color-yellow:     #ffd60a;
-      --color-green:      #30d158;
-      --font-text:        -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      --font-monospace:   'SF Mono', SFMono-Regular, ui-monospace, monospace;
-      --font-ui-small:    12px;
-      --font-ui-medium:   13px;
-      --font-ui-smaller:  11px;
-      --font-medium:      500;
-      --font-semibold:    600;
-      --radius-s:         4px;
-    }
-
-    html, body {
-      margin: 0; padding: 0;
-      height: 100vh; width: 100%;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      background: var(--background-primary, #1c1c1e);
-      color: var(--text-normal, #dcddde);
-    }
-    /* qt-toolbar is flex-shrink: 0 (set below), claudian-root fills the rest */
-    #claudian-root {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
-    /* Ensure ClaudianView fills the root container */
-    #claudian-root > .view-content {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
-    #claudian-root .claudian-container {
-      height: 100%;
-    }
-    /* Prevent clipping at the top (header/logo) and bottom (input area) */
-    #claudian-root .claudian-header {
-      padding-top: 8px;
-    }
-    #claudian-root .claudian-input-container {
-      padding-bottom: 12px;
-    }
-    /* Thin cwd / folder bar above the view */
-    #qt-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      background: var(--background-secondary, #2c2c2e);
-      border-bottom: 1px solid var(--background-modifier-border, #48484a);
-      font-size: 11px;
-      font-family: var(--font-monospace, monospace);
-    }
-    #qt-cwd {
-      flex: 1;
-      color: var(--text-muted, #999);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    #qt-pick-btn, #qt-history-btn {
-      background: var(--background-secondary-alt, #3a3a3c);
-      border: 1px solid var(--background-modifier-border, #48484a);
-      color: var(--text-normal, #dcddde);
-      cursor: pointer;
-      padding: 3px 9px;
-      border-radius: 5px;
-      font-size: 11px;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    #qt-pick-btn:hover, #qt-history-btn:hover { opacity: 0.8; }
-    #qt-history-btn {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
-    }
-    #qt-history-btn.active {
-      border-color: var(--interactive-accent, #7c6af7);
-      color: var(--interactive-accent, #7c6af7);
-    }
-    /* History panel — in-flow so it pushes the chat area down (avoids z-index/clip issues) */
-    #qt-toolbar-wrapper { flex-shrink: 0; }
-    #qt-history-panel {
-      max-height: 50vh;
-      background: var(--background-secondary, #2c2c2e);
-      border-bottom: 1px solid var(--background-modifier-border, #48484a);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    #qt-history-panel.hidden { display: none; }
-    #qt-history-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--background-modifier-border, #48484a);
-      flex-shrink: 0;
-    }
-    .qt-history-title {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted, #999);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    #qt-new-chat-btn {
-      background: var(--interactive-accent, #7c6af7);
-      border: none;
-      color: #fff;
-      cursor: pointer;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-    }
-    #qt-new-chat-btn:hover { opacity: 0.85; }
-    #qt-history-list {
-      overflow-y: auto;
-      flex: 1;
-    }
-    .qt-history-item {
-      padding: 8px 10px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--background-modifier-border, #48484a);
-    }
-    .qt-history-item:last-child { border-bottom: none; }
-    .qt-history-item:hover { background: var(--background-modifier-hover, rgba(255,255,255,0.06)); }
-    .qt-history-item.active { background: rgba(124,106,247,0.12); border-left: 2px solid var(--interactive-accent, #7c6af7); }
-    .qt-history-preview {
-      font-size: 12px;
-      color: var(--text-normal, #dcddde);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .qt-history-time {
-      font-size: 10px;
-      color: var(--text-faint, #636366);
-      margin-top: 2px;
-    }
-    .qt-history-empty {
-      padding: 16px 10px;
-      font-size: 12px;
-      color: var(--text-faint, #636366);
-      text-align: center;
-    }
-    /* ── Width-fit overrides for desktop window ── */
-    *, *::before, *::after { box-sizing: border-box; }
-    .claudian-messages {
-      padding: 12px 16px;
-      overflow-x: hidden !important;
-    }
-    .claudian-message { max-width: 100%; }
-    .claudian-message-content pre,
-    .claudian-code-wrapper pre,
-    .claudian-code-wrapper.has-language pre {
-      white-space: pre-wrap !important;
-      word-wrap: break-word !important;
-      overflow-x: hidden !important;
-      max-width: 100%;
-    }
-    .claudian-code-wrapper { max-width: 100%; overflow: hidden; }
-    /* Diff viewer and tool output also need wrapping */
-    .claudian-diff-content,
-    .claudian-tool-content pre { overflow-x: hidden !important; white-space: pre-wrap !important; word-wrap: break-word !important; }
-    .claudian-input-container { padding: 12px 16px 0; overflow: hidden; }
-    .claudian-input-wrapper { overflow: hidden; }
-    /* Always show copy buttons (no hover required) */
-    .claudian-text-copy-btn,
-    .claudian-code-wrapper .copy-code-button,
-    .claudian-code-wrapper .claudian-code-lang-label { opacity: 1; }
-    #qt-error {
-      color: #ff453a;
-      padding: 16px;
-      font-family: monospace;
-      font-size: 12px;
-      white-space: pre-wrap;
-    }
-    /* Send button injected into .claudian-input-toolbar */
-    .qt-send-btn {
-      margin-left: auto;
-      cursor: pointer;
-      padding: 3px 5px;
-      display: flex;
-      align-items: center;
-      color: var(--text-muted, #999);
-      border-radius: 4px;
-      flex-shrink: 0;
-      transition: color 0.1s;
-    }
-    .qt-send-btn:hover { color: var(--interactive-accent, #7c6af7); }
-    /* ── Streaming UX ─────────────────────────────────────────────────── */
-    /* Typing indicator — three bouncing dots shown before first token */
-    #qt-typing-indicator {
-      display: none;
-      align-items: center;
-      gap: 5px;
-      padding: 6px 16px;
-      flex-shrink: 0;
-    }
-    #qt-typing-indicator.visible { display: flex; }
-    .qt-typing-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--text-muted, #8e8e93);
-      animation: qt-bounce 1.2s ease-in-out infinite;
-    }
-    .qt-typing-dot:nth-child(2) { animation-delay: 0.2s; }
-    .qt-typing-dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes qt-bounce {
-      0%, 60%, 100% { transform: translateY(0);   opacity: 0.35; }
-      30%           { transform: translateY(-5px); opacity: 1;    }
-    }
-    .qt-typing-label {
-      font-size: 11px;
-      color: var(--text-faint, #636366);
-      margin-left: 2px;
-    }
-    /* Stop button — hidden by default, shown only while streaming */
-    #qt-stop-btn {
-      display: none;
-      background: transparent;
-      border: 1px solid var(--color-red, #ff453a);
-      color: var(--color-red, #ff453a);
-      cursor: pointer;
-      padding: 3px 9px;
-      border-radius: 5px;
-      font-size: 11px;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    #qt-stop-btn.visible { display: block; }
-    #qt-stop-btn:hover   { background: var(--background-modifier-error, #3d1f1f); }
-    /* Dim the send button and textarea while streaming */
-    .qt-send-btn.disabled   { opacity: 0.35; pointer-events: none; }
-    .claudian-input textarea { transition: opacity 0.15s; }
-    .qt-input-locked .claudian-input textarea { opacity: 0.5; pointer-events: none; }
-  </style>
+  <link rel="stylesheet" href="qrc:///chat/chat.css">
 </head>
 <body>
-
-<div id="qt-toolbar-wrapper">
-  <div id="qt-toolbar">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-         style="color:var(--text-muted,#999);flex-shrink:0">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-    </svg>
-    <span id="qt-cwd">~/</span>
-    <button id="qt-history-btn" title="Conversation history">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-      </svg>
-      History
-    </button>
-    <button id="qt-stop-btn" title="Stop generation">Stop</button>
-    <button id="qt-pick-btn">Open Folder</button>
-  </div>
-
-  <div id="qt-history-panel" class="hidden">
-    <div id="qt-history-header">
-      <span class="qt-history-title">Conversations</span>
-      <button id="qt-new-chat-btn">+ New Chat</button>
+<div id="app">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <button id="new-session-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        New Session
+      </button>
     </div>
-    <div id="qt-history-list"></div>
+    <div id="session-list"></div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="topbar">
+      <span id="topbar-title">Claudian Qt</span>
+      <button id="view-selector-btn">
+        <span id="view-selector-label">Normal</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+    </div>
+
+    <div id="messages" class="fs-md"></div>
+
+    <div id="summary-view">
+      <div id="summary-stats"></div>
+      <div id="summary-last-turn"></div>
+      <div id="summary-content"></div>
+      <div id="summary-actions">
+        <button id="generate-summary-btn">Generate summary</button>
+        <button id="exit-summary-btn">Exit summary view</button>
+      </div>
+    </div>
+
+    <div id="typing-indicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <span class="typing-label">Claude is thinking…</span>
+    </div>
+
+    <div id="input-area">
+      <div id="textarea-wrapper">
+        <textarea id="input-textarea" rows="1"
+                  placeholder="Message Claude…"></textarea>
+      </div>
+      <div id="input-toolbar">
+        <button id="cwd-btn" title="Change working directory">~/</button>
+        <div id="model-selector">
+          <button id="model-btn">
+            <span id="model-btn-label">Default</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div id="model-dropdown"></div>
+        </div>
+        <button id="yolo-btn">Safe</button>
+        <button id="send-btn" title="Send (Enter)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+        <button id="stop-btn" title="Stop generation">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+          Stop
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
-<div id="qt-typing-indicator">
-  <div class="qt-typing-dot"></div>
-  <div class="qt-typing-dot"></div>
-  <div class="qt-typing-dot"></div>
-  <span class="qt-typing-label">Claude is thinking…</span>
+<!-- View selector popup — outside #app so position:fixed works correctly -->
+<div id="view-popup">
+  <div class="view-popup-label">Transcript view</div>
+  <div class="view-option" data-view="normal"><span>Normal</span><span class="view-check"></span></div>
+  <div class="view-option" data-view="thinking"><span>Thinking</span><span class="view-check"></span></div>
+  <div class="view-option" data-view="verbose"><span>Verbose</span><span class="view-check"></span></div>
+  <div class="view-option" data-view="summary"><span>Summary</span><span class="view-check"></span></div>
+  <div class="view-popup-divider"></div>
+  <div class="view-popup-label">Font size</div>
+  <div class="font-size-row">
+    <button class="font-size-btn sm-btn" data-font="sm">Aa</button>
+    <button class="font-size-btn md-btn" data-font="md">Aa</button>
+    <button class="font-size-btn lg-btn" data-font="lg">Aa</button>
+  </div>
 </div>
 
-<div id="claudian-root"></div>
-
-<!-- Load order: QWebChannel → Obsidian shim → Claudian bundle → bootstrap -->
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-<script src="qrc:///chat/obsidian-shim.js"></script>
-<script src="qrc:///claudian/main.js"></script>
-<script>
-'use strict';
-
-// ── Qt Bridge Service ──────────────────────────────────────────────────────
-// Replaces ClaudianService. Async-generator query() pumps chunks from C++
-// QWebChannel signals. The Claudian plugin's StreamController handles:
-//   case "text": await this.appendText(chunk.content)
-// so we must use { type:'text', content } for the field name.
-//
-// Progressive rendering fix: each textReady signal enqueues via setTimeout(0)
-// so every token is delivered as a separate macrotask, giving the browser a
-// repaint slot between each one (otherwise batched Qt signals fire in one
-// synchronous pass and the DOM only updates after the full response).
-class QtBridgeService {
-  constructor(bridge) {
-    this._bridge  = bridge;
-    this._queue   = [];
-    this._waiter  = null;
-
-    // setTimeout(0) separates each token into its own macrotask → browser repaints
-    this._onText  = (text) => {
-      setTimeout(() => this._enqueue({ type: 'text', content: text }), 0);
-    };
-    this._onTool  = (name, json) => {
-      let input = {};
-      try { input = JSON.parse(json); } catch (_) {}
-      this._enqueue({ type: 'tool_use', id: String(Date.now()), name, input });
-    };
-    this._onDone  = ()    => this._enqueue({ type: 'done' });
-    this._onError = (msg) => this._enqueue({ type: 'error', msg });
-
-    bridge.textReady.connect(this._onText);
-    bridge.toolUse.connect(this._onTool);
-    bridge.turnComplete.connect(this._onDone);
-    bridge.errorOccurred.connect(this._onError);
-  }
-
-  _enqueue(chunk) {
-    if (this._waiter) {
-      const r = this._waiter; this._waiter = null; r(chunk);
-    } else {
-      this._queue.push(chunk);
-    }
-  }
-
-  _next() {
-    if (this._queue.length) return Promise.resolve(this._queue.shift());
-    return new Promise(r => { this._waiter = r; });
-  }
-
-  async *query(prompt, images, history, opts) {
-    // Flush any stale chunks from a previous aborted turn.
-    this._queue = []; this._waiter = null;
-    this._bridge.sendMessage(prompt);
-    for (;;) {
-      const chunk = await this._next();
-      if (chunk.type === 'done')  return;
-      if (chunk.type === 'error') throw new Error(chunk.msg);
-      yield chunk;
-    }
-  }
-
-  abort() {
-    this._bridge.abort();
-    this._enqueue({ type: 'done' });
-  }
-
-  // Stubs expected by InputController / other callers
-  async ensureReady()          {}
-  isReady()                    { return true; }
-  onReadyStateChange(cb)       { return () => {}; }
-  registerResponseHandler()    { return () => {}; }
-  getSessionId()               { return ''; }
-  getEffectiveModel()          { return ''; }
-
-  destroy() {
-    try { this._bridge.textReady.disconnect(this._onText); }    catch (_) {}
-    try { this._bridge.toolUse.disconnect(this._onTool); }      catch (_) {}
-    try { this._bridge.turnComplete.disconnect(this._onDone); } catch (_) {}
-    try { this._bridge.errorOccurred.disconnect(this._onError); } catch (_) {}
-  }
-}
-
-// ── Inject Qt service into a ClaudianView tab ──────────────────────────────
-function injectQtServiceIntoTab(tab, qtService) {
-  if (!tab) return;
-  // Replace the service on the tab
-  tab.service = qtService;
-
-  const ic = tab.controllers?.inputController;
-  if (!ic) return;
-  // Patch whichever property/method InputController uses to retrieve the service
-  if ('getAgentService' in ic) ic.getAgentService = () => qtService;
-  if ('agentService'   in ic) ic.agentService    = qtService;
-  // Also handle stream controller if it holds its own service ref
-  const sc = tab.controllers?.streamController;
-  if (sc && 'service' in sc) sc.service = qtService;
-}
-
-// ── Main bootstrap (async IIFE) ────────────────────────────────────────────
-(async function bootstrap() {
-  // ── 1. Retrieve ClaudianPlugin from main.js CommonJS exports ──────────
-  const ClaudianPlugin = window.module?.exports?.default;
-  if (typeof ClaudianPlugin !== 'function') {
-    document.getElementById('claudian-root').innerHTML =
-      '<div id="qt-error">Failed to load ClaudianPlugin from main.js.\nCheck browser console for errors.</div>';
-    return;
-  }
-
-  // ── 2. Build mock App object ───────────────────────────────────────────
-  const mockApp = {
-    vault: {
-      adapter: {
-        basePath: '/',
-        exists:   (p)    => Promise.resolve(false),
-        read:     (p)    => Promise.resolve(''),
-        write:    (p, d) => Promise.resolve(),
-        mkdir:    (p)    => Promise.resolve(),
-        list:     (p)    => Promise.resolve({ files: [], folders: [] }),
-        stat:     (p)    => Promise.resolve({ type: 'file', size: 0, mtime: 0, ctime: 0 }),
-        remove:   (p)    => Promise.resolve(),
-        copy:     (f, t) => Promise.resolve(),
-        rename:   (f, t) => Promise.resolve(),
-      },
-      configDir: '.obsidian',
-      on()      { return { unsubscribe() {} }; },
-      off()     {},
-      read:                (f) => Promise.resolve(''),
-      cachedRead:          (f) => Promise.resolve(''),
-      modify:              (f, d) => Promise.resolve(),
-      create:              (p, d) => Promise.resolve(new window.__obsidian__.TFile(p)),
-      createBinary:        (p, d) => Promise.resolve(new window.__obsidian__.TFile(p)),
-      delete:              (f, force) => Promise.resolve(),
-      trash:               (f, sys) => Promise.resolve(),
-      exists:              (p) => Promise.resolve(false),
-      createFolder:        (p) => Promise.resolve(),
-      rename:              (f, n) => Promise.resolve(),
-      copy:                (f, t) => Promise.resolve(new window.__obsidian__.TFile(t)),
-      getFiles:            () => [],
-      getAllLoadedFiles:    () => [],
-      getMarkdownFiles:    () => [],
-      getAbstractFileByPath: () => null,
-      getFileByPath:       () => null,
-      getFolderByPath:     () => null,
-      getRoot:             () => new window.__obsidian__.TFolder('/'),
-    },
-    workspace: {
-      activeLeaf:   null,
-      activeEditor: null,
-      getLeavesOfType:     () => [],
-      revealLeaf:          () => Promise.resolve(),
-      getActiveFile:       () => null,
-      getActiveViewOfType: () => null,
-      getMostRecentLeaf:   () => null,
-      getLeaf:             () => null,
-      iterateAllLeaves:    () => {},
-      on()     { return { unsubscribe() {} }; },
-      off()    {},
-      trigger() {},
-      openLinkText: () => Promise.resolve(),
-      openPopoutLeaf: () => null,
-    },
-    metadataCache: {
-      getFileCache:       () => null,
-      getCache:           () => null,
-      resolvedLinks:      {},
-      unresolvedLinks:    {},
-      on()   { return { unsubscribe() {} }; },
-      off()  {},
-      trigger() {},
-    },
-    fileManager: {
-      processFrontMatter: () => Promise.resolve(),
-      generateMarkdownLink: () => '',
-    },
-    keymap: { pushScope() {}, popScope() {} },
-    scope:  { register() {} },
-    plugins: { enabledPlugins: new Set(), plugins: {} },
-    internalPlugins: { getPluginById: () => null },
-    commands: { addCommand() {}, removeCommand() {}, executeCommandById() {} },
-    setting:  { open() {}, close() {} },
-  };
-
-  // ── 3. Instantiate ClaudianPlugin ──────────────────────────────────────
-  const mockManifest = { id: 'claudian-qt', name: 'Claudian Qt', version: '1.0.0', minAppVersion: '1.0.0', description: '', author: '' };
-  let plugin;
-  try {
-    plugin = new ClaudianPlugin(mockApp, mockManifest);
-  } catch (e) {
-    document.getElementById('claudian-root').innerHTML =
-      `<div id="qt-error">ClaudianPlugin constructor failed:\n${e.stack || e}</div>`;
-    return;
-  }
-
-  // ── 4. Capture registerView factory early in case onload() throws later ─
-  let viewFactory = null;
-  const _origRegisterView = plugin.registerView?.bind(plugin);
-  plugin.registerView = function(type, factory) {
-    plugin._viewFactories = plugin._viewFactories || {};
-    plugin._viewFactories[type] = factory;
-    if (type === 'claudian-view') viewFactory = factory;
-    _origRegisterView?.(type, factory);
-  };
-
-  // ── 5. Call onload() — some async operations may fail silently ─────────
-  try {
-    await plugin.onload();
-  } catch (e) {
-    console.warn('[claudian-qt] plugin.onload() threw (continuing):', e);
-  }
-
-  // Fallback: check _viewFactories if registerView patch didn't fire
-  if (!viewFactory) {
-    viewFactory = plugin._viewFactories?.['claudian-view'];
-  }
-
-  if (typeof viewFactory !== 'function') {
-    document.getElementById('claudian-root').innerHTML =
-      '<div id="qt-error">ClaudianView factory not registered.\nIs plugin.onload() calling registerView()?</div>';
-    return;
-  }
-
-  // ── 6. Create fake leaf and instantiate ClaudianView ──────────────────
-  const rootEl = document.getElementById('claudian-root');
-  const leaf = {
-    app:            mockApp,
-    containerEl:    rootEl,
-    parent:         null,
-    view:           null,
-    tabHeaderEl:    null,
-    getDisplayText: () => 'Claudian',
-    getViewType:    () => 'claudian-view',
-  };
-
-  let view;
-  try {
-    view = viewFactory(leaf);
-    leaf.view = view;
-  } catch (e) {
-    rootEl.innerHTML = `<div id="qt-error">ClaudianView instantiation failed:\n${e.stack || e}</div>`;
-    return;
-  }
-
-  // ── 7. Open the view (builds DOM) ─────────────────────────────────────
-  try {
-    await view.onOpen();
-  } catch (e) {
-    console.warn('[claudian-qt] view.onOpen() threw (continuing):', e);
-  }
-
-  // ── 8. Bootstrap QWebChannel ──────────────────────────────────────────
-  new QWebChannel(qt.webChannelTransport, function(channel) {
-    const bridge = channel.objects.claude;
-    window.__qtBridge__ = bridge;
-
-    // ── cwd display and pick button ──────────────────────────────────────
-    const cwdEl   = document.getElementById('qt-cwd');
-    const pickBtn = document.getElementById('qt-pick-btn');
-
-    function updateCwd(path) {
-      mockApp.vault.adapter.basePath = path;
-      if (cwdEl) {
-        const home = path.match(/^\/Users\/[^/]+/) || path.match(/^\/home\/[^/]+/);
-        cwdEl.textContent = home ? path.replace(home[0], '~') : path;
-      }
-      // Propagate to plugin if it caches vault path
-      try { if (plugin.vaultPath !== undefined) plugin.vaultPath = path; } catch (_) {}
-    }
-
-    bridge.cwdChanged.connect(updateCwd);
-    updateCwd(bridge.cwd);
-
-    pickBtn.addEventListener('click', () => bridge.pickFolder());
-
-    // ── History panel ──────────────────────────────────────────────────
-    const historyBtn   = document.getElementById('qt-history-btn');
-    const historyPanel = document.getElementById('qt-history-panel');
-    const historyList  = document.getElementById('qt-history-list');
-    const newChatBtn   = document.getElementById('qt-new-chat-btn');
-    console.log('[history] elements:', {historyBtn, historyPanel, historyList, newChatBtn});
-    console.log('[history] bridge.requestSessions:', typeof bridge.requestSessions);
-    console.log('[history] bridge.sessionsListed:', typeof bridge.sessionsListed);
-
-    let activeHistoryId = null;
-
-    function escHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    function relativeTime(iso) {
-      if (!iso) return '';
-      const diff = Date.now() - new Date(iso).getTime();
-      const m = Math.floor(diff / 60000);
-      if (m < 1) return 'just now';
-      if (m < 60) return `${m}m ago`;
-      const h = Math.floor(m / 60);
-      if (h < 24) return `${h}h ago`;
-      const d = Math.floor(h / 24);
-      return d < 7 ? `${d}d ago` : new Date(iso).toLocaleDateString();
-    }
-
-    function renderHistory(sessions) {
-      historyList.innerHTML = '';
-      if (!sessions || sessions.length === 0) {
-        historyList.innerHTML = '<div class="qt-history-empty">No conversations yet</div>';
-        return;
-      }
-      sessions.forEach(s => {
-        const item = document.createElement('div');
-        item.className = 'qt-history-item' + (s.id === activeHistoryId ? ' active' : '');
-        item.dataset.sid = s.id;
-        item.innerHTML =
-          `<div class="qt-history-preview">${escHtml(s.preview)}</div>` +
-          `<div class="qt-history-time">${relativeTime(s.timestamp)}</div>`;
-        item.addEventListener('click', () => {
-          activeHistoryId = s.id;
-          bridge.loadSession(s.id);
-          historyList.querySelectorAll('.qt-history-item')
-            .forEach(el => el.classList.toggle('active', el.dataset.sid === s.id));
-          closeHistory();
-        });
-        historyList.appendChild(item);
-      });
-    }
-
-    // ── Render loaded session history into the Claudian messages container ──
-    bridge.sessionHistoryLoaded.connect(json => {
-      let turns;
-      try { turns = JSON.parse(json); } catch(e) { return; }
-      const container = document.querySelector('.claudian-messages');
-      if (!container) return;
-      container.innerHTML = '';
-      turns.forEach(turn => {
-        const msg = document.createElement('div');
-        msg.className = 'claudian-message ' +
-          (turn.role === 'user' ? 'claudian-message-user' : 'claudian-message-assistant');
-        const content = document.createElement('div');
-        content.className = 'claudian-message-content';
-        const p = document.createElement('p');
-        p.style.whiteSpace = 'pre-wrap';
-        p.style.margin = '0';
-        p.textContent = turn.text;
-        content.appendChild(p);
-        msg.appendChild(content);
-        container.appendChild(msg);
-      });
-      container.scrollTop = container.scrollHeight;
-    });
-
-    // Sessions arrive via signal (more reliable than slot return-value callback)
-    bridge.sessionsListed.connect(json => {
-      try { renderHistory(JSON.parse(json)); }
-      catch(e) { console.error('[history] parse error:', e); }
-    });
-
-    function openHistory() {
-      console.log('[history] openHistory called');
-      historyList.innerHTML = '<div class="qt-history-empty">Loading…</div>';
-      historyPanel.classList.remove('hidden');
-      historyBtn.classList.add('active');
-      console.log('[history] panel hidden after remove:', historyPanel.classList.contains('hidden'));
-      bridge.requestSessions();
-    }
-
-    function closeHistory() {
-      historyPanel.classList.add('hidden');
-      historyBtn.classList.remove('active');
-    }
-
-    historyBtn.addEventListener('click', e => {
-      console.log('[history] button clicked, panel hidden:', historyPanel.classList.contains('hidden'));
-      e.stopPropagation();
-      historyPanel.classList.contains('hidden') ? openHistory() : closeHistory();
-    });
-
-    newChatBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      activeHistoryId = null;
-      bridge.newSession();
-      historyList.querySelectorAll('.qt-history-item').forEach(el => el.classList.remove('active'));
-      closeHistory();
-    });
-
-    historyPanel.addEventListener('click', e => e.stopPropagation());
-
-    // When cwd changes, reset active session tracking
-    bridge.cwdChanged.connect(() => { activeHistoryId = null; });
-
-    // When a new session is created by the process, track it as active
-    bridge.sessionReady.connect(id => {
-      if (id) activeHistoryId = id;
-      else activeHistoryId = null;
-    });
-
-    // ── Inject Qt service into the active (and future) tabs ───────────
-    const qtService = new QtBridgeService(bridge);
-
-    // ── Streaming state machine ───────────────────────────────────────
-    const typingIndicator = document.getElementById('qt-typing-indicator');
-    const stopBtn         = document.getElementById('qt-stop-btn');
-    let isStreaming        = false;
-    let firstTokenSeen     = false;
-
-    function onStreamingStart() {
-      isStreaming    = true;
-      firstTokenSeen = false;
-      typingIndicator.classList.add('visible');
-      stopBtn.classList.add('visible');
-      document.body.classList.add('qt-input-locked');
-      const sendBtnEl = document.querySelector('.qt-send-btn');
-      if (sendBtnEl) sendBtnEl.classList.add('disabled');
-    }
-
-    function onFirstToken() {
-      if (firstTokenSeen) return;
-      firstTokenSeen = true;
-      typingIndicator.classList.remove('visible');
-    }
-
-    function onStreamingEnd() {
-      isStreaming = false;
-      typingIndicator.classList.remove('visible');
-      stopBtn.classList.remove('visible');
-      document.body.classList.remove('qt-input-locked');
-      const sendBtnEl = document.querySelector('.qt-send-btn');
-      if (sendBtnEl) sendBtnEl.classList.remove('disabled');
-    }
-
-    // Detect first token to switch "thinking" → "writing" state
-    bridge.textReady.connect(() => { if (isStreaming) onFirstToken(); });
-
-    // Clean up if bridge signals complete/error before the generator finishes
-    bridge.turnComplete.connect(() => { if (isStreaming) onStreamingEnd(); });
-    bridge.errorOccurred.connect(() => { if (isStreaming) onStreamingEnd(); });
-
-    // Wrap qtService.query() to hook lifecycle
-    const _origQuery = qtService.query.bind(qtService);
-    qtService.query = async function*(prompt, images, history, opts) {
-      onStreamingStart();
-      try {
-        for await (const chunk of _origQuery(prompt, images, history, opts)) {
-          yield chunk;
-        }
-      } catch (err) {
-        throw err;
-      } finally {
-        // Ensure clean-up even if generator is aborted early
-        if (isStreaming) onStreamingEnd();
-      }
-    };
-
-    // Wire stop button
-    stopBtn.addEventListener('click', () => {
-      qtService.abort();
-    });
-
-    // ── Auto-scroll during streaming ──────────────────────────────────
-    // Set up observer lazily (.claudian-messages may not exist yet at bootstrap)
-    let scrollObserver = null;
-
-    function setupAutoScroll() {
-      if (scrollObserver) return;
-      const msgContainer = document.querySelector('.claudian-messages');
-      if (!msgContainer) return;
-
-      scrollObserver = new MutationObserver(() => {
-        if (!isStreaming) return;
-        // Only auto-scroll if user is already near the bottom (within 120px)
-        const { scrollTop, scrollHeight, clientHeight } = msgContainer;
-        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-        if (distanceFromBottom < 120) {
-          msgContainer.scrollTop = scrollHeight;
-        }
-      });
-
-      scrollObserver.observe(msgContainer, {
-        childList:     true,
-        subtree:       true,
-        characterData: true,
-      });
-    }
-
-    // Try immediately; retry once after 500ms in case the plugin hasn't rendered yet
-    setupAutoScroll();
-    setTimeout(setupAutoScroll, 500);
-
-    // ── Enter-key guard during streaming ─────────────────────────────
-    // Belt-and-suspenders: block submit keydown while streaming
-    // even if pointer-events lock doesn't stop the Claudian plugin.
-    document.addEventListener('keydown', (e) => {
-      if (!isStreaming) return;
-      if (e.key === 'Enter' && !e.shiftKey) {
-        const active = document.activeElement;
-        const isInInput = active && (
-          active.tagName === 'TEXTAREA' ||
-          active.closest('.claudian-input-container')
-        );
-        if (isInInput) {
-          e.stopImmediatePropagation();
-          e.preventDefault();
-        }
-      }
-    }, true); // capture phase — runs before Claudian plugin's listener
-
-    function injectIntoActiveTab() {
-      const tabManager = view.getTabManager?.();
-      if (!tabManager) return;
-      const tab = tabManager.getActiveTab?.();
-      injectQtServiceIntoTab(tab, qtService);
-    }
-
-    injectIntoActiveTab();
-
-    // Inject into tabs created after initial load
-    // Monkey-patch TabManager.createTab if accessible
-    const tabManager = view.getTabManager?.();
-    if (tabManager && typeof tabManager.createTab === 'function') {
-      const origCreate = tabManager.createTab.bind(tabManager);
-      tabManager.createTab = async function(...args) {
-        const result = await origCreate(...args);
-        injectIntoActiveTab();
-        return result;
-      };
-    }
-
-    // ── Wire model selector → bridge ──────────────────────────────────
-    // Map Claudian display names to claude CLI shorthand values
-    const MODEL_LABEL_MAP = { 'opus': 'opus', 'opus 1m': 'opus', 'sonnet': 'sonnet', 'sonnet 1m': 'sonnet', 'haiku': 'haiku' };
-
-    function syncModelToUI(modelVal) {
-      if (!modelVal) return;
-      const needle = modelVal.toLowerCase();
-      document.querySelectorAll('.claudian-model-option').forEach(opt => {
-        const label = (opt.querySelector('span')?.textContent || '').toLowerCase().trim();
-        const optVal = MODEL_LABEL_MAP[label] || label;
-        const match  = optVal === needle || needle.includes(label);
-        opt.classList.toggle('selected', match);
-        if (match) {
-          const btnLabel = opt.closest('.claudian-model-selector')?.querySelector('.claudian-model-label');
-          if (btnLabel) btnLabel.textContent = opt.querySelector('span')?.textContent || '';
-        }
-      });
-    }
-
-    document.querySelector('.claudian-input-toolbar')?.addEventListener('click', e => {
-      const opt = e.target.closest('.claudian-model-option');
-      if (!opt) return;
-      const label    = (opt.querySelector('span')?.textContent || '').toLowerCase().trim();
-      const modelVal = MODEL_LABEL_MAP[label] || label;
-      bridge.setModel(modelVal);
-      syncModelToUI(modelVal);
-    });
-
-    bridge.modelChanged.connect(syncModelToUI);
-    syncModelToUI(bridge.model);
-
-    // ── Wire YOLO toggle → bridge ──────────────────────────────────────
-    const toggleSwitch = document.querySelector('.claudian-permission-toggle .claudian-toggle-switch');
-    let syncingYolo = false;
-    if (toggleSwitch) {
-      new MutationObserver(() => {
-        if (syncingYolo) return;
-        bridge.setYolo(toggleSwitch.classList.contains('active'));
-      }).observe(toggleSwitch, { attributes: true, attributeFilter: ['class'] });
-
-      bridge.yoloChanged.connect(isYolo => {
-        syncingYolo = true;
-        toggleSwitch.classList.toggle('active', isYolo);
-        const lbl = document.querySelector('.claudian-permission-label');
-        if (lbl) lbl.textContent = isYolo ? 'YOLO' : 'Safe';
-        syncingYolo = false;
-      });
-
-      // Sync initial bridge state → UI
-      syncingYolo = true;
-      toggleSwitch.classList.toggle('active', bridge.yolo);
-      const permLabel = document.querySelector('.claudian-permission-label');
-      if (permLabel) permLabel.textContent = bridge.yolo ? 'YOLO' : 'Safe';
-      syncingYolo = false;
-    }
-
-    // ── Polish model button: add chevron + ready class ────────────────
-    const modelBtn = document.querySelector('.claudian-model-btn');
-    if (modelBtn && !modelBtn.querySelector('.claudian-model-chevron')) {
-      modelBtn.classList.add('ready');
-      const chevron = document.createElement('span');
-      chevron.className = 'claudian-model-chevron';
-      chevron.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
-      modelBtn.appendChild(chevron);
-    }
-
-    // ── Inject send button into input toolbar ─────────────────────────
-    const inputToolbar = document.querySelector('.claudian-input-toolbar');
-    if (inputToolbar && !inputToolbar.querySelector('.qt-send-btn')) {
-      const sendBtn = document.createElement('div');
-      sendBtn.className  = 'qt-send-btn';
-      sendBtn.title      = 'Send message (Enter)';
-      sendBtn.setAttribute('aria-label', 'Send message');
-      sendBtn.innerHTML  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
-      sendBtn.addEventListener('click', () => {
-        const tm  = view.getTabManager?.();
-        const tab = tm?.getActiveTab?.();
-        tab?.controllers?.inputController?.sendMessage?.();
-      });
-      inputToolbar.appendChild(sendBtn);
-    }
-  });
-})();
-</script>
+<script src="qrc:///chat/marked.min.js"></script>
+<script src="qrc:///chat/chat.js"></script>
 </body>
 </html>
