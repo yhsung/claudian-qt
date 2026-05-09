@@ -31,7 +31,7 @@ export async function listSessions(
     return [];
   }
 
-  const jsonlFiles = files.filter((f) => f.endsWith(".jsonl")).reverse();
+  const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
   const sessions: SessionEntry[] = [];
 
   for (const filename of jsonlFiles) {
@@ -67,7 +67,7 @@ export async function listSessions(
     if (preview) sessions.push({ id: sessionId, preview, timestamp });
   }
 
-  return sessions;
+  return sessions.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 
 export async function loadSessionHistory(
