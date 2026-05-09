@@ -5,15 +5,23 @@ async function readStdinCommand() {
     for await (const chunk of process.stdin) {
         chunks.push(chunk);
     }
-    return JSON.parse(chunks.join("").trim());
+    const raw = chunks.join("").trim();
+    if (!raw)
+        throw new Error("stdin was empty — expected a JSON BridgeCommand");
+    try {
+        return JSON.parse(raw);
+    }
+    catch {
+        throw new Error(`Failed to parse stdin as JSON: ${raw.slice(0, 200)}`);
+    }
 }
 async function main() {
-    const cmd = await readStdinCommand();
     const abortController = new AbortController();
     const abort = () => abortController.abort();
     process.once("SIGTERM", abort);
     process.once("SIGINT", abort);
     try {
+        const cmd = await readStdinCommand();
         const queryResult = query({
             prompt: cmd.prompt,
             options: {
@@ -33,9 +41,13 @@ async function main() {
             process.exitCode = 0;
             return;
         }
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = err instanceof Error ? (err.stack ?? err.message) : String(err);
         process.stderr.write(msg + "\n");
         process.exitCode = 1;
+    }
+    finally {
+        process.off("SIGTERM", abort);
+        process.off("SIGINT", abort);
     }
 }
 main().catch((err) => {
