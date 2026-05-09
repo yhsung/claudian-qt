@@ -162,9 +162,16 @@ void ClaudeProcess::parseLine(const QByteArray &line) {
 
     } else if (type == "result") {
         if (obj["is_error"].toBool()) {
-            emit errorOccurred(obj["result"].toString());
+            QString msg;
+            const QJsonArray errors = obj["errors"].toArray();
+            if (!errors.isEmpty())
+                msg = errors[0].toString();
+            else if (obj.contains("result"))
+                msg = obj["result"].toString();
+            else
+                msg = obj["subtype"].toString();
+            emit errorOccurred(msg);
         } else {
-            qDebug() << "resultReceived:" << obj;
             emit resultReceived(obj);
         }
     }
