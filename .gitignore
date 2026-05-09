@@ -26,3 +26,6 @@ bridge/dist/
 bridge/coverage/
 bridge/.vitest/
 *.tsbuildinfo
+
+# Local worktrees
+.worktrees/
