@@ -36,7 +36,7 @@ async function main(): Promise<void> {
       prompt: cmd.prompt,
       options: {
         abortController,
-        cwd: cmd.cwd,
+        cwd: cmd.cwd || undefined,
         resume: cmd.sessionId || undefined,
         model: cmd.model || undefined,
         allowDangerouslySkipPermissions: cmd.yolo ?? false,

@@ -18,6 +18,11 @@ jobs:
           version: '6.8.*'
           modules: 'qtwebengine qtwebchannel qtpositioning'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 

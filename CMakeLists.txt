@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.26)
 project(ClaudianQt VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -54,14 +54,29 @@ add_custom_command(TARGET ClaudianQt POST_BUILD
 # ---------------------------------------------------------------------------
 # TypeScript bridge: build and bundle into app
 # ---------------------------------------------------------------------------
-find_program(NPM_EXECUTABLE npm PATHS /opt/homebrew/bin /usr/local/bin)
+find_program(NPM_EXECUTABLE npm
+    PATHS
+        /opt/homebrew/bin
+        /usr/local/bin
+        $ENV{HOME}/.nvm/current/bin
+        $ENV{HOME}/.volta/bin
+        $ENV{HOME}/.fnm/current/bin
+)
 if(NPM_EXECUTABLE)
-    add_custom_target(ClaudeBridge ALL
+    add_custom_command(
+        OUTPUT  "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
         COMMAND ${NPM_EXECUTABLE} install --prefer-offline
         COMMAND ${NPM_EXECUTABLE} run build
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bridge
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/bridge/src/index.ts"
+            "${CMAKE_SOURCE_DIR}/bridge/package.json"
+            "${CMAKE_SOURCE_DIR}/bridge/tsconfig.json"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/bridge"
         COMMENT "Building TypeScript Claude Agent SDK bridge"
         VERBATIM
+    )
+    add_custom_target(ClaudeBridge ALL
+        DEPENDS "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
     )
     add_dependencies(ClaudianQt ClaudeBridge)
 
@@ -77,7 +92,7 @@ if(NPM_EXECUTABLE)
     )
     # Copy node_modules into app bundle so Node can resolve imports at runtime
     add_custom_command(TARGET ClaudianQt POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
             "${CMAKE_SOURCE_DIR}/bridge/node_modules"
             "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge/node_modules"
         COMMENT "Copying bridge node_modules into app bundle"
