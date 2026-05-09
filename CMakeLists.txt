@@ -13,7 +13,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets WebEngineWidgets WebChanne
 qt_add_executable(ClaudianQt
     src/main.cpp
     src/mainwindow.cpp
-    src/claudeprocess.cpp
+    src/bridgedaemon.cpp
     src/claudebridge.cpp
     resources/resources.qrc
 )
@@ -66,11 +66,13 @@ find_program(NPM_EXECUTABLE npm
 )
 if(NPM_EXECUTABLE)
     add_custom_command(
-        OUTPUT  "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
+        OUTPUT  "${CMAKE_SOURCE_DIR}/bridge/dist/daemon.js"
         COMMAND ${NPM_EXECUTABLE} install --prefer-offline
         COMMAND ${NPM_EXECUTABLE} run build
         DEPENDS
-            "${CMAKE_SOURCE_DIR}/bridge/src/index.ts"
+            "${CMAKE_SOURCE_DIR}/bridge/src/daemon.ts"
+            "${CMAKE_SOURCE_DIR}/bridge/src/protocol.ts"
+            "${CMAKE_SOURCE_DIR}/bridge/src/session-history.ts"
             "${CMAKE_SOURCE_DIR}/bridge/package.json"
             "${CMAKE_SOURCE_DIR}/bridge/tsconfig.json"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/bridge"
@@ -78,7 +80,7 @@ if(NPM_EXECUTABLE)
         VERBATIM
     )
     add_custom_target(ClaudeBridge ALL
-        DEPENDS "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
+        DEPENDS "${CMAKE_SOURCE_DIR}/bridge/dist/daemon.js"
     )
     add_dependencies(ClaudianQt ClaudeBridge)
 
@@ -88,14 +90,14 @@ if(NPM_EXECUTABLE)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bridge
     )
 
-    # Copy dist/index.js into app bundle Resources/bridge/
+    # Copy entire dist/ into app bundle Resources/bridge/ (daemon.js imports session-history.js etc.)
     add_custom_command(TARGET ClaudianQt POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/bridge/dist/index.js"
-            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge/index.js"
-        COMMENT "Bundling TypeScript bridge into app bundle"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+            "${CMAKE_SOURCE_DIR}/bridge/dist"
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
+        COMMENT "Bundling TypeScript daemon dist into app bundle"
         VERBATIM
     )
     # Copy node_modules into app bundle so Node can resolve imports at runtime

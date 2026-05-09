@@ -35,7 +35,7 @@ jobs:
           test -f build/ClaudianQt.app/Contents/MacOS/ClaudianQt
           test -f build/ClaudianQt.app/Contents/PlugIns/platforms/libqcocoa.dylib
           test -f build/ClaudianQt.app/Contents/Resources/qt.conf
-          test -f build/ClaudianQt.app/Contents/Resources/bridge/index.js
+          test -f build/ClaudianQt.app/Contents/Resources/bridge/daemon.js
           test -d build/ClaudianQt.app/Contents/Resources/bridge/node_modules
 
       - name: Test TypeScript bridge

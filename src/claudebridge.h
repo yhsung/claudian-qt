@@ -1,10 +1,10 @@
 #pragma once
 #include <QObject>
-
-#include "claudeprocess.h"
+#include "bridgedaemon.h"
 
 // Registered with QWebChannel as "claude".
-// Public slots are callable from JS; signals are received by JS.
+// Public slots callable from JS; signals received by JS.
+// All Claude operations delegated to BridgeDaemon.
 class ClaudeBridge : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString cwd   READ cwd   NOTIFY cwdChanged)
@@ -24,11 +24,10 @@ public slots:
     void setCwd(const QString &path);
     void setModel(const QString &model);
     void setYolo(bool enabled);
-    void pickFolder(); // opens native folder dialog, then emits cwdChanged
-    // History management
-    void requestSessions();                        // emits sessionsListed signal with JSON
-    void loadSession(const QString &sessionId);    // resume session and emit its history
-    void newSession();                             // clear session to start fresh
+    void pickFolder();
+    void requestSessions();
+    void loadSession(const QString &sessionId);
+    void newSession();
 
 signals:
     void textReady(const QString &text);
@@ -39,13 +38,12 @@ signals:
     void cwdChanged(const QString &path);
     void modelChanged(const QString &model);
     void yoloChanged(bool enabled);
-    void sessionsListed(const QString &json);         // JSON array of {id, preview, timestamp}
-    void sessionHistoryLoaded(const QString &json);   // JSON array of {role, text} turns
+    void sessionsListed(const QString &json);
+    void sessionHistoryLoaded(const QString &json);
 
 private:
-    ClaudeProcess *m_claude;
-    QString        m_sessionId;
-    QString        m_cwd;
-    QString        m_model;
-    bool           m_yolo  = false;
+    BridgeDaemon *m_daemon;
+    QString       m_cwd;
+    QString       m_model;
+    bool          m_yolo = false;
 };
