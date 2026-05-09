@@ -16,8 +16,15 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
     connect(m_daemon, &BridgeDaemon::sessionHistoryLoaded, this, &ClaudeBridge::sessionHistoryLoaded);
 
+    connect(m_daemon, &BridgeDaemon::daemonStarted, this, [this]() {
+        m_daemon->sendCommand(QJsonObject{{"type", "set_cwd"},   {"cwd",   m_cwd}});
+        if (!m_model.isEmpty())
+            m_daemon->sendCommand(QJsonObject{{"type", "set_model"}, {"model", m_model}});
+        if (m_yolo)
+            m_daemon->sendCommand(QJsonObject{{"type", "set_yolo"},  {"yolo",  m_yolo}});
+    });
+
     m_daemon->start();
-    m_daemon->sendCommand(QJsonObject{{"type", "set_cwd"}, {"cwd", m_cwd}});
 }
 
 void ClaudeBridge::sendMessage(const QString &text) {

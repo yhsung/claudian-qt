@@ -17,6 +17,7 @@ public:
     void abort();
 
 signals:
+    void daemonStarted();
     void sessionInitialized(const QString &sessionId);
     void textReady(const QString &text);
     void toolUseStarted(const QString &name, const QString &inputJson);

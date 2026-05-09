@@ -93,7 +93,11 @@ void BridgeDaemon::startDaemon() {
         m_proc->disconnect();
         m_proc->deleteLater();
         m_proc = nullptr;
+        return;
     }
+    // Daemon started successfully — notify so callers can resync state
+    m_restartCount = 0;
+    emit daemonStarted();
 }
 
 void BridgeDaemon::sendCommand(const QJsonObject &cmd) {
