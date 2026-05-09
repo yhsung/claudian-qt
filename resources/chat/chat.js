@@ -259,7 +259,7 @@ function sendMessage() {
 
 // ── Sessions ───────────────────────────────────────────────────────────────
 function renderSessions(sessions) {
-  state.sessions = sessions || [];
+  state.sessions = (sessions || []).sort((a, b) => b.timestamp - a.timestamp);
   DOM.sessionList.innerHTML = '';
   if (!state.sessions.length) {
     DOM.sessionList.innerHTML = '<div class="session-empty">No conversations yet</div>';

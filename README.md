@@ -20,8 +20,10 @@ A native macOS desktop wrapper for the [Claude Code](https://claude.ai/code) CLI
 ```
 
 - **C++ layer** — `ClaudeBridge` exposes properties (`cwd`, `model`, `yolo`) and slots (`sendMessage`, `abort`, `pickFolder`, `setModel`, `setYolo`) over `QWebChannel`. `ClaudeProcess` manages the `claude` subprocess and parses its newline-delimited JSON stream.
-- **Web layer** — `index.html` loads the Claudian plugin bundle (`main.js`) inside a minimal Obsidian shim. A `QtBridgeService` class replaces Claudian's internal agent service, routing the streaming chunks from `QWebChannel` signals into Claudian's async generator protocol.
+- **Web layer** — `index.html` is a self-contained chat UI with session management. A `QtBridgeService` class routes the streaming chunks from `QWebChannel` signals into an async generator protocol consumed by the view.
 - **Toolbar controls** — Model selector (Haiku / Sonnet / Opus), YOLO toggle, and send button are wired bidirectionally to the Qt bridge so selections propagate to the next `claude` invocation as `--model` / `--dangerously-skip-permissions` flags.
+
+- **Session list** — Sessions are sorted by timestamp (most recent first) for easy navigation.
 
 ## Prerequisites
 
@@ -83,16 +85,16 @@ claudian-qt/
 ├── src/
 │   ├── main.cpp              # QApplication entry point
 │   ├── mainwindow.cpp/.h     # QWebEngineView setup, QWebChannel registration
+│   ├── bridgedaemon.cpp/.h   # daemon-side bridge for claude CLI communication
 │   ├── claudebridge.cpp/.h   # Qt/JS boundary — properties, slots, signals
 │   └── claudeprocess.cpp/.h  # claude subprocess management, stream-json parser
 └── resources/
     ├── resources.qrc          # Bundles web assets into the binary
-    ├── chat/
-    │   ├── index.html         # Bootstrap: Obsidian shim → Claudian plugin → Qt wiring
-    │   └── obsidian-shim.js   # Minimal Obsidian API mock (no Obsidian, no Node.js)
-    └── claudian/
-        ├── main.js            # Claudian plugin bundle (esbuild CommonJS)
-        └── styles.css         # Claudian design system styles
+    └── chat/
+        ├── index.html        # Bootstrap: Claudian UI, QWebChannel wiring
+        ├── chat.js           # Chat logic, session management, rendering
+        ├── chat.css          # Chat UI styles
+        └── marked.min.js     # Markdown parser
 ```
 
 ## Key data flows
