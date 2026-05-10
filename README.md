@@ -5,26 +5,79 @@ A native macOS/Windows desktop wrapper for [Claude Code](https://claude.ai/code)
 ## How it works
 
 ```
-┌───────────────────────────────────────────┐
-│  Qt MainWindow (native window)            │
-│  ┌─────────────────────────────────────┐  │
-│  │ QWebEngineView                      │  │
-│  │  index.html + Claudian UI           │  │
-│  │  ↕ QWebChannel ("claude")           │  │
-│  │  ClaudeBridge (C++ adapter)         │  │
-│  │  ↕ Qt Signals/Slots                 │  │
-│  │  BridgeDaemon (C++ manager)         │  │
-│  │  ↕ stdin/stdout (NDJSON)            │  │
-│  │  daemon.js (Persistent Node process) │  │
-│  │  ↕ Claude Agent SDK                 │  │
-│  └─────────────────────────────────────┘  │
-└───────────────────────────────────────────┘
+  User input / display
+        │ ▲
+        ▼ │
+┌─────────────────────────────────────────────────────────────────────┐
+│  Web Layer  ·  QWebEngineView  (qrc:/chat/)                         │
+│                                                                     │
+│  chat.js  ·  chat.css  ·  index.html                               │
+│                                                                     │
+│  Renders: streaming text · thinking blocks · tool use + results     │
+│           sub-agent turns · permission dialog · session sidebar     │
+│           search (inline <mark> highlighting) · token badge         │
+│                                                                     │
+│  Signals IN:   textReady · thinkingChunk · toolUse · toolResult     │
+│                subAgentMessage · permissionRequested · turnComplete  │
+│                usageUpdated · sessionsListed · sessionHistoryLoaded  │
+│                imagesPicked · imageImported · fileWritten            │
+│                                                                     │
+│  Slots OUT:    sendMessage · abort · respondToPermission             │
+│                setPermissionMode · setYolo · deleteSession           │
+│                pickFolder · pickImages · writeTextFile               │
+│                requestSessions · loadSession · newSession            │
+└──────────────────────── QWebChannel  "claude" ──────────────────────┘
+                                  ↕  Qt signals / slots
+┌─────────────────────────────────────────────────────────────────────┐
+│  C++ Bridge Layer                                                   │
+│                                                                     │
+│  ClaudeBridge   Q_OBJECT registered on QWebChannel                 │
+│  Properties:    cwd  ·  model  ·  yolo                             │
+│  Owns:          BridgeDaemon  ·  AttachmentStore                   │
+│                                                                     │
+│  BridgeDaemon   manages Node.js process lifecycle                  │
+│                 parses newline-delimited JSON from stdout           │
+│                 routes typed events → Qt signals                    │
+│                 auto-restarts on crash (3 attempts, backoff)        │
+│                                                                     │
+│  AttachmentStore  native image staging (drag, paste, file picker)  │
+│                   TIFF → PNG conversion via QImage                  │
+│                   base64 data-URL encoding for qrc:// page origin   │
+│                   turn finalisation + manifest.json I/O             │
+└────────────────────── stdin / stdout  NDJSON ───────────────────────┘
+                                  ↕  newline-delimited JSON (NDJSON)
+┌─────────────────────────────────────────────────────────────────────┐
+│  Daemon  ·  bridge/dist/daemon.js  (persistent Node.js process)     │
+│                                                                     │
+│  State:    cwd · model · yolo · permissionMode · sessionId          │
+│                                                                     │
+│  Commands IN:   send · abort · set_cwd · set_model · set_yolo       │
+│                 set_permission_mode · permission_response            │
+│                 delete_session · request_sessions · load_session     │
+│                                                                     │
+│  Events OUT:    text_ready · thinking_chunk · tool_use · tool_result │
+│                 sub_agent_message · permission_request               │
+│                 session_ready · turn_complete · result · error       │
+│                 sessions_listed · session_history_loaded             │
+│                                                                     │
+│  Stream handler:   text_delta  →  text_ready                        │
+│                    thinking_delta  →  thinking_chunk                 │
+│                    message_delta  →  cache token accumulation        │
+│  Message handler:  assistant.tool_use  →  tool_use                  │
+│                    assistant.parent_tool_use_id  →  sub_agent_message│
+│                    user.tool_result  →  tool_result                  │
+│  canUseTool:       YOLO → auto-approve · normal → permission_request │
+└──────────────────── @anthropic-ai/claude-agent-sdk ─────────────────┘
+                                  ↕  --permission-prompt-tool stdio
+                         Claude CLI  subprocess
+                         session JSONL  (~/.claude/projects/<cwd>/)
 ```
 
-- **Persistent Daemon** — A long-lived Node.js process (`bridge/src/daemon.ts`) manages all communication with the Claude Agent SDK. It maintains session state, handles history persistence, and processes image attachments.
-- **C++ layer** — `ClaudeBridge` is a thin protocol adapter that exposes properties and slots to the web UI. `BridgeDaemon` manages the lifecycle of the Node.js process and translates NDJSON events into Qt signals.
-- **Web layer** — `index.html` renders the Claudian chat interface. It streams tokens incrementally, renders tool invocations and their output inline, and provides code block copy buttons and transcript export.
-- **Image Support** — `AttachmentStore` (C++) handles native file staging for drag-and-drop, file picking, and clipboard paste. Clipboard images are read directly via `QApplication::clipboard()` (the DataTransfer web API is non-functional in Qt WebEngine). Any unsupported format (e.g. macOS TIFF screenshots) is converted to PNG via `QImage` before staging. Thumbnails are encoded as base64 data URLs so they load correctly from the `qrc://` page origin.
+- **Web layer** — `chat.js` handles all UI state: incremental token streaming, collapsible thinking blocks (activated by the "Thinking" view mode), tool invocations with live output, sub-agent turns, inline `<mark>` search with ↑/↓ navigation, permission dialog, session sidebar with delete, transcript export, and per-turn token/cache badges.
+- **ClaudeBridge** — thin `QObject` registered on `QWebChannel` as `"claude"`. Exposes Qt properties (`cwd`, `model`, `yolo`) that JS reads synchronously, public slots JS can call, and signals JS connects to. All Claude operations are delegated to `BridgeDaemon`.
+- **BridgeDaemon** — owns the Node.js subprocess. Writes NDJSON commands to stdin; reads NDJSON events from stdout line-by-line; maps each event type to a typed Qt signal; auto-restarts on crash with exponential backoff (max 3 attempts).
+- **AttachmentStore** — handles all three image ingress paths: file picker (`pickImages`), drag-and-drop, and clipboard paste (`pasteImageFromClipboard` reads `QApplication::clipboard()` directly — the DataTransfer web API is non-functional in Qt WebEngine). Converts unsupported formats (e.g. macOS TIFF screenshots) to PNG via `QImage`. Encodes thumbnails as base64 data URLs so they display from the `qrc://` page origin. On turn completion, moves staged files to `~/.claudian-qt/attachments/sessions/<id>/turn-NNNN/` and writes `manifest.json`.
+- **Daemon** — long-lived Node.js process (`bridge/src/daemon.ts`, compiled to `bridge/dist/daemon.js`). Always supplies a `canUseTool` callback so the SDK adds `--permission-prompt-tool stdio` to the CLI (required for permission IPC regardless of YOLO state). In YOLO mode the callback auto-approves; in normal mode it pauses execution and emits `permission_request`, waiting for `permission_response` from the UI. Intercepts `thinking_delta` stream events for extended thinking, `message_delta` for cache token stats, and `parent_tool_use_id` on assistant messages for sub-agent transparency.
 
 
 ## Prerequisites
