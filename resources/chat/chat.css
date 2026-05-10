@@ -357,3 +357,34 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Statusline ──────────────────────────────────────────────────────────── */
+#statusline {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px; height: 24px; flex-shrink: 0;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-faint);
+  font-family: var(--font-mono);
+  user-select: none;
+}
+#statusline-model {
+  color: var(--text-muted); flex-shrink: 0;
+}
+#statusline-usage {
+  display: flex; align-items: center; gap: 6px; flex: 1;
+}
+#statusline-bar-track {
+  width: 80px; height: 6px;
+  background: var(--border); border-radius: 3px;
+  overflow: hidden; flex-shrink: 0; cursor: default;
+}
+#statusline-bar-fill {
+  height: 100%; width: 0%; border-radius: 3px;
+  background: var(--green);
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+#statusline-bar-fill.bar-warn   { background: var(--orange); }
+#statusline-bar-fill.bar-danger { background: var(--red); }
+#statusline-pct { flex-shrink: 0; }
+#statusline-turns { margin-left: auto; flex-shrink: 0; }
