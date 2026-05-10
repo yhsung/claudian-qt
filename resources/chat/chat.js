@@ -176,6 +176,8 @@ function initDOM() {
     searchBar:          document.getElementById('search-bar'),
     searchInput:        document.getElementById('search-input'),
     searchCount:        document.getElementById('search-count'),
+    searchPrev:         document.getElementById('search-prev'),
+    searchNext:         document.getElementById('search-next'),
     searchClose:        document.getElementById('search-close'),
     exportBtn:          document.getElementById('export-btn'),
     viewSelectorBtn:    document.getElementById('view-selector-btn'),
@@ -711,7 +713,56 @@ function exportTranscript() {
 }
 
 // ── Search ─────────────────────────────────────────────────────────────────
-const _search = { active: false, query: '' };
+const _search = { active: false, query: '', marks: [], currentIdx: -1 };
+
+function highlightInElement(el, query) {
+  if (!el || !query) return;
+  const lower = query.toLowerCase();
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+  const textNodes = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (!node.parentElement.closest('mark')) textNodes.push(node);
+  }
+  textNodes.forEach(textNode => {
+    const text = textNode.textContent;
+    const lowerText = text.toLowerCase();
+    if (!lowerText.includes(lower)) return;
+    const frag = document.createDocumentFragment();
+    let lastIdx = 0, searchFrom = 0, matchIdx;
+    while ((matchIdx = lowerText.indexOf(lower, searchFrom)) !== -1) {
+      if (matchIdx > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, matchIdx)));
+      const mark = document.createElement('mark');
+      mark.className = 'search-highlight';
+      mark.textContent = text.slice(matchIdx, matchIdx + query.length);
+      frag.appendChild(mark);
+      lastIdx = matchIdx + query.length;
+      searchFrom = lastIdx;
+    }
+    if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+    textNode.parentNode.replaceChild(frag, textNode);
+  });
+}
+
+function clearSearchHighlights() {
+  DOM.messages.querySelectorAll('mark.search-highlight').forEach(mark => {
+    const parent = mark.parentNode;
+    parent.replaceChild(document.createTextNode(mark.textContent), mark);
+    parent.normalize();
+  });
+  DOM.messages.querySelectorAll('.search-match, .search-dim').forEach(el =>
+    el.classList.remove('search-match', 'search-dim'));
+}
+
+function navigateToMark(idx) {
+  if (!_search.marks.length) return;
+  if (_search.currentIdx >= 0) _search.marks[_search.currentIdx]?.classList.remove('current');
+  _search.currentIdx = ((idx % _search.marks.length) + _search.marks.length) % _search.marks.length;
+  const mark = _search.marks[_search.currentIdx];
+  mark.classList.add('current');
+  mark.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  DOM.searchCount.textContent = `${_search.currentIdx + 1} of ${_search.marks.length}`;
+}
 
 function openSearch() {
   _search.active = true;
@@ -721,38 +772,44 @@ function openSearch() {
 }
 
 function closeSearch() {
+  clearSearchHighlights();
   _search.active = false;
   _search.query = '';
+  _search.marks = [];
+  _search.currentIdx = -1;
   DOM.searchBar.classList.remove('visible');
   DOM.searchInput.value = '';
   DOM.searchCount.textContent = '';
-  DOM.messages.querySelectorAll('.search-match, .search-dim').forEach(el => {
-    el.classList.remove('search-match', 'search-dim');
-  });
 }
 
 function runSearch(query) {
   _search.query = query;
-  const msgEls = [...DOM.messages.children];
-  if (!query) {
-    msgEls.forEach(el => el.classList.remove('search-match', 'search-dim'));
-    DOM.searchCount.textContent = '';
-    return;
-  }
+  clearSearchHighlights();
+  _search.marks = [];
+  _search.currentIdx = -1;
+  if (!query) { DOM.searchCount.textContent = ''; return; }
+
   const lower = query.toLowerCase();
-  let matchCount = 0;
-  let firstMatch = null;
-  msgEls.forEach(el => {
+  [...DOM.messages.children].forEach(el => {
     const msgId = el.dataset.msgId;
     const msg = state.messages.find(m => m.id === msgId);
-    const text = (msg?.content || '') + (msg?.toolCalls?.map(tc => tc.result || '').join(' ') || '');
-    const matches = text.toLowerCase().includes(lower);
-    el.classList.toggle('search-match', matches);
-    el.classList.toggle('search-dim', !matches);
-    if (matches) { matchCount++; if (!firstMatch) firstMatch = el; }
+    const plainText = (msg?.content || '') + (msg?.toolCalls?.map(tc => tc.result || '').join(' ') || '');
+    const hasMatch = plainText.toLowerCase().includes(lower);
+    el.classList.toggle('search-match', hasMatch);
+    el.classList.toggle('search-dim', !hasMatch);
+    if (hasMatch) {
+      [el.querySelector('.msg-content'), el.querySelector('.msg-bubble'),
+       ...el.querySelectorAll('.tool-result')].filter(Boolean)
+        .forEach(area => highlightInElement(area, query));
+    }
   });
-  DOM.searchCount.textContent = matchCount ? `${matchCount} match${matchCount > 1 ? 'es' : ''}` : 'No matches';
-  if (firstMatch) firstMatch.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  _search.marks = [...DOM.messages.querySelectorAll('mark.search-highlight')];
+  if (_search.marks.length) {
+    navigateToMark(0);
+  } else {
+    DOM.searchCount.textContent = 'No matches';
+  }
 }
 
 // ── Controls ───────────────────────────────────────────────────────────────
@@ -912,6 +969,14 @@ function wireEvents() {
   // Search
   DOM.searchBtn.addEventListener('click', () => _search.active ? closeSearch() : openSearch());
   DOM.searchInput.addEventListener('input', () => runSearch(DOM.searchInput.value.trim()));
+  DOM.searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.shiftKey ? navigateToMark(_search.currentIdx - 1) : navigateToMark(_search.currentIdx + 1);
+    }
+  });
+  DOM.searchPrev.addEventListener('click', () => navigateToMark(_search.currentIdx - 1));
+  DOM.searchNext.addEventListener('click', () => navigateToMark(_search.currentIdx + 1));
   DOM.searchClose.addEventListener('click', closeSearch);
 
   // Export button
