@@ -1,0 +1,101 @@
+<h2>Image Support Design: Composer + History</h2>
+<p class="subtitle">Review the proposed desktop-like image flow. Click the card that feels right if one stands out, then reply in the terminal with any changes.</p>
+
+<div class="cards">
+  <div class="card" data-choice="recommended" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Recommended: compact tray above composer</div>
+        <div class="mockup-body" style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="flex:1;background:#171717;border:1px solid #2d2d2d;border-radius:16px;padding:16px;">
+              <div style="font-size:13px;color:#9ca3af;margin-bottom:10px;">Attached images</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <div style="width:92px;height:92px;border-radius:14px;background:linear-gradient(135deg,#78543f,#d0a48d);position:relative;">
+                  <div style="position:absolute;top:6px;right:6px;background:rgba(15,15,15,.78);width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:12px;">×</div>
+                </div>
+                <div style="width:92px;height:92px;border-radius:14px;background:linear-gradient(135deg,#365b79,#99c9f2);position:relative;">
+                  <div style="position:absolute;top:6px;right:6px;background:rgba(15,15,15,.78);width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:12px;">×</div>
+                </div>
+                <div style="width:92px;height:92px;border-radius:14px;border:1px dashed #4b5563;display:flex;align-items:center;justify-content:center;color:#c4b5fd;font-size:28px;">+</div>
+              </div>
+              <div style="margin-top:10px;font-size:12px;color:#9ca3af;">Drag files here, paste from clipboard, or use the add button.</div>
+            </div>
+          </div>
+          <div style="background:#171717;border:1px solid #2d2d2d;border-radius:18px;padding:14px 16px;">
+            <div style="min-height:48px;color:#d1d5db;">Message Claude…</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button class="mock-button">Attach</button>
+                <button class="mock-button">Paste</button>
+                <span style="font-size:12px;color:#9ca3af;">4 images max shown in tray, scroll for more</span>
+              </div>
+              <button class="mock-button">Send</button>
+            </div>
+          </div>
+          <div style="background:#171717;border:1px solid #2d2d2d;border-radius:16px;padding:16px;">
+            <div style="font-size:13px;color:#9ca3af;margin-bottom:8px;">Reopened history message</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+              <div style="width:84px;height:84px;border-radius:12px;background:linear-gradient(135deg,#78543f,#d0a48d);"></div>
+              <div style="width:84px;height:84px;border-radius:12px;background:linear-gradient(135deg,#365b79,#99c9f2);"></div>
+              <div style="width:84px;height:84px;border-radius:12px;background:linear-gradient(135deg,#4d5c39,#cad59c);"></div>
+            </div>
+            <div style="font-size:14px;">Compare the layout of these screens and summarize the key differences.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Compact Attachment Tray</h3>
+      <p>Pre-send thumbnails live above the composer. Reopened messages render a thumbnail gallery before the user text. This keeps the typing area stable while supporting many images.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="inline" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Alternative: images embedded inside textarea card</div>
+        <div class="mockup-body" style="background:#171717;border:1px solid #2d2d2d;border-radius:18px;padding:16px;">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+            <div style="width:80px;height:80px;border-radius:12px;background:linear-gradient(135deg,#78543f,#d0a48d);"></div>
+            <div style="width:80px;height:80px;border-radius:12px;background:linear-gradient(135deg,#365b79,#99c9f2);"></div>
+            <div style="width:80px;height:80px;border-radius:12px;background:linear-gradient(135deg,#4d5c39,#cad59c);"></div>
+            <div style="width:80px;height:80px;border-radius:12px;border:1px dashed #4b5563;display:flex;align-items:center;justify-content:center;color:#c4b5fd;font-size:28px;">+</div>
+          </div>
+          <div style="min-height:58px;color:#d1d5db;">Message Claude…</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+            <span style="font-size:12px;color:#9ca3af;">Paste, drag, or browse</span>
+            <button class="mock-button">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Embedded Composer Gallery</h3>
+      <p>Cleaner single card, but the composer grows aggressively with many images and makes long prompts feel cramped.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Section 1: UI behavior</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Proposed behavior</h4>
+      <ul>
+        <li>Users can add multiple images by file picker, drag/drop, or clipboard paste.</li>
+        <li>Each pending attachment shows a thumbnail, filename, and remove action before send.</li>
+        <li>Reopened user messages display a thumbnail gallery above the message text.</li>
+        <li>Clicking a history thumbnail opens a larger preview modal without leaving the chat.</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Intentional limits</h4>
+      <ul>
+        <li>v1 supports image files only, not PDFs or arbitrary documents.</li>
+        <li>Attachments are sent only with the current user turn; no retroactive edits.</li>
+        <li>Thumbnail rendering uses managed copies stored by the app, not original file paths.</li>
+      </ul>
+    </div>
+  </div>
+</div>
