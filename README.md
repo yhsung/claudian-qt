@@ -23,7 +23,7 @@ A native macOS/Windows desktop wrapper for [Claude Code](https://claude.ai/code)
 
 - **Persistent Daemon** — A long-lived Node.js process (`bridge/src/daemon.ts`) manages all communication with the Claude Agent SDK. It maintains session state, handles history persistence, and processes image attachments.
 - **C++ layer** — `ClaudeBridge` is a thin protocol adapter that exposes properties and slots to the web UI. `BridgeDaemon` manages the lifecycle of the Node.js process and translates NDJSON events into Qt signals.
-- **Web layer** — `index.html` renders the Claudian chat interface. It uses an async generator to stream chunks from the bridge into the UI, supporting real-time streaming with a "Stop" button to abort generations.
+- **Web layer** — `index.html` renders the Claudian chat interface. It streams tokens incrementally, renders tool invocations and their output inline, and provides code block copy buttons and transcript export.
 - **Image Support** — `AttachmentStore` (C++) handles native file staging for drag-and-drop, file picking, and clipboard paste. Clipboard images are read directly via `QApplication::clipboard()` (the DataTransfer web API is non-functional in Qt WebEngine). Any unsupported format (e.g. macOS TIFF screenshots) is converted to PNG via `QImage` before staging. Thumbnails are encoded as base64 data URLs so they load correctly from the `qrc://` page origin.
 
 
@@ -164,8 +164,13 @@ claudian-qt/
 2. `chat.js` calls `bridge.sendMessage(text, attachmentsJson)` over `QWebChannel`.
 3. `ClaudeBridge` sends a `send` command over the persistent stdin pipe to the Node.js daemon.
 4. The daemon uses the Claude Agent SDK's `query()` API with an `AbortController`.
-5. Streaming events (`text_ready`, `tool_use`) are written to stdout and emitted as Qt signals.
+5. Streaming events (`text_ready`, `tool_use`, `tool_result`) are written to stdout and emitted as Qt signals.
 6. `chat.js` renders chunks incrementally; the UI auto-scrolls and shows a "Stop" button.
+
+**Tool use and results**
+- When Claude invokes a tool, the daemon emits a `tool_use` event (with the tool's `id`, `name`, and `input`). These appear as a collapsible "Ran N commands" group inside the assistant message.
+- After the SDK executes each tool and sends the result back to Claude, the daemon intercepts the `user` message containing `tool_result` blocks and emits a `tool_result` event with the tool's `id`, output text, and error status.
+- The matching tool item in the UI is updated live: status changes from ⏳ to ✓/✗ and the output is displayed in an expandable `<pre>` block. The group auto-expands when the first result arrives.
 
 **Attachment staging**
 - Images enter via three paths: file picker (`pickImages()`), drag-and-drop onto the chat area, or clipboard paste (`pasteImageFromClipboard()` reads `QApplication::clipboard()` directly — Qt WebEngine does not expose clipboard image data through the JS DataTransfer API).
@@ -178,9 +183,15 @@ claudian-qt/
 - Changing the working directory (`cwd`) resets the session state in the daemon.
 
 **Streaming UX**
-- A `MutationObserver` in the web view detects DOM changes during streaming to provide intelligent auto-scroll.
-- A typing indicator shows "Claude is thinking..." before the first token arrives.
+- Token streaming renders incrementally via `requestAnimationFrame` batching to prevent layout thrashing.
+- The typing indicator label switches between "Claude is thinking…" (waiting for first token) and "Running tools…" (tool execution in progress), then disappears once text tokens arrive.
+- Each code block rendered from Markdown gets a hover-revealed "Copy" button that writes to the clipboard.
 - The "Stop" button sends an `abort` command to the daemon, which triggers the SDK's `AbortController`.
+
+**Transcript export**
+- The download icon in the top bar opens a native save dialog.
+- `ClaudeBridge::writeTextFile` serializes the current conversation (user messages, assistant responses, tool calls with their output) to Markdown and writes the file.
+- A brief toast notification confirms the save path.
 
 ## License
 

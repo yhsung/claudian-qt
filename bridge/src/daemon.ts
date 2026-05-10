@@ -1,6 +1,7 @@
 import * as readline from "readline";
 import * as os from "os";
 import { query, AbortError } from "@anthropic-ai/claude-agent-sdk";
+import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
 import { listSessions, loadSessionHistory } from "./session-history.js";
@@ -20,12 +21,46 @@ const state = {
 
 let currentAbort: AbortController | null = null;
 
+// Pending permission promises keyed by requestId
+const pendingPermissions = new Map<string, { resolve: (result: PermissionResult) => void }>();
+
+const canUseTool: CanUseTool = (toolName, input, options) => {
+  return new Promise<PermissionResult>((resolve) => {
+    if (options.signal.aborted) {
+      resolve({ behavior: "deny", message: "Request aborted." });
+      return;
+    }
+    const requestId = `perm_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    pendingPermissions.set(requestId, { resolve });
+
+    options.signal.addEventListener("abort", () => {
+      if (pendingPermissions.delete(requestId)) {
+        resolve({ behavior: "deny", message: "Request aborted." });
+      }
+    }, { once: true });
+
+    emit({
+      type: "permission_request",
+      requestId,
+      toolName,
+      input: JSON.stringify(input),
+      title:         options.title,
+      description:   options.description,
+      displayName:   options.displayName,
+      decisionReason: options.decisionReason,
+      blockedPath:   options.blockedPath,
+    });
+  });
+};
+
 async function handleSend(prompt: string, attachments: OutboundAttachment[], model?: string, yolo?: boolean): Promise<void> {
   if (currentAbort) currentAbort.abort();
 
   const abortController = new AbortController();
   currentAbort = abortController;
   let successful = false;
+
+  const effectiveYolo = yolo ?? state.yolo;
 
   try {
     const userMessage = await buildUserMessage(prompt, attachments);
@@ -36,8 +71,10 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
         cwd:                             state.cwd,
         resume:                          state.sessionId || undefined,
         model:                           (model ?? state.model) || undefined,
-        allowDangerouslySkipPermissions: yolo            ?? state.yolo,
+        allowDangerouslySkipPermissions: effectiveYolo,
         includePartialMessages:          true,
+        // Only intercept permissions when not in YOLO mode
+        ...(effectiveYolo ? {} : { canUseTool }),
       },
     });
 
@@ -67,7 +104,32 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
         const content = msgObj?.content as Array<Record<string, unknown>> | undefined;
         for (const block of content ?? []) {
           if (block.type === "tool_use") {
-            emit({ type: "tool_use", name: block.name as string, input: JSON.stringify(block.input) });
+            emit({ type: "tool_use", id: block.id as string, name: block.name as string, input: JSON.stringify(block.input) });
+          }
+        }
+
+      } else if (m.type === "user") {
+        // Tool results returned to Claude after tool execution.
+        const msgObj = m.message as Record<string, unknown> | undefined;
+        const content = msgObj?.content as Array<Record<string, unknown>> | undefined;
+        for (const block of content ?? []) {
+          if (block.type === "tool_result") {
+            const toolContent = block.content;
+            let text: string;
+            if (Array.isArray(toolContent)) {
+              text = (toolContent as Array<Record<string, unknown>>)
+                .filter(c => c.type === "text")
+                .map(c => c.text as string)
+                .join("\n");
+            } else {
+              text = String(toolContent ?? "");
+            }
+            emit({
+              type: "tool_result",
+              toolUseId: block.tool_use_id as string,
+              content: text.slice(0, 4000),
+              isError: block.is_error === true,
+            });
           }
         }
 
@@ -161,6 +223,22 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       state.turnIndex = history.filter((t) => t.role === "user").length - 1;
       emit({ type: "session_ready", sessionId: cmd.sessionId });
       emit({ type: "session_history_loaded", json: JSON.stringify(history) });
+      break;
+    }
+
+    case "permission_response": {
+      const pending = pendingPermissions.get(cmd.requestId);
+      if (pending) {
+        pendingPermissions.delete(cmd.requestId);
+        if (cmd.allow) {
+          pending.resolve({
+            behavior: "allow",
+            decisionClassification: cmd.alwaysAllow ? "user_permanent" : "user_temporary",
+          });
+        } else {
+          pending.resolve({ behavior: "deny", message: "Permission denied by user." });
+        }
+      }
       break;
     }
   }

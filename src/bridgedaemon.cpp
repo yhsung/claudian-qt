@@ -132,7 +132,17 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     const QString type = event["type"].toString();
 
     if      (type == "text_ready")              emit textReady(event["text"].toString());
-    else if (type == "tool_use")                emit toolUseStarted(event["name"].toString(), event["input"].toString());
+    else if (type == "tool_use")                emit toolUseStarted(event["id"].toString(), event["name"].toString(), event["input"].toString());
+    else if (type == "tool_result")             emit toolResultReceived(event["toolUseId"].toString(), event["content"].toString(), event["isError"].toBool());
+    else if (type == "permission_request")      emit permissionRequested(
+                                                    event["requestId"].toString(),
+                                                    event["toolName"].toString(),
+                                                    event["input"].toString(),
+                                                    event["title"].toString(),
+                                                    event["description"].toString(),
+                                                    event["displayName"].toString(),
+                                                    event["decisionReason"].toString(),
+                                                    event["blockedPath"].toString());
     else if (type == "turn_complete")           emit turnFinished();
     else if (type == "session_ready")           emit sessionInitialized(event["sessionId"].toString());
     else if (type == "error")                   emit errorOccurred(event["msg"].toString());

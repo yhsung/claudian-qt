@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QBuffer>
 #include <QClipboard>
+#include <QFile>
 #include <QMimeData>
 #include <QDir>
 #include <QFileDialog>
@@ -9,6 +10,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTextStream>
 
 ClaudeBridge::ClaudeBridge(QObject *parent)
     : QObject(parent)
@@ -19,6 +21,8 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionInitialized,   this, &ClaudeBridge::sessionReady);
     connect(m_daemon, &BridgeDaemon::textReady,            this, &ClaudeBridge::textReady);
     connect(m_daemon, &BridgeDaemon::toolUseStarted,       this, &ClaudeBridge::toolUse);
+    connect(m_daemon, &BridgeDaemon::toolResultReceived,   this, &ClaudeBridge::toolResult);
+    connect(m_daemon, &BridgeDaemon::permissionRequested,  this, &ClaudeBridge::permissionRequested);
     connect(m_daemon, &BridgeDaemon::turnFinished,         this, &ClaudeBridge::turnComplete);
     connect(m_daemon, &BridgeDaemon::errorOccurred,        this, &ClaudeBridge::errorOccurred);
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
@@ -181,4 +185,35 @@ void ClaudeBridge::loadSession(const QString &sessionId) {
 
 void ClaudeBridge::newSession() {
     m_daemon->sendCommand(QJsonObject{{"type", "new_session"}});
+}
+
+void ClaudeBridge::respondToPermission(const QString &requestId, bool allow, bool alwaysAllow) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",        "permission_response"},
+        {"requestId",   requestId},
+        {"allow",       allow},
+        {"alwaysAllow", alwaysAllow}
+    });
+}
+
+void ClaudeBridge::writeTextFile(const QString &suggestedName, const QString &content) {
+    const QString path = QFileDialog::getSaveFileName(
+        nullptr,
+        "Export Transcript",
+        QDir::homePath() + "/" + suggestedName,
+        "Markdown (*.md);;Plain Text (*.txt);;All Files (*)"
+    );
+    if (path.isEmpty()) {
+        emit fileWritten(false, {});
+        return;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        emit fileWritten(false, path);
+        return;
+    }
+    QTextStream out(&file);
+    out << content;
+    file.close();
+    emit fileWritten(true, path);
 }

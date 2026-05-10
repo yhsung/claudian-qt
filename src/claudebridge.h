@@ -37,10 +37,17 @@ public slots:
     void requestSessions();
     void loadSession(const QString &sessionId);
     void newSession();
+    void writeTextFile(const QString &suggestedName, const QString &content);
+    void respondToPermission(const QString &requestId, bool allow, bool alwaysAllow);
 
 signals:
     void textReady(const QString &text);
-    void toolUse(const QString &name, const QString &inputJson);
+    void toolUse(const QString &id, const QString &name, const QString &inputJson);
+    void toolResult(const QString &toolUseId, const QString &content, bool isError);
+    void permissionRequested(const QString &requestId, const QString &toolName,
+                             const QString &inputJson, const QString &title,
+                             const QString &description, const QString &displayName,
+                             const QString &decisionReason, const QString &blockedPath);
     void turnComplete();
     void sessionReady(const QString &sessionId);
     void errorOccurred(const QString &msg);
@@ -52,6 +59,7 @@ signals:
     void imagesPicked(const QString &json);
     void imageImported(const QString &requestId, const QString &json);
     void usageUpdated(const QString &json);
+    void fileWritten(bool success, const QString &path);
 
 private:
     BridgeDaemon    *m_daemon;

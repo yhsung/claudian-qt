@@ -33,6 +33,14 @@
         </svg>
       </button>
       <span id="topbar-title">ACE GUI</span>
+      <button id="export-btn" title="Export transcript">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
       <button id="view-selector-btn">
         <span id="view-selector-label">Normal</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
@@ -131,6 +139,27 @@
   <button id="image-preview-close" title="Close">×</button>
   <img id="image-preview-img" alt="">
   <div id="image-preview-caption"></div>
+</div>
+
+<div id="permission-modal">
+  <div id="permission-card">
+    <div id="permission-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <span id="permission-header-label">Permission Required</span>
+    </div>
+    <div id="permission-tool-name"></div>
+    <div id="permission-title"></div>
+    <div id="permission-description"></div>
+    <div id="permission-blocked-path"></div>
+    <div id="permission-actions">
+      <button id="permission-deny-btn">Deny</button>
+      <button id="permission-allow-btn">Allow Once</button>
+      <button id="permission-always-btn">Always Allow</button>
+    </div>
+  </div>
 </div>
 
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>

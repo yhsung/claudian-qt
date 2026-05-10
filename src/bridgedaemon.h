@@ -20,7 +20,12 @@ signals:
     void daemonStarted();
     void sessionInitialized(const QString &sessionId);
     void textReady(const QString &text);
-    void toolUseStarted(const QString &name, const QString &inputJson);
+    void toolUseStarted(const QString &id, const QString &name, const QString &inputJson);
+    void toolResultReceived(const QString &toolUseId, const QString &content, bool isError);
+    void permissionRequested(const QString &requestId, const QString &toolName,
+                             const QString &inputJson, const QString &title,
+                             const QString &description, const QString &displayName,
+                             const QString &decisionReason, const QString &blockedPath);
     void turnFinished();
     void errorOccurred(const QString &msg);
     void sessionsListed(const QString &json);

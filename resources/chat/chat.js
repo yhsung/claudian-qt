@@ -135,6 +135,9 @@ async function importClipboardFile(file) {
   });
 }
 
+// ── Permission state ───────────────────────────────────────────────────────
+let _pendingPermissionRequestId = null;
+
 // ── DOM refs ───────────────────────────────────────────────────────────────
 function initDOM() {
   DOM = {
@@ -142,6 +145,7 @@ function initDOM() {
     newSessionBtn:      document.getElementById('new-session-btn'),
     messages:           document.getElementById('messages'),
     typingIndicator:    document.getElementById('typing-indicator'),
+    typingLabel:        document.querySelector('.typing-label'),
     summaryView:        document.getElementById('summary-view'),
     summaryStats:       document.getElementById('summary-stats'),
     summaryLastTurn:    document.getElementById('summary-last-turn'),
@@ -158,6 +162,7 @@ function initDOM() {
     modelDropdown:      document.getElementById('model-dropdown'),
     yoloBtn:            document.getElementById('yolo-btn'),
     sidebarToggle:      document.getElementById('sidebar-toggle'),
+    exportBtn:          document.getElementById('export-btn'),
     viewSelectorBtn:    document.getElementById('view-selector-btn'),
     viewSelectorLabel:  document.getElementById('view-selector-label'),
     viewPopup:          document.getElementById('view-popup'),
@@ -172,6 +177,14 @@ function initDOM() {
     statuslineBarFill:    document.getElementById('statusline-bar-fill'),
     statuslinePct:        document.getElementById('statusline-pct'),
     statuslineTurns:      document.getElementById('statusline-turns'),
+    permissionModal:      document.getElementById('permission-modal'),
+    permissionToolName:   document.getElementById('permission-tool-name'),
+    permissionTitle:      document.getElementById('permission-title'),
+    permissionDesc:       document.getElementById('permission-description'),
+    permissionBlockedPath: document.getElementById('permission-blocked-path'),
+    permissionDenyBtn:    document.getElementById('permission-deny-btn'),
+    permissionAllowBtn:   document.getElementById('permission-allow-btn'),
+    permissionAlwaysBtn:  document.getElementById('permission-always-btn'),
   };
 }
 
@@ -179,19 +192,22 @@ function initDOM() {
 function renderToolCallItem(tc) {
   const div = document.createElement('div');
   div.className = 'tool-call-item';
+  if (tc.id) div.dataset.toolId = tc.id;
   const inputStr = (() => {
     try { return JSON.stringify(JSON.parse(tc.inputJson), null, 2); }
     catch { return tc.inputJson; }
   })();
+  const statusText = tc.status === 'running' ? '⏳ running'
+    : tc.status === 'done' ? '✓ done' : '✗ error';
   div.innerHTML =
     `<div class="tool-name">${escHtml(tc.name)}</div>` +
     (state.viewMode === 'verbose'
       ? `<div class="tool-input">${escHtml(inputStr)}</div>`
       : '') +
-    `<div class="tool-status ${tc.status}">${
-      tc.status === 'running' ? '⏳ running'
-      : tc.status === 'done' ? '✓ done' : '✗ error'
-    }</div>`;
+    `<div class="tool-status ${tc.status}">${statusText}</div>` +
+    (tc.result !== undefined
+      ? `<pre class="tool-result${tc.isError ? ' tool-result-error' : ''}">${escHtml(tc.result)}</pre>`
+      : '');
   return div;
 }
 
@@ -231,7 +247,10 @@ function renderMessage(msg) {
     outer.className = 'msg-assistant';
     const contentDiv = document.createElement('div');
     contentDiv.className = 'msg-content';
-    if (msg.content) contentDiv.innerHTML = window.marked.parse(msg.content);
+    if (msg.content) {
+      contentDiv.innerHTML = window.marked.parse(msg.content);
+      postProcessCodeBlocks(contentDiv);
+    }
     outer.appendChild(contentDiv);
     if (msg.toolCalls && msg.toolCalls.length > 0 && state.viewMode !== 'summary') {
       const toolEl = renderToolCalls(msg.toolCalls);
@@ -250,6 +269,36 @@ function renderMessages() {
   DOM.messages.scrollTop = DOM.messages.scrollHeight;
 }
 
+// ── Code block copy buttons ────────────────────────────────────────────────
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
+  });
+}
+
+function postProcessCodeBlocks(el) {
+  el.querySelectorAll('pre:not(.code-wrapped)').forEach(pre => {
+    pre.classList.add('code-wrapped');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'code-block-wrapper';
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    const btn = document.createElement('button');
+    btn.className = 'code-copy-btn';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', () => {
+      copyToClipboard(pre.innerText);
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+    });
+    wrapper.appendChild(btn);
+  });
+}
+
 // ── Streaming ──────────────────────────────────────────────────────────────
 function flushStreamBuffer() {
   state._rafPending = false;
@@ -257,13 +306,17 @@ function flushStreamBuffer() {
   const msgEl = DOM.messages.querySelector(`[data-msg-id="${state.currentMsgId}"]`);
   if (!msgEl) return;
   const contentDiv = msgEl.querySelector('.msg-content');
-  if (contentDiv) contentDiv.innerHTML = window.marked.parse(state._streamBuffer);
+  if (contentDiv) {
+    contentDiv.innerHTML = window.marked.parse(state._streamBuffer);
+    postProcessCodeBlocks(contentDiv);
+  }
   const { scrollTop, scrollHeight, clientHeight } = DOM.messages;
   if (scrollHeight - scrollTop - clientHeight < 120) DOM.messages.scrollTop = scrollHeight;
 }
 
 function appendToken(text) {
   state._streamBuffer += text;
+  if (DOM.typingLabel) DOM.typingLabel.textContent = 'Claude is thinking…';
   DOM.typingIndicator.classList.remove('visible');
   if (!state._rafPending) {
     state._rafPending = true;
@@ -271,12 +324,15 @@ function appendToken(text) {
   }
 }
 
-function appendToolCall(name, inputJson) {
+function appendToolCall(id, name, inputJson) {
   if (!state.currentMsgId) return;
   const msg = state.messages.find(m => m.id === state.currentMsgId);
   if (!msg) return;
   state.toolCallCount++;
-  msg.toolCalls.push({ name, inputJson, status: 'running' });
+  msg.toolCalls.push({ id, name, inputJson, status: 'running' });
+  if (DOM.typingLabel && DOM.typingIndicator.classList.contains('visible')) {
+    DOM.typingLabel.textContent = 'Running tools…';
+  }
   const msgEl = DOM.messages.querySelector(`[data-msg-id="${state.currentMsgId}"]`);
   if (!msgEl) return;
   let group = msgEl.querySelector('.tool-group');
@@ -289,6 +345,36 @@ function appendToolCall(name, inputJson) {
     const body = group.querySelector('.tool-group-body');
     if (body) body.appendChild(renderToolCallItem(msg.toolCalls[msg.toolCalls.length - 1]));
   }
+}
+
+function appendToolResult(toolUseId, content, isError) {
+  if (!state.currentMsgId) return;
+  const msg = state.messages.find(m => m.id === state.currentMsgId);
+  if (!msg) return;
+  const tc = msg.toolCalls.find(t => t.id === toolUseId);
+  if (!tc) return;
+  tc.result = content;
+  tc.isError = isError;
+  tc.status = isError ? 'error' : 'done';
+  const msgEl = DOM.messages.querySelector(`[data-msg-id="${state.currentMsgId}"]`);
+  if (!msgEl) return;
+  const itemEl = msgEl.querySelector(`[data-tool-id="${toolUseId}"]`);
+  if (!itemEl) return;
+  const statusEl = itemEl.querySelector('.tool-status');
+  if (statusEl) {
+    statusEl.className = `tool-status ${isError ? 'error' : 'done'}`;
+    statusEl.textContent = isError ? '✗ error' : '✓ done';
+  }
+  let resultEl = itemEl.querySelector('.tool-result');
+  if (!resultEl) {
+    resultEl = document.createElement('pre');
+    resultEl.className = `tool-result${isError ? ' tool-result-error' : ''}`;
+    itemEl.appendChild(resultEl);
+  }
+  resultEl.textContent = content;
+  // Auto-expand the group when a result arrives so output is visible
+  const group = itemEl.closest('.tool-group');
+  if (group) group.classList.add('expanded');
 }
 
 function startStreaming() {
@@ -312,7 +398,7 @@ function endStreaming() {
     const msgEl = DOM.messages.querySelector(`[data-msg-id="${state.currentMsgId}"]`);
     if (msgEl) {
       const cd = msgEl.querySelector('.msg-content');
-      if (cd) cd.innerHTML = window.marked.parse(state._streamBuffer);
+      if (cd) { cd.innerHTML = window.marked.parse(state._streamBuffer); postProcessCodeBlocks(cd); }
     }
   }
   const msg = state.messages.find(m => m.id === state.currentMsgId);
@@ -519,6 +605,67 @@ function generateSummary() {
   bridge.sendMessage('Summarize this conversation in exactly this JSON format (respond with only the JSON, no markdown fences): {"purpose": "one sentence", "current_state": "2-3 sentences", "outcome": "2-3 sentences"}', '[]');
 }
 
+// ── Permission dialog ──────────────────────────────────────────────────────
+function showPermissionDialog(requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath) {
+  _pendingPermissionRequestId = requestId;
+
+  DOM.permissionToolName.textContent = displayName || toolName;
+
+  const titleText = title || (decisionReason ? `Claude wants to use ${toolName}: ${decisionReason}` : `Claude wants to use ${toolName}`);
+  DOM.permissionTitle.textContent = titleText;
+
+  DOM.permissionDesc.textContent = description || '';
+  DOM.permissionDesc.style.display = description ? '' : 'none';
+
+  if (blockedPath) {
+    DOM.permissionBlockedPath.textContent = blockedPath;
+    DOM.permissionBlockedPath.style.display = '';
+  } else {
+    DOM.permissionBlockedPath.style.display = 'none';
+  }
+
+  DOM.permissionModal.classList.add('visible');
+}
+
+function dismissPermissionDialog() {
+  DOM.permissionModal.classList.remove('visible');
+  _pendingPermissionRequestId = null;
+}
+
+function respondPermission(allow, alwaysAllow) {
+  if (!bridge || !_pendingPermissionRequestId) return;
+  bridge.respondToPermission(_pendingPermissionRequestId, allow, alwaysAllow);
+  dismissPermissionDialog();
+}
+
+// ── Transcript export ──────────────────────────────────────────────────────
+function exportTranscript() {
+  if (!bridge || !state.messages.length) return;
+  const lines = [];
+  state.messages.forEach(msg => {
+    if (msg.role === 'user') {
+      lines.push('## User\n');
+      lines.push(msg.content || '');
+      if (msg.attachments && msg.attachments.length > 0) {
+        lines.push(`\n_${msg.attachments.length} image(s) attached_`);
+      }
+    } else {
+      lines.push('## Assistant\n');
+      lines.push(msg.content || '');
+      if (msg.toolCalls && msg.toolCalls.length > 0) {
+        lines.push('\n**Tools used:**');
+        msg.toolCalls.forEach(tc => {
+          lines.push(`- \`${tc.name}\` — ${tc.status}`);
+          if (tc.result) lines.push(`\n  \`\`\`\n  ${tc.result.trim()}\n  \`\`\``);
+        });
+      }
+    }
+    lines.push('\n\n---\n');
+  });
+  const markdown = `# Conversation Transcript\n\n${lines.join('\n')}`;
+  bridge.writeTextFile('transcript.md', markdown);
+}
+
 // ── Controls ───────────────────────────────────────────────────────────────
 const MODELS = [
   { value: '',       label: 'Default' },
@@ -673,13 +820,31 @@ function wireEvents() {
   DOM.generateSummaryBtn.addEventListener('click', generateSummary);
   DOM.exitSummaryBtn.addEventListener('click', () => setViewMode('normal'));
 
+  // Export button
+  DOM.exportBtn.addEventListener('click', exportTranscript);
+
+  // Permission dialog buttons
+  DOM.permissionDenyBtn.addEventListener('click',   () => respondPermission(false, false));
+  DOM.permissionAllowBtn.addEventListener('click',  () => respondPermission(true,  false));
+  DOM.permissionAlwaysBtn.addEventListener('click', () => respondPermission(true,  true));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && DOM.permissionModal.classList.contains('visible')) {
+      respondPermission(false, false);
+    }
+  });
+
   // Attach button
   DOM.attachBtn.addEventListener('click', () => { if (bridge) bridge.pickImages(); });
 
-  // Image preview modal close
+  // Image preview modal close (click, button, or Escape)
   DOM.imagePreviewClose.addEventListener('click', () => DOM.imagePreviewModal.classList.remove('visible'));
   DOM.imagePreviewModal.addEventListener('click', (e) => {
     if (e.target === DOM.imagePreviewModal) DOM.imagePreviewModal.classList.remove('visible');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && DOM.imagePreviewModal.classList.contains('visible')) {
+      DOM.imagePreviewModal.classList.remove('visible');
+    }
   });
 
   // Paste images from clipboard — delegate to C++ which reads QApplication::clipboard()
@@ -722,8 +887,28 @@ function wireEvents() {
 
 function wireBridgeSignals() {
   bridge.textReady.connect(text => appendToken(text));
-  bridge.toolUse.connect((name, inputJson) => appendToolCall(name, inputJson));
-  bridge.turnComplete.connect(() => { if (state.streaming) endStreaming(); });
+  bridge.toolUse.connect((id, name, inputJson) => appendToolCall(id, name, inputJson));
+  bridge.toolResult.connect((toolUseId, content, isError) => appendToolResult(toolUseId, content, isError));
+  bridge.permissionRequested.connect((requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath) => {
+    showPermissionDialog(requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath);
+  });
+  bridge.turnComplete.connect(() => {
+    dismissPermissionDialog();
+    if (state.streaming) endStreaming();
+  });
+  bridge.fileWritten.connect((success, path) => {
+    if (!success) return;
+    const name = path.split('/').pop() || 'transcript.md';
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = `Saved: ${name}`;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('toast-visible'));
+    setTimeout(() => {
+      toast.classList.remove('toast-visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 2500);
+  });
   bridge.errorOccurred.connect(msg => {
     if (state.streaming) endStreaming();
     const errMsg = { id: mkId(), role: 'assistant', content: `**Error:** ${escHtml(msg)}`, toolCalls: [], timestamp: new Date().toISOString() };

@@ -36,11 +36,14 @@ export type DaemonCommand =
   | { type: "set_yolo"; yolo: boolean }
   | { type: "new_session" }
   | { type: "request_sessions" }
-  | { type: "load_session"; sessionId: string };
+  | { type: "load_session"; sessionId: string }
+  | { type: "permission_response"; requestId: string; allow: boolean; alwaysAllow: boolean };
 
 export type DaemonEvent =
   | { type: "text_ready"; text: string }
-  | { type: "tool_use"; name: string; input: string }
+  | { type: "tool_use"; id: string; name: string; input: string }
+  | { type: "tool_result"; toolUseId: string; content: string; isError: boolean }
+  | { type: "permission_request"; requestId: string; toolName: string; input: string; title?: string; description?: string; displayName?: string; decisionReason?: string; blockedPath?: string }
   | { type: "turn_complete" }
   | { type: "session_ready"; sessionId: string }
   | { type: "error"; msg: string }

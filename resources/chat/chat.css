@@ -81,6 +81,12 @@ html, body {
 }
 #sidebar-toggle:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 #topbar-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+#export-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-faint); border-radius: var(--radius-sm);
+  padding: 4px 8px; cursor: pointer; display: flex; align-items: center;
+}
+#export-btn:hover { border-color: var(--accent); color: var(--text); }
 #view-selector-btn {
   background: transparent; border: 1px solid var(--border);
   color: var(--text-muted); border-radius: var(--radius-sm);
@@ -169,6 +175,26 @@ html, body {
 .tool-status.running { color: var(--orange); }
 .tool-status.done { color: var(--green); }
 .tool-status.error { color: var(--red); }
+.tool-result {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 160px; overflow-y: auto;
+  background: rgba(0,0,0,0.2); border-radius: var(--radius-sm);
+  padding: 6px 8px; margin: 2px 0 0; border: none;
+}
+.tool-result-error { color: var(--red); }
+
+/* ── Code block copy button ────────────────────────────────────────────── */
+.code-block-wrapper { position: relative; }
+.code-copy-btn {
+  position: absolute; top: 6px; right: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text-muted); border-radius: var(--radius-sm);
+  padding: 2px 8px; font-size: 10px; font-family: var(--font-ui);
+  cursor: pointer; opacity: 0; transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.code-block-wrapper:hover .code-copy-btn { opacity: 1; }
+.code-copy-btn.copied { color: var(--green); border-color: var(--green); }
 
 /* ── Typing Indicator ──────────────────────────────────────────────────── */
 #typing-indicator { display: none; align-items: center; gap: 5px; padding: 0 24px 8px; flex-shrink: 0; }
@@ -357,6 +383,74 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Permission dialog ───────────────────────────────────────────────────── */
+#permission-modal {
+  position: fixed; inset: 0; z-index: 1500;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(2px);
+}
+#permission-modal.visible { display: flex; }
+#permission-card {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px 22px;
+  width: min(420px, 90vw);
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+#permission-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--orange);
+}
+#permission-tool-name {
+  font-family: var(--font-mono); font-size: 15px;
+  font-weight: 700; color: var(--text);
+}
+#permission-title {
+  font-size: 13px; color: var(--text); line-height: 1.5;
+}
+#permission-description {
+  font-size: 12px; color: var(--text-muted); line-height: 1.5;
+}
+#permission-blocked-path {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-faint); background: rgba(0,0,0,0.2);
+  border-radius: var(--radius-sm); padding: 4px 8px;
+  word-break: break-all;
+}
+#permission-actions {
+  display: flex; gap: 8px; padding-top: 4px;
+}
+#permission-deny-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-muted); border-radius: var(--radius-sm);
+  padding: 7px 14px; font-size: 12px; cursor: pointer;
+}
+#permission-deny-btn:hover { border-color: var(--red); color: var(--red); }
+#permission-allow-btn {
+  flex: 1; background: transparent; border: 1px solid var(--accent);
+  color: var(--accent); border-radius: var(--radius-sm);
+  padding: 7px 14px; font-size: 12px; cursor: pointer;
+}
+#permission-allow-btn:hover { background: rgba(124,106,247,0.12); }
+#permission-always-btn {
+  flex: 1; background: var(--accent); border: none;
+  color: #fff; border-radius: var(--radius-sm);
+  padding: 7px 14px; font-size: 12px; font-weight: 500; cursor: pointer;
+}
+#permission-always-btn:hover { background: var(--accent-hover); }
+
+/* ── Toast notification ──────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%) translateY(8px);
+  background: var(--bg-surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius); padding: 8px 16px;
+  font-size: 12px; pointer-events: none; z-index: 2000;
+  opacity: 0; transition: opacity 0.2s, transform 0.2s;
+}
+.toast.toast-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ── Statusline ──────────────────────────────────────────────────────────── */
 #statusline {
