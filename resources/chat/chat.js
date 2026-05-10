@@ -534,14 +534,14 @@ function buildModelDropdown() {
     el.className = 'model-option' + (state.model === value ? ' selected' : '');
     el.dataset.model = value;
     el.innerHTML = `<span>${label}</span>${state.model === value ? '<span>✓</span>' : ''}`;
-    el.addEventListener('click', () => { bridge.setModel(value); DOM.modelDropdown.classList.remove('open'); });
+    el.addEventListener('click', () => { syncModel(value); bridge.setModel(value); DOM.modelDropdown.classList.remove('open'); });
     DOM.modelDropdown.appendChild(el);
   });
 }
 
 function syncModel(val) {
   state.model = val;
-  const found = MODELS.find(m => m.value === val || (val && val.toLowerCase().includes(m.value)));
+  const found = MODELS.find(m => m.value === val || (m.value && val && val.toLowerCase().includes(m.value)));
   DOM.modelBtnLabel.textContent = found?.label || val || 'Default';
 }
 
@@ -655,7 +655,7 @@ function wireEvents() {
     if (DOM.modelDropdown.classList.contains('open')) {
       DOM.modelDropdown.classList.remove('open');
     } else {
-      buildModelDropdown(); DOM.modelDropdown.classList.add('open');
+      syncModel(bridge.model); buildModelDropdown(); DOM.modelDropdown.classList.add('open');
     }
   });
   document.addEventListener('click', () => DOM.modelDropdown.classList.remove('open'));

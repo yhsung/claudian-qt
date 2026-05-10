@@ -20,6 +20,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionHistoryLoaded, this, &ClaudeBridge::sessionHistoryLoaded);
 
     connect(m_daemon, &BridgeDaemon::resultReceived, this, [this](const QJsonObject &result) {
+        if (result["is_error"].toBool()) return;
         int inputTokens  = 0;
         int outputTokens = 0;
         int contextWindow = 0;
@@ -69,11 +70,14 @@ void ClaudeBridge::sendMessage(const QString &text, const QString &attachmentsJs
         return;
     }
     if (text.trimmed().isEmpty() && doc.array().isEmpty()) return;
-    m_daemon->sendCommand(QJsonObject{
+    QJsonObject cmd{
         {"type", "send"},
         {"prompt", text.trimmed()},
         {"attachments", doc.array()}
-    });
+    };
+    if (!m_model.isEmpty()) cmd["model"] = m_model;
+    if (m_yolo)             cmd["yolo"]  = m_yolo;
+    m_daemon->sendCommand(cmd);
 }
 
 void ClaudeBridge::abort() {

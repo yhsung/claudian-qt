@@ -20,7 +20,7 @@ const state = {
 
 let currentAbort: AbortController | null = null;
 
-async function handleSend(prompt: string, attachments: OutboundAttachment[]): Promise<void> {
+async function handleSend(prompt: string, attachments: OutboundAttachment[], model?: string, yolo?: boolean): Promise<void> {
   if (currentAbort) currentAbort.abort();
 
   const abortController = new AbortController();
@@ -35,8 +35,8 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[]): Pr
         abortController,
         cwd:                             state.cwd,
         resume:                          state.sessionId || undefined,
-        model:                           state.model     || undefined,
-        allowDangerouslySkipPermissions: state.yolo,
+        model:                           (model ?? state.model) || undefined,
+        allowDangerouslySkipPermissions: yolo            ?? state.yolo,
         includePartialMessages:          true,
       },
     });
@@ -117,7 +117,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[]): Pr
 async function handleCommand(cmd: DaemonCommand): Promise<void> {
   switch (cmd.type) {
     case "send":
-      await handleSend(cmd.prompt, cmd.attachments ?? []);
+      await handleSend(cmd.prompt, cmd.attachments ?? [], cmd.model, cmd.yolo);
       break;
 
     case "abort":

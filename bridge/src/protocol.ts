@@ -29,7 +29,7 @@ export interface HistoryTurn {
 }
 
 export type DaemonCommand =
-  | { type: "send"; prompt: string; attachments?: OutboundAttachment[] }
+  | { type: "send"; prompt: string; attachments?: OutboundAttachment[]; model?: string; yolo?: boolean }
   | { type: "abort" }
   | { type: "set_cwd"; cwd: string }
   | { type: "set_model"; model: string }
