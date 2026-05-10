@@ -75,6 +75,10 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
 
   const effectiveYolo = yolo ?? state.yolo;
 
+  // Cache token accumulator for this turn (captured from message_delta stream events).
+  let turnCacheRead = 0;
+  let turnCacheCreated = 0;
+
   try {
     const userMessage = await buildUserMessage(prompt, attachments);
     const queryResult = query({
@@ -87,6 +91,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
         allowDangerouslySkipPermissions: effectiveYolo,
         permissionMode:                  effectiveYolo ? "bypassPermissions" : (state.permissionMode as any) || "default",
         includePartialMessages:          true,
+        forwardSubagentText:             true,
         canUseTool:                      makeCanUseTool(effectiveYolo),
       },
     });
@@ -100,24 +105,43 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
         emit({ type: "session_ready", sessionId: state.sessionId });
 
       } else if (m.type === "stream_event") {
-        // Incremental token streaming: emit each text_delta as a separate text_ready
         const event = m.event as Record<string, unknown> | undefined;
         if (!event) continue;
-        if (
-          event.type === "content_block_delta" &&
-          (event.delta as Record<string, unknown>)?.type === "text_delta"
-        ) {
-          const text = (event.delta as Record<string, unknown>).text as string;
-          if (text) emit({ type: "text_ready", text });
+        const delta = event.delta as Record<string, unknown> | undefined;
+
+        if (event.type === "content_block_delta") {
+          if (delta?.type === "text_delta") {
+            const text = delta.text as string;
+            if (text) emit({ type: "text_ready", text });
+          } else if (delta?.type === "thinking_delta") {
+            const text = delta.thinking as string;
+            if (text) emit({ type: "thinking_chunk", text });
+          }
+        } else if (event.type === "message_delta") {
+          // Capture cache token usage for the statusline badge.
+          const usage = (event.usage as Record<string, unknown>) || {};
+          turnCacheRead    += Number(usage.cache_read_input_tokens)    || 0;
+          turnCacheCreated += Number(usage.cache_creation_input_tokens) || 0;
         }
 
       } else if (m.type === "assistant") {
-        // Text was already streamed token-by-token via stream_event; only emit tool_use here.
         const msgObj = m.message as Record<string, unknown> | undefined;
         const content = msgObj?.content as Array<Record<string, unknown>> | undefined;
-        for (const block of content ?? []) {
-          if (block.type === "tool_use") {
-            emit({ type: "tool_use", id: block.id as string, name: block.name as string, input: JSON.stringify(block.input) });
+        const parentToolUseId = m.parent_tool_use_id as string | null | undefined;
+
+        if (parentToolUseId) {
+          // Sub-agent message — collect text blocks and surface them as a unit.
+          const subText = (content ?? [])
+            .filter(b => b.type === "text")
+            .map(b => b.text as string)
+            .join("");
+          if (subText) emit({ type: "sub_agent_message", parentToolUseId, text: subText });
+        } else {
+          // Main agent — text already streamed via stream_event; emit tool_use blocks only.
+          for (const block of content ?? []) {
+            if (block.type === "tool_use") {
+              emit({ type: "tool_use", id: block.id as string, name: block.name as string, input: JSON.stringify(block.input) });
+            }
           }
         }
 
@@ -153,7 +177,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
           emit({ type: "error", msg });
         } else {
           successful = true;
-          emit({ type: "result", data: m });
+          emit({ type: "result", data: { ...m, cacheReadTokens: turnCacheRead, cacheCreatedTokens: turnCacheCreated } });
         }
       }
     }

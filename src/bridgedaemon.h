@@ -22,6 +22,8 @@ signals:
     void textReady(const QString &text);
     void toolUseStarted(const QString &id, const QString &name, const QString &inputJson);
     void toolResultReceived(const QString &toolUseId, const QString &content, bool isError);
+    void thinkingChunkReceived(const QString &text);
+    void subAgentMessageReceived(const QString &parentToolUseId, const QString &text);
     void permissionRequested(const QString &requestId, const QString &toolName,
                              const QString &inputJson, const QString &title,
                              const QString &description, const QString &displayName,

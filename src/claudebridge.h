@@ -44,8 +44,10 @@ public slots:
 
 signals:
     void textReady(const QString &text);
+    void thinkingChunk(const QString &text);
     void toolUse(const QString &id, const QString &name, const QString &inputJson);
     void toolResult(const QString &toolUseId, const QString &content, bool isError);
+    void subAgentMessage(const QString &parentToolUseId, const QString &text);
     void permissionRequested(const QString &requestId, const QString &toolName,
                              const QString &inputJson, const QString &title,
                              const QString &description, const QString &displayName,

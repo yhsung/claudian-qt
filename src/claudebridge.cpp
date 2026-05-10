@@ -21,8 +21,10 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionInitialized,   this, &ClaudeBridge::sessionReady);
     connect(m_daemon, &BridgeDaemon::textReady,            this, &ClaudeBridge::textReady);
     connect(m_daemon, &BridgeDaemon::toolUseStarted,       this, &ClaudeBridge::toolUse);
-    connect(m_daemon, &BridgeDaemon::toolResultReceived,   this, &ClaudeBridge::toolResult);
-    connect(m_daemon, &BridgeDaemon::permissionRequested,  this, &ClaudeBridge::permissionRequested);
+    connect(m_daemon, &BridgeDaemon::toolResultReceived,      this, &ClaudeBridge::toolResult);
+    connect(m_daemon, &BridgeDaemon::thinkingChunkReceived,   this, &ClaudeBridge::thinkingChunk);
+    connect(m_daemon, &BridgeDaemon::subAgentMessageReceived, this, &ClaudeBridge::subAgentMessage);
+    connect(m_daemon, &BridgeDaemon::permissionRequested,     this, &ClaudeBridge::permissionRequested);
     connect(m_daemon, &BridgeDaemon::turnFinished,         this, &ClaudeBridge::turnComplete);
     connect(m_daemon, &BridgeDaemon::errorOccurred,        this, &ClaudeBridge::errorOccurred);
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
@@ -50,12 +52,14 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
         }
 
         const QJsonObject payload{
-            {"inputTokens",   inputTokens},
-            {"outputTokens",  outputTokens},
-            {"contextWindow", contextWindow},
-            {"numTurns",      numTurns},
-            {"stopReason",    result["stop_reason"].toString()},
-            {"subtype",       result["subtype"].toString()}
+            {"inputTokens",      inputTokens},
+            {"outputTokens",     outputTokens},
+            {"contextWindow",    contextWindow},
+            {"numTurns",         numTurns},
+            {"stopReason",       result["stop_reason"].toString()},
+            {"subtype",          result["subtype"].toString()},
+            {"cacheReadTokens",  result["cacheReadTokens"].toInt(0)},
+            {"cacheCreatedTokens", result["cacheCreatedTokens"].toInt(0)}
         };
         emit usageUpdated(
             QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact))

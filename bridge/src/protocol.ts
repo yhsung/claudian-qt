@@ -43,8 +43,10 @@ export type DaemonCommand =
 
 export type DaemonEvent =
   | { type: "text_ready"; text: string }
+  | { type: "thinking_chunk"; text: string }
   | { type: "tool_use"; id: string; name: string; input: string }
   | { type: "tool_result"; toolUseId: string; content: string; isError: boolean }
+  | { type: "sub_agent_message"; parentToolUseId: string; text: string }
   | { type: "permission_request"; requestId: string; toolName: string; input: string; title?: string; description?: string; displayName?: string; decisionReason?: string; blockedPath?: string }
   | { type: "turn_complete" }
   | { type: "session_ready"; sessionId: string }

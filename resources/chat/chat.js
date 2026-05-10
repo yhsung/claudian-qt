@@ -18,8 +18,9 @@ const state = {
   toolCallCount: 0,
   _rafPending: false,
   _streamBuffer: '',
+  _thinkingBuffer: '',
   _summaryCapturing: false,
-  _lastPrompt: null,       // { text, attachmentsJson } for regenerate
+  _lastPrompt: null,
   pendingAttachments: [],
   previewAttachment: null,
 };
@@ -287,6 +288,9 @@ function renderMessage(msg) {
     }
   } else {
     outer.className = 'msg-assistant';
+    if (msg.thinking) {
+      outer.appendChild(makeThinkingBlock(msg.thinking, state.viewMode === 'thinking'));
+    }
     const contentDiv = document.createElement('div');
     contentDiv.className = 'msg-content';
     if (msg.content) {
@@ -315,6 +319,36 @@ function renderMessages() {
   state.messages.forEach(msg => DOM.messages.appendChild(renderMessage(msg)));
   applyFontSize();
   DOM.messages.scrollTop = DOM.messages.scrollHeight;
+}
+
+// ── Thinking block helpers ─────────────────────────────────────────────────
+function makeThinkingBlock(text, expanded) {
+  const block = document.createElement('div');
+  block.className = 'thinking-block' + (expanded ? ' expanded' : '');
+  const header = document.createElement('div');
+  header.className = 'thinking-header';
+  header.innerHTML = '<span class="thinking-arrow">▶</span><span class="thinking-label">Thinking</span>';
+  header.addEventListener('click', () => block.classList.toggle('expanded'));
+  const body = document.createElement('div');
+  body.className = 'thinking-body';
+  body.textContent = text;
+  block.append(header, body);
+  return block;
+}
+
+function appendThinkingChunk(text) {
+  state._thinkingBuffer += text;
+  if (!state.currentMsgId) return;
+  const msgEl = DOM.messages.querySelector(`[data-msg-id="${state.currentMsgId}"]`);
+  if (!msgEl) return;
+  let block = msgEl.querySelector('.thinking-block');
+  if (!block) {
+    block = makeThinkingBlock('', state.viewMode === 'thinking');
+    const contentDiv = msgEl.querySelector('.msg-content');
+    msgEl.insertBefore(block, contentDiv);
+  }
+  const body = block.querySelector('.thinking-body');
+  if (body) body.textContent = state._thinkingBuffer;
 }
 
 // ── Code block copy buttons ────────────────────────────────────────────────
@@ -426,12 +460,39 @@ function appendToolResult(toolUseId, content, isError) {
   if (group) group.classList.add('expanded');
 }
 
+function appendSubAgentMessage(parentToolUseId, text) {
+  if (!state.currentMsgId) return;
+  const msgEl = DOM.messages.querySelector(`[data-msg-id="${state.currentMsgId}"]`);
+  if (!msgEl) return;
+  const key = `sub-agent-${CSS.escape(parentToolUseId)}`;
+  let block = msgEl.querySelector(`[data-sub-agent="${parentToolUseId}"]`);
+  if (!block) {
+    block = document.createElement('div');
+    block.className = 'sub-agent-block';
+    block.dataset.subAgent = parentToolUseId;
+    const header = document.createElement('div');
+    header.className = 'sub-agent-header';
+    header.innerHTML = '<span class="sub-agent-arrow">▶</span><span>↳ Sub-agent</span>';
+    header.addEventListener('click', () => block.classList.toggle('expanded'));
+    const body = document.createElement('div');
+    body.className = 'sub-agent-body msg-content';
+    block.append(header, body);
+    msgEl.appendChild(block);
+  }
+  const body = block.querySelector('.sub-agent-body');
+  if (body) {
+    body.innerHTML = window.marked.parse(text);
+    postProcessCodeBlocks(body);
+  }
+}
+
 function startStreaming() {
   state.streaming = true;
   const msg = { id: mkId(), role: 'assistant', content: '', toolCalls: [], timestamp: new Date().toISOString() };
   state.messages.push(msg);
   state.currentMsgId = msg.id;
   state._streamBuffer = '';
+  state._thinkingBuffer = '';
   DOM.messages.appendChild(renderMessage(msg));
   DOM.typingIndicator.classList.add('visible');
   DOM.stopBtn.classList.add('visible');
@@ -453,6 +514,7 @@ function endStreaming() {
   const msg = state.messages.find(m => m.id === state.currentMsgId);
   if (msg) {
     msg.content = state._streamBuffer;
+    if (state._thinkingBuffer) msg.thinking = state._thinkingBuffer;
     msg.toolCalls.forEach(tc => { if (tc.status === 'running') tc.status = 'done'; });
     const msgEl = DOM.messages.querySelector(`[data-msg-id="${state.currentMsgId}"]`);
     if (msgEl) {
@@ -631,6 +693,10 @@ function setViewMode(mode) {
   localStorage.setItem('viewMode', mode);
   syncViewPopupState();
   renderMessages();
+  // Expand/collapse thinking blocks based on Thinking view mode
+  DOM.messages.querySelectorAll('.thinking-block').forEach(el => {
+    el.classList.toggle('expanded', mode === 'thinking');
+  });
 }
 
 function setFontSize(size) {
@@ -934,9 +1000,10 @@ function resetStatusline() {
 function onUsageUpdated(jsonStr) {
   let data;
   try { data = JSON.parse(jsonStr); } catch { return; }
-  const { inputTokens = 0, outputTokens = 0, contextWindow = 0, numTurns = 0, stopReason = '', subtype = '' } = data;
+  const { inputTokens = 0, outputTokens = 0, contextWindow = 0, numTurns = 0,
+          stopReason = '', subtype = '', cacheReadTokens = 0, cacheCreatedTokens = 0 } = data;
 
-  // Stamp token + stop-reason badge on the last assistant message
+  // Stamp token + stop-reason + cache badge on the last assistant message
   const lastAsstEl = [...DOM.messages.querySelectorAll('[data-msg-id]')].reverse()
     .find(el => el.classList.contains('msg-assistant'));
   if (lastAsstEl) {
@@ -946,8 +1013,12 @@ function onUsageUpdated(jsonStr) {
     const total = inputTokens + outputTokens;
     const reasonLabel = stopReason === 'end_turn' ? '' : stopReason ? ` · ${stopReason.replace(/_/g, ' ')}` : '';
     const subtypeWarn = subtype && subtype !== 'success' ? ` · ${subtype.replace(/_/g, ' ')}` : '';
-    badge.textContent = `${fmt(total)} tokens${reasonLabel}${subtypeWarn}`;
-    badge.title = `${fmt(inputTokens)} in + ${fmt(outputTokens)} out`;
+    const cacheLabel  = cacheReadTokens > 0 ? ' · 💾 cached' : '';
+    badge.textContent = `${fmt(total)} tokens${cacheLabel}${reasonLabel}${subtypeWarn}`;
+    const cacheTip = cacheReadTokens > 0
+      ? `\ncache read: ${fmt(cacheReadTokens)}${cacheCreatedTokens > 0 ? ` · created: ${fmt(cacheCreatedTokens)}` : ''}`
+      : '';
+    badge.title = `${fmt(inputTokens)} in + ${fmt(outputTokens)} out${cacheTip}`;
   }
 
   DOM.statuslineTurns.textContent = numTurns === 1 ? '1 turn' : `${numTurns} turns`;
@@ -1125,8 +1196,10 @@ function wireEvents() {
 
 function wireBridgeSignals() {
   bridge.textReady.connect(text => appendToken(text));
+  bridge.thinkingChunk.connect(text => appendThinkingChunk(text));
   bridge.toolUse.connect((id, name, inputJson) => appendToolCall(id, name, inputJson));
   bridge.toolResult.connect((toolUseId, content, isError) => appendToolResult(toolUseId, content, isError));
+  bridge.subAgentMessage.connect((parentToolUseId, text) => appendSubAgentMessage(parentToolUseId, text));
   bridge.permissionRequested.connect((requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath) => {
     showPermissionDialog(requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath);
   });

@@ -134,6 +134,8 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     if      (type == "text_ready")              emit textReady(event["text"].toString());
     else if (type == "tool_use")                emit toolUseStarted(event["id"].toString(), event["name"].toString(), event["input"].toString());
     else if (type == "tool_result")             emit toolResultReceived(event["toolUseId"].toString(), event["content"].toString(), event["isError"].toBool());
+    else if (type == "thinking_chunk")          emit thinkingChunkReceived(event["text"].toString());
+    else if (type == "sub_agent_message")       emit subAgentMessageReceived(event["parentToolUseId"].toString(), event["text"].toString());
     else if (type == "permission_request")      emit permissionRequested(
                                                     event["requestId"].toString(),
                                                     event["toolName"].toString(),
