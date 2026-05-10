@@ -185,8 +185,21 @@ claudian-qt/
 **Streaming UX**
 - Token streaming renders incrementally via `requestAnimationFrame` batching to prevent layout thrashing.
 - The typing indicator label switches between "Claude is thinking…" (waiting for first token) and "Running tools…" (tool execution in progress), then disappears once text tokens arrive.
-- Each code block rendered from Markdown gets a hover-revealed "Copy" button that writes to the clipboard.
+- Each code block rendered from Markdown gets a hover-revealed "Copy" button that writes to the clipboard. Tool result output blocks get the same treatment via `makeToolResultEl()`.
 - The "Stop" button sends an `abort` command to the daemon, which triggers the SDK's `AbortController`.
+
+**Message timestamps**
+- Every user and assistant message shows a relative timestamp (`just now`, `3m ago`, `2h ago`, etc.) rendered below the bubble using the `relativeTime()` helper. User timestamps are right-aligned; assistant timestamps are left-aligned.
+
+**Transcript search**
+- ⌘F or the magnifier icon in the top bar opens an inline search bar. Typing highlights matching messages with a subtle accent outline and dims non-matching ones, scrolls the first hit into view, and shows a match count. Escape or × closes and clears all highlights.
+
+**Attachment tray**
+- When two or more images are staged for sending, a "Clear all" button appears alongside the individual × remove buttons.
+
+**Keyboard shortcuts**
+- Escape is handled by a single prioritised listener that dismisses overlays from innermost to outermost: image preview → permission dialog → search bar → summary view.
+- ⌘F / Ctrl+F opens transcript search from anywhere.
 
 **Permission dialog**
 - The Claude Agent SDK requires `--permission-prompt-tool stdio` on the spawned CLI process to route permission requests over IPC rather than a terminal. This flag is only added when a `canUseTool` callback is provided, so the daemon always supplies one.
