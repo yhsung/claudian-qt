@@ -1,7 +1,9 @@
 #include "attachmentstore.h"
+#include <QBuffer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QImageReader>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -25,7 +27,17 @@ QString AttachmentStore::importBytes(
     const QString &originalName,
     const QString &mimeType
 ) {
-    if (!isSupportedImageMime(mimeType)) return {};
+    // If the format isn't Claude-supported (e.g. TIFF from macOS clipboard), convert to PNG.
+    if (!isSupportedImageMime(mimeType)) {
+        QImage img;
+        if (!img.loadFromData(bytes)) return {};
+        QByteArray pngBytes;
+        QBuffer buf(&pngBytes);
+        buf.open(QIODevice::WriteOnly);
+        if (!img.save(&buf, "PNG")) return {};
+        const QString pngName = QFileInfo(originalName).baseName() + ".png";
+        return importBytes(pngBytes, pngName, "image/png");
+    }
 
     QDir().mkpath(stagingRoot());
     const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
