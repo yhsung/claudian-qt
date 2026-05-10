@@ -157,6 +157,7 @@ function initDOM() {
     modelBtnLabel:      document.getElementById('model-btn-label'),
     modelDropdown:      document.getElementById('model-dropdown'),
     yoloBtn:            document.getElementById('yolo-btn'),
+    sidebarToggle:      document.getElementById('sidebar-toggle'),
     viewSelectorBtn:    document.getElementById('view-selector-btn'),
     viewSelectorLabel:  document.getElementById('view-selector-label'),
     viewPopup:          document.getElementById('view-popup'),
@@ -553,8 +554,23 @@ function syncCwd(path) {
   DOM.cwdBtn.title = state.cwd;
 }
 
+// ── Sidebar toggle ────────────────────────────────────────────────────────
+function initSidebarState() {
+  if (localStorage.getItem('sidebarCollapsed') === 'true') {
+    document.getElementById('app').classList.add('sidebar-collapsed');
+  }
+}
+
+function toggleSidebar() {
+  const app = document.getElementById('app');
+  const collapsed = app.classList.toggle('sidebar-collapsed');
+  localStorage.setItem('sidebarCollapsed', collapsed);
+}
+
 // ── Events ─────────────────────────────────────────────────────────────────
 function wireEvents() {
+  DOM.sidebarToggle.addEventListener('click', toggleSidebar);
+
   DOM.textarea.addEventListener('input', () => {
     DOM.textarea.style.height = 'auto';
     DOM.textarea.style.height = Math.min(DOM.textarea.scrollHeight, 200) + 'px';
@@ -700,6 +716,7 @@ function wireBridgeSignals() {
 (function bootstrap() {
   if (window.marked) window.marked.use({ gfm: true, breaks: true });
   initDOM();
+  initSidebarState();
   wireEvents();
   applyFontSize();
   new QWebChannel(qt.webChannelTransport, function(channel) {
