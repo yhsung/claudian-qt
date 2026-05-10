@@ -85,6 +85,17 @@ if(NPM_EXECUTABLE)
     )
     add_dependencies(ClaudianQt ClaudeBridge)
 
+    # Sync daemon dist after TS-only rebuilds (ClaudianQt's POST_BUILD only runs on relink).
+    add_custom_command(TARGET ClaudeBridge POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_BINARY_DIR}/ClaudianQt.app/Contents/Resources/bridge"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+            "${CMAKE_SOURCE_DIR}/bridge/dist"
+            "${CMAKE_BINARY_DIR}/ClaudianQt.app/Contents/Resources/bridge"
+        COMMENT "Syncing daemon dist to app bundle after TS rebuild"
+        VERBATIM
+    )
+
     add_test(
         NAME BridgeTests
         COMMAND ${NPM_EXECUTABLE} test

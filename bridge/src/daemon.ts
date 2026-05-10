@@ -231,11 +231,7 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       if (pending) {
         pendingPermissions.delete(cmd.requestId);
         if (cmd.allow) {
-          pending.resolve({
-            behavior: "allow",
-            updatedInput: {},
-            decisionClassification: cmd.alwaysAllow ? "user_permanent" : "user_temporary",
-          });
+          pending.resolve({ behavior: "allow", updatedInput: {} });
         } else {
           pending.resolve({ behavior: "deny", message: "Permission denied by user." });
         }
