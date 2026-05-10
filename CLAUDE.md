@@ -283,7 +283,7 @@ ClaudianQt is a Qt6 desktop wrapper for the Claude Code CLI. It renders a WebEng
 ## Error Handling
 ## Cross-Cutting Concerns
 - C++ layer: `claude` subprocess run with `--verbose` flag (output captured in stderr, not parsed)
-- JavaScript layer: Inline `console.log()` available in DevTools (launch with `--remote-debugging-port=9222`)
+- JavaScript layer: Inline `console.log()` available in DevTools. Launch app with `./scripts/build.sh --inspect` to enable WebEngine DevTools on `chrome://inspect` (port 9222) and Node inspector on `localhost:9229`.
 - Message text: `ClaudeBridge::sendMessage()` calls `text.trimmed().isEmpty()` — rejects empty input
 - Session ID: `ClaudeBridge::loadSession()` guards against loading same session twice (no-op if `m_sessionId == sessionId`)
 - Delegated to `claude` CLI — authentication token stored in `~/.claude/config.json` by CLI installer
