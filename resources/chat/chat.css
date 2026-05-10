@@ -216,3 +216,133 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+/* ── Attachment Tray ──────────────────────────────────────────────────────── */
+#attachment-tray {
+  display: none;
+  gap: 10px;
+  padding: 8px 16px 0;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+#attachment-tray.visible { display: flex; }
+
+.attachment-tile {
+  position: relative;
+  width: 80px;
+  flex: 0 0 80px;
+}
+.attachment-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  cursor: pointer;
+  display: block;
+}
+.attachment-thumb:hover { opacity: 0.85; }
+.attachment-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.75);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.attachment-remove:hover { background: var(--red); }
+
+/* ── History galleries ────────────────────────────────────────────────────── */
+.history-attachment-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.history-attachment-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  cursor: pointer;
+  display: block;
+}
+.history-attachment-thumb:hover { opacity: 0.85; }
+
+/* ── Drag-over highlight ──────────────────────────────────────────────────── */
+#main.drag-over #textarea-wrapper {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124,106,247,0.25);
+}
+
+/* ── Attach button ────────────────────────────────────────────────────────── */
+#attach-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+#attach-btn:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── Image preview modal ──────────────────────────────────────────────────── */
+#image-preview-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(0,0,0,0.75);
+  z-index: 1200;
+}
+#image-preview-modal.visible { display: flex; }
+#image-preview-img {
+  max-width: min(80vw, 960px);
+  max-height: 80vh;
+  border-radius: 12px;
+  display: block;
+}
+#image-preview-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#image-preview-close:hover { background: rgba(255,255,255,0.25); }
+#image-preview-caption {
+  color: rgba(255,255,255,0.75);
+  font-size: 12px;
+  max-width: 60vw;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -18,10 +18,13 @@ const state = {
   _rafPending: false,
   _streamBuffer: '',
   _summaryCapturing: false,
+  pendingAttachments: [],
+  previewAttachment: null,
 };
 
 let bridge = null;
 let DOM = {};
+const pendingImports = new Map();
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function mkId() {
@@ -42,6 +45,82 @@ function relativeTime(iso) {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   return d < 7 ? `${d}d ago` : new Date(iso).toLocaleDateString();
+}
+
+// ── Attachment helpers ─────────────────────────────────────────────────────
+function renderAttachmentRow(attachments, { removable = false } = {}) {
+  const row = document.createElement('div');
+  row.className = 'history-attachment-row';
+  attachments.forEach(att => {
+    const tile = document.createElement('div');
+    tile.className = 'attachment-tile';
+    const img = document.createElement('img');
+    img.className = removable ? 'attachment-thumb' : 'history-attachment-thumb';
+    img.src = att.fileUrl;
+    img.alt = att.originalName;
+    img.addEventListener('click', () => openImagePreview(att));
+    tile.appendChild(img);
+    if (removable) {
+      const rmBtn = document.createElement('button');
+      rmBtn.className = 'attachment-remove';
+      rmBtn.textContent = '×';
+      rmBtn.title = 'Remove';
+      rmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.pendingAttachments = state.pendingAttachments.filter(a => a.id !== att.id);
+        renderPendingAttachments();
+      });
+      tile.appendChild(rmBtn);
+    }
+    row.appendChild(tile);
+  });
+  return row;
+}
+
+function renderPendingAttachments() {
+  DOM.attachmentTray.innerHTML = '';
+  DOM.attachmentTray.classList.toggle('visible', state.pendingAttachments.length > 0);
+  if (state.pendingAttachments.length > 0) {
+    DOM.attachmentTray.appendChild(renderAttachmentRow(state.pendingAttachments, { removable: true }));
+  }
+}
+
+function openImagePreview(att) {
+  state.previewAttachment = att;
+  DOM.imagePreviewImg.src = att.fileUrl;
+  DOM.imagePreviewImg.alt = att.originalName;
+  DOM.imagePreviewCaption.textContent = att.originalName;
+  DOM.imagePreviewModal.classList.add('visible');
+}
+
+function normalizeAttachment(raw) {
+  return {
+    id: raw.id,
+    originalName: raw.originalName,
+    mimeType: raw.mimeType,
+    stagedPath: raw.stagedPath || '',
+    fileUrl: raw.fileUrl,
+    sizeBytes: raw.sizeBytes,
+    width: raw.width ?? null,
+    height: raw.height ?? null,
+  };
+}
+
+async function importClipboardFile(file) {
+  return new Promise((resolve, reject) => {
+    const requestId = mkId();
+    const reader = new FileReader();
+    pendingImports.set(requestId, { resolve, reject });
+    reader.onload = () => {
+      const base64 = String(reader.result).split(',')[1] || '';
+      bridge.importImageData(requestId, file.name || 'clipboard-image.png', file.type || 'image/png', base64);
+    };
+    reader.onerror = () => {
+      pendingImports.delete(requestId);
+      reject(reader.error);
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
@@ -69,6 +148,12 @@ function initDOM() {
     viewSelectorBtn:    document.getElementById('view-selector-btn'),
     viewSelectorLabel:  document.getElementById('view-selector-label'),
     viewPopup:          document.getElementById('view-popup'),
+    attachmentTray:     document.getElementById('attachment-tray'),
+    attachBtn:          document.getElementById('attach-btn'),
+    imagePreviewModal:  document.getElementById('image-preview-modal'),
+    imagePreviewImg:    document.getElementById('image-preview-img'),
+    imagePreviewCaption: document.getElementById('image-preview-caption'),
+    imagePreviewClose:  document.getElementById('image-preview-close'),
   };
 }
 
@@ -114,6 +199,12 @@ function renderMessage(msg) {
   outer.dataset.msgId = msg.id;
   if (msg.role === 'user') {
     outer.className = 'msg-user';
+    outer.style.flexDirection = 'column';
+    outer.style.alignItems = 'flex-end';
+    // Show attachment gallery above the text bubble if there are attachments
+    if (msg.attachments && msg.attachments.length > 0) {
+      outer.appendChild(renderAttachmentRow(msg.attachments));
+    }
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble';
     bubble.textContent = msg.content;
@@ -246,15 +337,30 @@ function endStreaming() {
 // ── Send ───────────────────────────────────────────────────────────────────
 function sendMessage() {
   const text = DOM.textarea.value.trim();
-  if (!text || state.streaming || !bridge) return;
-  const msg = { id: mkId(), role: 'user', content: text, toolCalls: [], timestamp: new Date().toISOString() };
+  if ((!text && !state.pendingAttachments.length) || state.streaming || !bridge) return;
+
+  const attachments = state.pendingAttachments.slice();
+  const msg = {
+    id: mkId(),
+    role: 'user',
+    content: text,
+    attachments,
+    toolCalls: [],
+    timestamp: new Date().toISOString(),
+  };
   state.messages.push(msg);
-  DOM.messages.appendChild(renderMessage(msg));
+
+  const msgEl = renderMessage(msg);
+  DOM.messages.appendChild(msgEl);
   DOM.messages.scrollTop = DOM.messages.scrollHeight;
+
   DOM.textarea.value = '';
   DOM.textarea.style.height = '';
+  state.pendingAttachments = [];
+  renderPendingAttachments();
+
   startStreaming();
-  bridge.sendMessage(text);
+  bridge.sendMessage(text, JSON.stringify(attachments));
 }
 
 // ── Sessions ───────────────────────────────────────────────────────────────
@@ -280,7 +386,14 @@ function renderSessions(sessions) {
 }
 
 function loadSessionHistory(turns) {
-  state.messages = turns.map(turn => ({ id: mkId(), role: turn.role, content: turn.text, toolCalls: [], timestamp: new Date().toISOString() }));
+  state.messages = turns.map(turn => ({
+    id: mkId(),
+    role: turn.role,
+    content: turn.text,
+    attachments: turn.attachments || [],
+    toolCalls: [],
+    timestamp: new Date().toISOString(),
+  }));
   renderMessages();
 }
 
@@ -385,7 +498,7 @@ function generateSummary() {
   DOM.generateSummaryBtn.disabled = true;
   DOM.generateSummaryBtn.textContent = 'Generating…';
   startStreaming();
-  bridge.sendMessage('Summarize this conversation in exactly this JSON format (respond with only the JSON, no markdown fences): {"purpose": "one sentence", "current_state": "2-3 sentences", "outcome": "2-3 sentences"}');
+  bridge.sendMessage('Summarize this conversation in exactly this JSON format (respond with only the JSON, no markdown fences): {"purpose": "one sentence", "current_state": "2-3 sentences", "outcome": "2-3 sentences"}', '[]');
 }
 
 // ── Controls ───────────────────────────────────────────────────────────────
@@ -451,6 +564,8 @@ function wireEvents() {
     DOM.messages.innerHTML = '';
     hideSummaryView();
     DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
+    state.pendingAttachments = [];
+    renderPendingAttachments();
     bridge.newSession();
   });
   DOM.modelBtn.addEventListener('click', e => {
@@ -475,6 +590,52 @@ function wireEvents() {
   });
   DOM.generateSummaryBtn.addEventListener('click', generateSummary);
   DOM.exitSummaryBtn.addEventListener('click', () => setViewMode('normal'));
+
+  // Attach button
+  DOM.attachBtn.addEventListener('click', () => { if (bridge) bridge.pickImages(); });
+
+  // Image preview modal close
+  DOM.imagePreviewClose.addEventListener('click', () => DOM.imagePreviewModal.classList.remove('visible'));
+  DOM.imagePreviewModal.addEventListener('click', (e) => {
+    if (e.target === DOM.imagePreviewModal) DOM.imagePreviewModal.classList.remove('visible');
+  });
+
+  // Paste images from clipboard
+  DOM.textarea.addEventListener('paste', async (e) => {
+    const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+    try {
+      const imported = await Promise.all(files.map(importClipboardFile));
+      state.pendingAttachments.push(...imported);
+      renderPendingAttachments();
+    } catch (err) {
+      console.error('Paste import failed:', err);
+    }
+  });
+
+  // Drag-and-drop images onto messages area
+  const mainEl = document.getElementById('main');
+  mainEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    mainEl.classList.add('drag-over');
+  });
+  mainEl.addEventListener('dragleave', (e) => {
+    if (!mainEl.contains(e.relatedTarget)) mainEl.classList.remove('drag-over');
+  });
+  mainEl.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    mainEl.classList.remove('drag-over');
+    const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    try {
+      const imported = await Promise.all(files.map(importClipboardFile));
+      state.pendingAttachments.push(...imported);
+      renderPendingAttachments();
+    } catch (err) {
+      console.error('Drop import failed:', err);
+    }
+  });
 }
 
 function wireBridgeSignals() {
@@ -493,6 +654,23 @@ function wireBridgeSignals() {
   bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; bridge.requestSessions(); });
   bridge.modelChanged.connect(model => syncModel(model));
   bridge.yoloChanged.connect(enabled => syncYolo(enabled));
+  bridge.imagesPicked.connect((json) => {
+    try {
+      const imported = JSON.parse(json).map(normalizeAttachment);
+      state.pendingAttachments.push(...imported);
+      renderPendingAttachments();
+    } catch(e) { console.error('imagesPicked parse error:', e); }
+  });
+  bridge.imageImported.connect((requestId, json) => {
+    const pending = pendingImports.get(requestId);
+    if (!pending) return;
+    pendingImports.delete(requestId);
+    try {
+      pending.resolve(normalizeAttachment(JSON.parse(json)));
+    } catch(e) {
+      pending.reject(e);
+    }
+  });
   syncCwd(bridge.cwd);
   syncModel(bridge.model);
   syncYolo(bridge.yolo);

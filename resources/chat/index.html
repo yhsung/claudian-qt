@@ -54,12 +54,15 @@
       <span class="typing-label">Claude is thinking…</span>
     </div>
 
+    <div id="attachment-tray"></div>
+
     <div id="input-area">
       <div id="textarea-wrapper">
         <textarea id="input-textarea" rows="1"
                   placeholder="Message Claude…"></textarea>
       </div>
       <div id="input-toolbar">
+        <button id="attach-btn" title="Attach images (or paste/drag)">📎</button>
         <button id="cwd-btn" title="Change working directory">~/</button>
         <div id="model-selector">
           <button id="model-btn">
@@ -104,6 +107,12 @@
     <button class="font-size-btn md-btn" data-font="md">Aa</button>
     <button class="font-size-btn lg-btn" data-font="lg">Aa</button>
   </div>
+</div>
+
+<div id="image-preview-modal">
+  <button id="image-preview-close" title="Close">×</button>
+  <img id="image-preview-img" alt="">
+  <div id="image-preview-caption"></div>
 </div>
 
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
