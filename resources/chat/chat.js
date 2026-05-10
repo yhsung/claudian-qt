@@ -110,12 +110,24 @@ async function importClipboardFile(file) {
   return new Promise((resolve, reject) => {
     const requestId = mkId();
     const reader = new FileReader();
-    pendingImports.set(requestId, { resolve, reject });
+
+    const timeout = setTimeout(() => {
+      if (!pendingImports.has(requestId)) return;
+      pendingImports.delete(requestId);
+      reject(new Error('Image import timed out: ' + (file.name || 'clipboard-image.png')));
+    }, 15000);
+
+    pendingImports.set(requestId, {
+      resolve(att) { clearTimeout(timeout); resolve(att); },
+      reject(err)  { clearTimeout(timeout); reject(err); },
+    });
+
     reader.onload = () => {
       const base64 = String(reader.result).split(',')[1] || '';
       bridge.importImageData(requestId, file.name || 'clipboard-image.png', file.type || 'image/png', base64);
     };
     reader.onerror = () => {
+      clearTimeout(timeout);
       pendingImports.delete(requestId);
       reject(reader.error);
     };
@@ -605,35 +617,42 @@ function wireEvents() {
     const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
     e.preventDefault();
-    try {
-      const imported = await Promise.all(files.map(importClipboardFile));
+    const results = await Promise.allSettled(files.map(importClipboardFile));
+    const imported = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+    if (imported.length) {
       state.pendingAttachments.push(...imported);
       renderPendingAttachments();
-    } catch (err) {
-      console.error('Paste import failed:', err);
     }
   });
 
-  // Drag-and-drop images onto messages area
+  // Drag-and-drop images onto the main area
   const mainEl = document.getElementById('main');
-  mainEl.addEventListener('dragover', (e) => {
+  let dragCount = 0;
+  mainEl.addEventListener('dragenter', (e) => {
     e.preventDefault();
+    dragCount++;
     mainEl.classList.add('drag-over');
   });
-  mainEl.addEventListener('dragleave', (e) => {
-    if (!mainEl.contains(e.relatedTarget)) mainEl.classList.remove('drag-over');
+  mainEl.addEventListener('dragover', (e) => {
+    e.preventDefault(); // required to allow drop
+  });
+  mainEl.addEventListener('dragleave', () => {
+    if (--dragCount <= 0) {
+      dragCount = 0;
+      mainEl.classList.remove('drag-over');
+    }
   });
   mainEl.addEventListener('drop', async (e) => {
     e.preventDefault();
+    dragCount = 0;
     mainEl.classList.remove('drag-over');
     const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
-    try {
-      const imported = await Promise.all(files.map(importClipboardFile));
+    const results = await Promise.allSettled(files.map(importClipboardFile));
+    const imported = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+    if (imported.length) {
       state.pendingAttachments.push(...imported);
       renderPendingAttachments();
-    } catch (err) {
-      console.error('Drop import failed:', err);
     }
   });
 }
