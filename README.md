@@ -203,8 +203,8 @@ claudian-qt/
 - ⌘F / Ctrl+F opens transcript search from anywhere.
 
 **Per-turn token badge and stop reason**
-- After each assistant turn the C++ `resultReceived` handler now includes `stopReason` and `subtype` in the `usageUpdated` payload alongside the token counts.
-- A `.msg-meta-badge` is stamped below the last assistant message showing total tokens for the turn (e.g. `3.2k tokens`). When the turn ended for a reason other than `end_turn` (e.g. `max_tokens`, an error subtype) that reason is appended after a `·` separator.
+- After each assistant turn the C++ `resultReceived` handler now includes `stopReason`, `subtype`, `cacheReadTokens`, and `cacheCreatedTokens` in the `usageUpdated` payload alongside the token counts.
+- A `.msg-meta-badge` is stamped below the last assistant message showing total tokens for the turn (e.g. `3.2k tokens`). When the turn ended for a reason other than `end_turn` (e.g. `max_tokens`, an error subtype) that reason is appended after a `·` separator. A `💾 cached` label appears when prompt-cache hits are detected; hovering reveals a breakdown of read vs. created cache tokens.
 
 **Regenerate last response**
 - Every `sendMessage` call saves `_lastPrompt` (text + attachments JSON). After streaming completes, a hover-revealed "↺ Retry" button appears on the last assistant message.
@@ -224,6 +224,19 @@ claudian-qt/
 - The UI shows a modal dialog with **Deny**, **Allow Once**, and **Always Allow** buttons. The user's choice is sent back via `bridge.respondToPermission(requestId, allow, alwaysAllow)` → `ClaudeBridge::respondToPermission` → daemon stdin → the pending Promise resolves with the appropriate `PermissionResult`.
 - In YOLO mode, the same `canUseTool` callback is used but resolves immediately with `{ behavior: "allow" }` without showing the dialog, preserving the IPC channel while bypassing all prompts.
 - The dialog dismisses automatically on abort or turn complete. Escape also denies and closes it.
+
+**Extended thinking display**
+- The daemon intercepts `thinking_delta` events from the SDK's content-block stream (same path as `text_delta`) and emits `thinking_chunk` events through `BridgeDaemon` → `ClaudeBridge` → JS.
+- `appendThinkingChunk()` builds a collapsible `.thinking-block` above the response text, progressively updating as chunks arrive. The block shows a ▶ toggle header labelled "Thinking".
+- The **Thinking** view mode (previously a no-op in the view selector) now controls default expand state: blocks start expanded in Thinking mode and collapsed in all others. Switching modes expands or collapses all existing thinking blocks live. The thinking text is stored on `msg.thinking` so session history replay also shows the section.
+
+**Cache hit indicator**
+- `message_delta` stream events carry `cache_read_input_tokens` and `cache_creation_input_tokens` in their usage object. The daemon accumulates these across the turn and merges them into the `result` emit as `cacheReadTokens`/`cacheCreatedTokens`.
+- C++ passes them through the `usageUpdated` payload. When `cacheReadTokens > 0`, a `💾 cached` label is added to the turn meta badge; the hover tooltip shows the exact read and created token counts.
+
+**Sub-agent transparency**
+- The daemon checks `parent_tool_use_id` on every `assistant` message from the SDK iterator. A non-null value means a sub-agent produced the message. Text blocks are collected and emitted as `sub_agent_message` events; with `includePartialMessages: true` these fire incrementally, giving progressive disclosure as the sub-agent generates output.
+- `appendSubAgentMessage()` creates or updates a collapsible `.sub-agent-block` with a left accent border and `↳ Sub-agent` label inside the parent assistant message element.
 
 **Transcript export**
 - The download icon in the top bar opens a native save dialog.
