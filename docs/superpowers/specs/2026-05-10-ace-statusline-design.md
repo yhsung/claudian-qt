@@ -82,7 +82,8 @@ A new `#statusline` div is inserted in `index.html` between the message/typing a
 **`chat.js`:**
 - On init: connect `bridge.usageUpdated` → parse JSON → update bar width, percentage, tooltip, turn counter.
 - On `bridge.modelChanged`: update model pill immediately.
-- On `bridge.sessionReady` with empty `sessionId`: reset bar and turn counter to `—`.
+- On `bridge.sessionReady` with empty `sessionId` (new session button): reset bar and turn counter to `—`.
+- On `bridge.cwdChanged` (directory change): reset bar and turn counter to `—`. Note: `set_cwd` in the daemon resets `sessionId` silently without emitting `session_ready`, so `cwdChanged` is the correct reset trigger for directory changes.
 
 **`chat.css`:** Add styles for `#statusline`, `.statusline-model`, `.statusline-bar-track`, `.statusline-bar-fill`, `.statusline-pct`, `.statusline-turns`. Color transitions via CSS custom property thresholds (`.bar-warn`, `.bar-danger` classes toggled by JS).
 
@@ -96,7 +97,8 @@ A new `#statusline` div is inserted in `index.html` between the message/typing a
 | Model = "Default" / unset | Model pill shows `default` |
 | `contextWindow` = 0 or missing | Hide progress bar, show raw token count (`45.2k tokens`) instead of percentage |
 | Multiple models in one turn | Sum tokens; use max `contextWindow` |
-| Session cleared (`newSession` or `setCwd`) | Reset bar and turns to `—` on `sessionReady` with empty session ID |
+| Session cleared (`newSession`) | Reset bar and turns to `—` on `sessionReady` with empty session ID |
+| Working directory changed (`setCwd`) | Reset bar and turns to `—` on `cwdChanged` signal (daemon does not emit `session_ready` on cwd change) |
 | Streaming in progress | Bar holds previous turn's values; no mid-turn updates |
 | Malformed result JSON | Lambda emits `{}`, JS detects missing fields and shows `—` |
 
