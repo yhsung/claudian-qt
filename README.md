@@ -1,6 +1,6 @@
 # Claudian Qt
 
-A native macOS desktop wrapper for [Claude Code](https://claude.ai/code), built with Qt6 and WebEngine. It renders the [Claudian](https://github.com/YishenTu/claudian) chat interface inside a native window and bridges it to a persistent TypeScript daemon powered by the `@anthropic-ai/claude-agent-sdk`.
+A native macOS/Windows desktop wrapper for [Claude Code](https://claude.ai/code), built with Qt6 and WebEngine. It renders the [Claudian](https://github.com/YishenTu/claudian) chat interface inside a native window and bridges it to a persistent TypeScript daemon powered by the `@anthropic-ai/claude-agent-sdk`.
 
 ## How it works
 
@@ -29,31 +29,59 @@ A native macOS desktop wrapper for [Claude Code](https://claude.ai/code), built 
 
 ## Prerequisites
 
-| Requirement | Version |
-|---|---|
-| macOS | 12 Monterey or later |
-| Xcode Command Line Tools | any recent |
-| CMake | ≥ 3.16 |
-| Qt6 (modular Homebrew formulae) | 6.11.0 |
-| Node.js | ≥ 18 |
-| Claude Code CLI | `npm install -g @anthropic-ai/claude-code` |
+| Requirement | macOS | Windows |
+|---|---|---|
+| OS | 12 Monterey or later | Windows 10/11 |
+| Compiler | Xcode Command Line Tools | MSVC 2022 (via Visual Studio) |
+| CMake | ≥ 3.16 | ≥ 3.16 |
+| Qt6 | 6.11.0 via Homebrew | 6.11.0 via Qt installer |
+| Node.js | ≥ 18 | ≥ 18 |
+| Shell | bash | Git Bash (MSYS2) |
+| Claude Code CLI | `npm install -g @anthropic-ai/claude-code` | same |
 
-Install Qt via Homebrew:
+### macOS — install Qt
 
 ```bash
 brew install qtbase qtwebengine qtdeclarative
 ```
 
+### Windows — install Qt
+
+Download the Qt Online Installer from [qt.io/download](https://www.qt.io/download-open-source) and install the **MSVC 2022 64-bit** component for Qt 6.11.0. Note the compiler-specific directory it installs to, e.g.:
+
+```
+C:\Qt\6.11.0\msvc2022_64
+```
+
+You will set this path as `QT_HOME` before building.
+
 ## Build
 
-Use the provided script (handles Qt Cellar paths and configure-if-needed automatically):
+Use the provided script — it detects the platform, configures on first run, and builds:
 
 ```bash
 bash scripts/build.sh          # build only
 bash scripts/build.sh --run    # build and launch
 ```
 
-Or manually:
+### macOS
+
+No extra setup needed. The script resolves Qt from the Homebrew Cellar automatically.
+
+### Windows (Git Bash)
+
+Open a **Developer Command Prompt for VS 2022**, then launch Git Bash from it (so MSVC tools are on `PATH`). Set `QT_HOME` to your compiler-specific Qt directory and run the script:
+
+```bash
+export QT_HOME="C:/Qt/6.11.0/msvc2022_64"
+bash scripts/build.sh --run
+```
+
+The script passes `QT_HOME` as `CMAKE_PREFIX_PATH` so CMake finds all Qt6 modules. On `--run` it prepends `$QT_HOME/bin` to `PATH` so Qt DLLs are resolved at launch.
+
+> **Tip:** add `export QT_HOME=...` to your `~/.bashrc` so you don't have to set it each session.
+
+### Manual configure (macOS)
 
 ```bash
 git clone https://github.com/yhsung/claudian-qt
@@ -76,19 +104,32 @@ cmake --build . --parallel $(sysctl -n hw.ncpu)
 
 ## Run
 
+### macOS
+
 ```bash
-QT_PLUGIN_PATH=/opt/homebrew/Cellar/qtbase/6.11.0/share/qt/plugins ./ClaudianQt
+QT_PLUGIN_PATH=/opt/homebrew/Cellar/qtbase/6.11.0/share/qt/plugins \
+  ./build/ClaudianQt.app/Contents/MacOS/ClaudianQt
+```
+
+### Windows
+
+```bash
+PATH="$QT_HOME/bin:$PATH" ./build/ClaudianQt.exe
 ```
 
 ### Remote debugging (Chrome DevTools)
 
+Set `QTWEBENGINE_REMOTE_DEBUGGING=9222` before launching, then open `http://127.0.0.1:9222` in any Chromium-based browser.
+
 ```bash
+# macOS
 QTWEBENGINE_REMOTE_DEBUGGING=9222 \
 QT_PLUGIN_PATH=/opt/homebrew/Cellar/qtbase/6.11.0/share/qt/plugins \
-./ClaudianQt
-```
+  ./build/ClaudianQt.app/Contents/MacOS/ClaudianQt
 
-Then open `http://127.0.0.1:9222` in any Chromium-based browser.
+# Windows
+QTWEBENGINE_REMOTE_DEBUGGING=9222 PATH="$QT_HOME/bin:$PATH" ./build/ClaudianQt.exe
+```
 
 ## Project structure
 
