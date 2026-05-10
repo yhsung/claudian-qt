@@ -23,10 +23,8 @@ fi
 if [ "${1}" = "--inspect" ] || [ "${DEBUG}" = "on" ]; then
   DEBUG_MODE="on"
   export QTWEBENGINE_REMOTE_DEBUGGING="9222"
-  export NODE_OPTIONS="--inspect=9229"
-  echo "⚡ Debug mode: WebEngine DevTools on :9222, Node inspector on :9229"
+  echo "⚡ Debug mode: WebEngine DevTools on :9222"
   echo "  → Chrome: chrome://inspect → Targets → configure port 9222"
-  echo "  → Node:   open http://localhost:9229/json"
   shift
 fi
 
@@ -76,7 +74,7 @@ if [ "${1}" = "--run" ]; then
     pkill -f "ClaudianQt" 2>/dev/null || true
     sleep 0.3
     if [ "$DEBUG_MODE" = "on" ]; then
-      DEBUG_LAUNCH=1 QTWEBENGINE_REMOTE_DEBUGGING="9222" NODE_OPTIONS="--inspect=9229" \
+      QTWEBENGINE_REMOTE_DEBUGGING="9222" \
         QT_PLUGIN_PATH=/opt/homebrew/Cellar/qtbase/6.11.0/share/qt/plugins \
         "$BUILD_DIR/ClaudianQt.app/Contents/MacOS/ClaudianQt" &
     else
@@ -88,7 +86,7 @@ if [ "${1}" = "--run" ]; then
     taskkill //F //IM ClaudianQt.exe 2>/dev/null || true
     sleep 0.3
     if [ "$DEBUG_MODE" = "on" ]; then
-      QTWEBENGINE_REMOTE_DEBUGGING="9222" NODE_OPTIONS="--inspect=9229" \
+      QTWEBENGINE_REMOTE_DEBUGGING="9222" \
         PATH="$QT_HOME/bin:$PATH" "$BUILD_DIR/ClaudianQt.exe" &
     else
       PATH="$QT_HOME/bin:$PATH" "$BUILD_DIR/ClaudianQt.exe" &
