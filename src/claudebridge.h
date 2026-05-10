@@ -33,6 +33,7 @@ public slots:
         const QString &mimeType,
         const QString &base64Data
     );
+    void pasteImageFromClipboard();
     void requestSessions();
     void loadSession(const QString &sessionId);
     void newSession();

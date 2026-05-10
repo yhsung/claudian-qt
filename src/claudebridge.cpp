@@ -1,6 +1,11 @@
 #include "claudebridge.h"
+#include <QApplication>
+#include <QBuffer>
+#include <QClipboard>
+#include <QMimeData>
 #include <QDir>
 #include <QFileDialog>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -144,6 +149,26 @@ void ClaudeBridge::importImageData(
         return;
     }
     emit imageImported(requestId, json);
+}
+
+void ClaudeBridge::pasteImageFromClipboard() {
+    const QMimeData *mime = QApplication::clipboard()->mimeData();
+    if (!mime || !mime->hasImage()) return;
+
+    QImage img = qvariant_cast<QImage>(mime->imageData());
+    if (img.isNull()) return;
+
+    QByteArray pngBytes;
+    QBuffer buf(&pngBytes);
+    buf.open(QIODevice::WriteOnly);
+    if (!img.save(&buf, "PNG")) return;
+
+    const QString json = m_attachmentStore->importBytes(pngBytes, "clipboard-image.png", "image/png");
+    if (json.isEmpty()) return;
+
+    QJsonArray arr;
+    arr.append(QJsonDocument::fromJson(json.toUtf8()).object());
+    emit imagesPicked(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
 }
 
 void ClaudeBridge::requestSessions() {

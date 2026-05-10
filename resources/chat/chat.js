@@ -682,24 +682,10 @@ function wireEvents() {
     if (e.target === DOM.imagePreviewModal) DOM.imagePreviewModal.classList.remove('visible');
   });
 
-  // Paste images from clipboard
-  DOM.textarea.addEventListener('paste', async (e) => {
-    // clipboardData.files is empty for screenshots on macOS — fall back to items
-    let files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
-    if (!files.length) {
-      files = [...(e.clipboardData?.items || [])]
-        .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
-        .map(it => it.getAsFile())
-        .filter(Boolean);
-    }
-    if (!files.length) return;
-    e.preventDefault();
-    const results = await Promise.allSettled(files.map(importClipboardFile));
-    const imported = results.filter(r => r.status === 'fulfilled').map(r => r.value);
-    if (imported.length) {
-      state.pendingAttachments.push(...imported);
-      renderPendingAttachments();
-    }
+  // Paste images from clipboard — delegate to C++ which reads QApplication::clipboard()
+  // directly. Qt WebEngine does not expose clipboard image data through the DataTransfer API.
+  DOM.textarea.addEventListener('paste', (e) => {
+    if (bridge) bridge.pasteImageFromClipboard();
   });
 
   // Drag-and-drop images onto the main area

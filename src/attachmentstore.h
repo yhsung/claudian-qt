@@ -13,13 +13,13 @@ public:
         const QString &mimeType,
         const QString &base64Data
     );
-
-private:
-    QString stagingRoot() const;
     QString importBytes(
         const QByteArray &bytes,
         const QString &originalName,
         const QString &mimeType
     );
+
+private:
+    QString stagingRoot() const;
     bool isSupportedImageMime(const QString &mimeType) const;
 };
