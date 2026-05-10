@@ -233,6 +233,7 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
         if (cmd.allow) {
           pending.resolve({
             behavior: "allow",
+            updatedInput: {},
             decisionClassification: cmd.alwaysAllow ? "user_permanent" : "user_temporary",
           });
         } else {
