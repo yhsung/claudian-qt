@@ -80,18 +80,7 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
-**ClaudianQt — Conversation Tracing**
-
-A conversation tracing system for ClaudianQt, the Qt6 desktop wrapper for Claude Code CLI. It captures every user prompt and assistant response (with rich metadata) into local log files for downstream data mining, usage analysis, and AI training dataset creation.
-
-**Core Value:** Every conversation is reliably captured with complete context — no messages lost, no metadata missing — so logs can be used as training data and for usage analysis without manual intervention.
-
-### Constraints
-
-- **Tech stack**: Must integrate with existing C++ / Qt6 architecture — logging should happen in the C++ layer for reliability
-- **Performance**: Logging must not block the UI or slow streaming responses — use async file I/O or buffered writes
-- **Compatibility**: macOS 12+ (current target platform)
-- **File size**: Conversations can be long — consider file rotation or size limits for very large sessions
+ClaudianQt is a Qt6 desktop wrapper for the Claude Code CLI. It renders a WebEngine-based chat UI, spawns `claude --output-format stream-json` as a subprocess, and bridges the two via QWebChannel. The `claude` CLI must be installed globally (`npm install -g @anthropic-ai/claude-code`).
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:codebase/STACK.md -->
@@ -317,9 +306,118 @@ For changes:
 - Run the relevant build/tests after code changes when feasible.
 - Document any assumptions or follow-up work in your final handoff.
 
+## Web Browsing
+
+Use the `/browse` skill from gstack for all web browsing tasks. Never use `mcp__claude-in-chrome__*` tools.
+
+## Available gstack skills
+
+- `/office-hours` — Schedule async office hours with the gstack team
+- `/plan-ceo-review` — Plan a CEO-level review
+- `/plan-eng-review` — Plan an engineering review
+- `/plan-design-review` — Plan a design review
+- `/design-consultation` — Get design feedback via async consultation
+- `/design-shotgun` — Shotgun approach to gather rapid design feedback
+- `/design-html` — Generate HTML from design specs
+- `/review` — Async PR/code review
+- `/ship` — Ship and validate a change
+- `/land-and-deploy` — Land PR and deploy to environment
+- `/canary` — Deploy and validate a canary release
+- `/benchmark` — Benchmark performance
+- `/browse` — Headless browser for QA testing and site dogfooding
+- `/connect-chrome` — Connect to a Chrome browser for interactive testing
+- `/qa` — Full QA workflow with browser
+- `/qa-only` — QA verification only
+- `/design-review` — Async design review
+- `/setup-browser-cookies` — Setup browser cookies
+- `/setup-deploy` — Setup deployment environment
+- `/setup-gbrain` — Setup gbrain (gstack brain)
+- `/retro` — Run a team retrospective
+- `/investigate` — Investigate issues with persistent context
+- `/document-release` — Document a release
+- `/codex` — Codex (AI coding agent)
+- `/cso` — Chief Staff Officer duties
+- `/autoplan` — Auto planning for projects
+- `/plan-devex-review` — Plan a developer experience review
+- `/devex-review` — Developer experience review
+- `/careful` — Careful, methodical planning
+- `/freeze` — Freeze a deployment
+- `/guard` — Guard a deployment
+- `/unfreeze` — Unfreeze a deployment
+- `/gstack-upgrade` — Upgrade gstack to latest version
+- `/learn` — Learn about gstack from docs
+
 <!-- GSD:profile-start -->
 ## Developer Profile
 
 > Profile not yet configured. Run `/gsd:profile-user` to generate your developer profile.
 > This section is managed by `generate-claude-profile` -- do not edit manually.
 <!-- GSD:profile-end -->
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **claudian-qt** (812 symbols, 1253 relationships, 51 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/claudian-qt/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/claudian-qt/clusters` | All functional areas |
+| `gitnexus://repo/claudian-qt/processes` | All execution flows |
+| `gitnexus://repo/claudian-qt/process/{name}` | Step-by-step execution trace |
+
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->
+
+## gstack (REQUIRED — global install)
+
+**Before doing ANY work, verify gstack is installed:**
+
+```bash
+test -d ~/.claude/skills/gstack/bin && echo "GSTACK_OK" || echo "GSTACK_MISSING"
+```
+
+If GSTACK_MISSING: STOP. Do not proceed. Tell the user:
+
+> gstack is required for all AI-assisted work in this repo.
+> Install it:
+> ```bash
+> git clone --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
+> cd ~/.claude/skills/gstack && ./setup --team
+> ```
+> Then restart your AI coding tool.
+
+Do not skip skills, ignore gstack errors, or work around missing gstack.
+
+Using gstack skills: After install, skills like /qa, /ship, /review, /investigate,
+and /browse are available. Use /browse for all web browsing.
+Use ~/.claude/skills/gstack/... for gstack file paths (the global path).
