@@ -19,6 +19,37 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
     connect(m_daemon, &BridgeDaemon::sessionHistoryLoaded, this, &ClaudeBridge::sessionHistoryLoaded);
 
+    connect(m_daemon, &BridgeDaemon::resultReceived, this, [this](const QJsonObject &result) {
+        int inputTokens  = 0;
+        int outputTokens = 0;
+        int contextWindow = 0;
+        int numTurns = result["num_turns"].toInt(0);
+
+        const QJsonObject modelUsage = result["modelUsage"].toObject();
+        for (auto it = modelUsage.begin(); it != modelUsage.end(); ++it) {
+            const QJsonObject m = it.value().toObject();
+            inputTokens  += m["inputTokens"].toInt(0);
+            outputTokens += m["outputTokens"].toInt(0);
+            contextWindow = qMax(contextWindow, m["contextWindow"].toInt(0));
+        }
+
+        if (modelUsage.isEmpty()) {
+            const QJsonObject usage = result["usage"].toObject();
+            inputTokens  = usage["input_tokens"].toInt(0);
+            outputTokens = usage["output_tokens"].toInt(0);
+        }
+
+        const QJsonObject payload{
+            {"inputTokens",   inputTokens},
+            {"outputTokens",  outputTokens},
+            {"contextWindow", contextWindow},
+            {"numTurns",      numTurns}
+        };
+        emit usageUpdated(
+            QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact))
+        );
+    });
+
     connect(m_daemon, &BridgeDaemon::daemonStarted, this, [this]() {
         m_daemon->sendCommand(QJsonObject{{"type", "set_cwd"},   {"cwd",   m_cwd}});
         if (!m_model.isEmpty())

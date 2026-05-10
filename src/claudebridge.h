@@ -50,6 +50,7 @@ signals:
     void sessionHistoryLoaded(const QString &json);
     void imagesPicked(const QString &json);
     void imageImported(const QString &requestId, const QString &json);
+    void usageUpdated(const QString &json);
 
 private:
     BridgeDaemon    *m_daemon;
