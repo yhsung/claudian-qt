@@ -24,7 +24,7 @@ A native macOS desktop wrapper for [Claude Code](https://claude.ai/code), built 
 - **Persistent Daemon** — A long-lived Node.js process (`bridge/src/daemon.ts`) manages all communication with the Claude Agent SDK. It maintains session state, handles history persistence, and processes image attachments.
 - **C++ layer** — `ClaudeBridge` is a thin protocol adapter that exposes properties and slots to the web UI. `BridgeDaemon` manages the lifecycle of the Node.js process and translates NDJSON events into Qt signals.
 - **Web layer** — `index.html` renders the Claudian chat interface. It uses an async generator to stream chunks from the bridge into the UI, supporting real-time streaming with a "Stop" button to abort generations.
-- **Image Support** — `AttachmentStore` (C++) handles native file staging for drag-and-drop, paste, and file picking, allowing multi-image attachments to be sent with any prompt.
+- **Image Support** — `AttachmentStore` (C++) handles native file staging for drag-and-drop, file picking, and clipboard paste. Clipboard images are read directly via `QApplication::clipboard()` (the DataTransfer web API is non-functional in Qt WebEngine). Any unsupported format (e.g. macOS TIFF screenshots) is converted to PNG via `QImage` before staging. Thumbnails are encoded as base64 data URLs so they load correctly from the `qrc://` page origin.
 
 
 ## Prerequisites
@@ -45,6 +45,15 @@ brew install qtbase qtwebengine qtdeclarative
 ```
 
 ## Build
+
+Use the provided script (handles Qt Cellar paths and configure-if-needed automatically):
+
+```bash
+bash scripts/build.sh          # build only
+bash scripts/build.sh --run    # build and launch
+```
+
+Or manually:
 
 ```bash
 git clone https://github.com/yhsung/claudian-qt
@@ -87,9 +96,10 @@ Then open `http://127.0.0.1:9222` in any Chromium-based browser.
 claudian-qt/
 ├── bridge/                   # TypeScript persistent daemon & protocol
 │   ├── src/
-│   │   ├── daemon.ts        # SDK interaction & state management
+│   │   ├── daemon.ts          # SDK interaction & state management
 │   │   ├── session-history.ts # JSONL parsing & history merge
-│   │   └── protocol.ts      # Shared command/event types
+│   │   ├── attachment-store.ts # Attachment finalization & manifest I/O
+│   │   └── protocol.ts        # Shared command/event types
 │   └── tests/               # Bridge & daemon unit tests
 ├── src/
 │   ├── main.cpp              # QApplication entry point
@@ -117,9 +127,10 @@ claudian-qt/
 6. `chat.js` renders chunks incrementally; the UI auto-scrolls and shows a "Stop" button.
 
 **Attachment staging**
-- Images are imported via `AttachmentStore` (C++), which validates MIME types and copies them to a local staging directory.
-- When a turn completes successfully, the daemon moves staged files to a session-specific attachment folder and updates a `manifest.json`.
-- History turns merge manifest data to render image galleries above message text.
+- Images enter via three paths: file picker (`pickImages()`), drag-and-drop onto the chat area, or clipboard paste (`pasteImageFromClipboard()` reads `QApplication::clipboard()` directly — Qt WebEngine does not expose clipboard image data through the JS DataTransfer API).
+- `AttachmentStore` (C++) stages each image: unsupported formats (e.g. macOS TIFF screenshots) are converted to PNG via `QImage`, then written to `~/.claudian-qt/attachments/staging/`. The `fileUrl` field is a base64 data URL so thumbnails display from the `qrc://` page without cross-scheme restrictions.
+- When a turn completes, the daemon moves staged files to `~/.claudian-qt/attachments/sessions/<id>/turn-NNNN/` and records the location in `manifest.json`.
+- On session restore, `loadSessionHistory` re-reads each attachment file from disk and re-encodes it as a data URL so history thumbnails render correctly.
 
 **Session continuity**
 - The persistent daemon maintains the `session_id` and automatically resumes sessions using `--resume` logic via the SDK.
