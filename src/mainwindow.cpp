@@ -4,7 +4,7 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    setWindowTitle("Claudian Qt");
+    setWindowTitle("ACE GUI");
     resize(960, 720);
 
     m_bridge  = new ClaudeBridge(this);

@@ -3,8 +3,8 @@
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
-    app.setApplicationName("ClaudianQt");
-    app.setOrganizationName("ClaudianQt");
+    app.setApplicationName("ACE GUI");
+    app.setOrganizationName("ACE GUI");
 
     MainWindow w;
     w.show();
