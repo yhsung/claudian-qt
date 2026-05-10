@@ -29,3 +29,6 @@ bridge/.vitest/
 
 # Local worktrees
 .worktrees/
+
+# macOS
+.DS_Store
