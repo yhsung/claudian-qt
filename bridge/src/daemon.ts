@@ -24,34 +24,44 @@ let currentAbort: AbortController | null = null;
 // Pending permission promises keyed by requestId
 const pendingPermissions = new Map<string, { resolve: (result: PermissionResult) => void }>();
 
-const canUseTool: CanUseTool = (toolName, input, options) => {
-  return new Promise<PermissionResult>((resolve) => {
-    if (options.signal.aborted) {
-      resolve({ behavior: "deny", message: "Request aborted." });
-      return;
-    }
-    const requestId = `perm_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    pendingPermissions.set(requestId, { resolve });
-
-    options.signal.addEventListener("abort", () => {
-      if (pendingPermissions.delete(requestId)) {
+// Build a canUseTool callback for a given send invocation.
+// Must always be provided so the SDK adds --permission-prompt-tool stdio to the CLI;
+// without that flag the CLI has no IPC channel for permissions and fails them even in
+// YOLO mode. In YOLO mode the callback auto-approves instead of showing the dialog.
+function makeCanUseTool(yoloMode: boolean): CanUseTool {
+  return (toolName, input, options) => {
+    return new Promise<PermissionResult>((resolve) => {
+      if (options.signal.aborted) {
         resolve({ behavior: "deny", message: "Request aborted." });
+        return;
       }
-    }, { once: true });
+      if (yoloMode) {
+        resolve({ behavior: "allow", updatedInput: {} });
+        return;
+      }
+      const requestId = `perm_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      pendingPermissions.set(requestId, { resolve });
 
-    emit({
-      type: "permission_request",
-      requestId,
-      toolName,
-      input: JSON.stringify(input),
-      title:         options.title,
-      description:   options.description,
-      displayName:   options.displayName,
-      decisionReason: options.decisionReason,
-      blockedPath:   options.blockedPath,
+      options.signal.addEventListener("abort", () => {
+        if (pendingPermissions.delete(requestId)) {
+          resolve({ behavior: "deny", message: "Request aborted." });
+        }
+      }, { once: true });
+
+      emit({
+        type: "permission_request",
+        requestId,
+        toolName,
+        input: JSON.stringify(input),
+        title:          options.title,
+        description:    options.description,
+        displayName:    options.displayName,
+        decisionReason: options.decisionReason,
+        blockedPath:    options.blockedPath,
+      });
     });
-  });
-};
+  };
+}
 
 async function handleSend(prompt: string, attachments: OutboundAttachment[], model?: string, yolo?: boolean): Promise<void> {
   if (currentAbort) currentAbort.abort();
@@ -73,8 +83,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
         model:                           (model ?? state.model) || undefined,
         allowDangerouslySkipPermissions: effectiveYolo,
         includePartialMessages:          true,
-        // Only intercept permissions when not in YOLO mode
-        ...(effectiveYolo ? {} : { canUseTool }),
+        canUseTool:                      makeCanUseTool(effectiveYolo),
       },
     });
 
