@@ -82,6 +82,16 @@ function renderPendingAttachments() {
   DOM.attachmentTray.classList.toggle('visible', state.pendingAttachments.length > 0);
   if (state.pendingAttachments.length > 0) {
     DOM.attachmentTray.appendChild(renderAttachmentRow(state.pendingAttachments, { removable: true }));
+    if (state.pendingAttachments.length > 1) {
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'attachment-clear-all';
+      clearBtn.textContent = 'Clear all';
+      clearBtn.addEventListener('click', () => {
+        state.pendingAttachments = [];
+        renderPendingAttachments();
+      });
+      DOM.attachmentTray.appendChild(clearBtn);
+    }
   }
 }
 
@@ -162,6 +172,11 @@ function initDOM() {
     modelDropdown:      document.getElementById('model-dropdown'),
     yoloBtn:            document.getElementById('yolo-btn'),
     sidebarToggle:      document.getElementById('sidebar-toggle'),
+    searchBtn:          document.getElementById('search-btn'),
+    searchBar:          document.getElementById('search-bar'),
+    searchInput:        document.getElementById('search-input'),
+    searchCount:        document.getElementById('search-count'),
+    searchClose:        document.getElementById('search-close'),
     exportBtn:          document.getElementById('export-btn'),
     viewSelectorBtn:    document.getElementById('view-selector-btn'),
     viewSelectorLabel:  document.getElementById('view-selector-label'),
@@ -189,6 +204,25 @@ function initDOM() {
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────
+function makeToolResultEl(content, isError) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'tool-result-wrapper';
+  const pre = document.createElement('pre');
+  pre.className = `tool-result${isError ? ' tool-result-error' : ''}`;
+  pre.textContent = content;
+  const btn = document.createElement('button');
+  btn.className = 'tool-result-copy-btn';
+  btn.textContent = 'Copy';
+  btn.addEventListener('click', () => {
+    copyToClipboard(content);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+  });
+  wrapper.append(pre, btn);
+  return wrapper;
+}
+
 function renderToolCallItem(tc) {
   const div = document.createElement('div');
   div.className = 'tool-call-item';
@@ -204,10 +238,8 @@ function renderToolCallItem(tc) {
     (state.viewMode === 'verbose'
       ? `<div class="tool-input">${escHtml(inputStr)}</div>`
       : '') +
-    `<div class="tool-status ${tc.status}">${statusText}</div>` +
-    (tc.result !== undefined
-      ? `<pre class="tool-result${tc.isError ? ' tool-result-error' : ''}">${escHtml(tc.result)}</pre>`
-      : '');
+    `<div class="tool-status ${tc.status}">${statusText}</div>`;
+  if (tc.result !== undefined) div.appendChild(makeToolResultEl(tc.result, tc.isError));
   return div;
 }
 
@@ -235,7 +267,6 @@ function renderMessage(msg) {
     outer.className = 'msg-user';
     outer.style.flexDirection = 'column';
     outer.style.alignItems = 'flex-end';
-    // Show attachment gallery above the text bubble if there are attachments
     if (msg.attachments && msg.attachments.length > 0) {
       outer.appendChild(renderAttachmentRow(msg.attachments));
     }
@@ -243,6 +274,12 @@ function renderMessage(msg) {
     bubble.className = 'msg-bubble';
     bubble.textContent = msg.content;
     outer.appendChild(bubble);
+    if (msg.timestamp) {
+      const ts = document.createElement('div');
+      ts.className = 'msg-timestamp';
+      ts.textContent = relativeTime(msg.timestamp);
+      outer.appendChild(ts);
+    }
   } else {
     outer.className = 'msg-assistant';
     const contentDiv = document.createElement('div');
@@ -255,6 +292,12 @@ function renderMessage(msg) {
     if (msg.toolCalls && msg.toolCalls.length > 0 && state.viewMode !== 'summary') {
       const toolEl = renderToolCalls(msg.toolCalls);
       if (toolEl) outer.appendChild(toolEl);
+    }
+    if (msg.timestamp) {
+      const ts = document.createElement('div');
+      ts.className = 'msg-timestamp';
+      ts.textContent = relativeTime(msg.timestamp);
+      outer.appendChild(ts);
     }
   }
   return outer;
@@ -365,13 +408,14 @@ function appendToolResult(toolUseId, content, isError) {
     statusEl.className = `tool-status ${isError ? 'error' : 'done'}`;
     statusEl.textContent = isError ? '✗ error' : '✓ done';
   }
-  let resultEl = itemEl.querySelector('.tool-result');
-  if (!resultEl) {
-    resultEl = document.createElement('pre');
-    resultEl.className = `tool-result${isError ? ' tool-result-error' : ''}`;
-    itemEl.appendChild(resultEl);
+  let wrapper = itemEl.querySelector('.tool-result-wrapper');
+  if (!wrapper) {
+    wrapper = makeToolResultEl(content, isError);
+    itemEl.appendChild(wrapper);
+  } else {
+    const pre = wrapper.querySelector('.tool-result');
+    if (pre) { pre.textContent = content; pre.className = `tool-result${isError ? ' tool-result-error' : ''}`; }
   }
-  resultEl.textContent = content;
   // Auto-expand the group when a result arrives so output is visible
   const group = itemEl.closest('.tool-group');
   if (group) group.classList.add('expanded');
@@ -666,6 +710,51 @@ function exportTranscript() {
   bridge.writeTextFile('transcript.md', markdown);
 }
 
+// ── Search ─────────────────────────────────────────────────────────────────
+const _search = { active: false, query: '' };
+
+function openSearch() {
+  _search.active = true;
+  DOM.searchBar.classList.add('visible');
+  DOM.searchInput.focus();
+  DOM.searchInput.select();
+}
+
+function closeSearch() {
+  _search.active = false;
+  _search.query = '';
+  DOM.searchBar.classList.remove('visible');
+  DOM.searchInput.value = '';
+  DOM.searchCount.textContent = '';
+  DOM.messages.querySelectorAll('.search-match, .search-dim').forEach(el => {
+    el.classList.remove('search-match', 'search-dim');
+  });
+}
+
+function runSearch(query) {
+  _search.query = query;
+  const msgEls = [...DOM.messages.children];
+  if (!query) {
+    msgEls.forEach(el => el.classList.remove('search-match', 'search-dim'));
+    DOM.searchCount.textContent = '';
+    return;
+  }
+  const lower = query.toLowerCase();
+  let matchCount = 0;
+  let firstMatch = null;
+  msgEls.forEach(el => {
+    const msgId = el.dataset.msgId;
+    const msg = state.messages.find(m => m.id === msgId);
+    const text = (msg?.content || '') + (msg?.toolCalls?.map(tc => tc.result || '').join(' ') || '');
+    const matches = text.toLowerCase().includes(lower);
+    el.classList.toggle('search-match', matches);
+    el.classList.toggle('search-dim', !matches);
+    if (matches) { matchCount++; if (!firstMatch) firstMatch = el; }
+  });
+  DOM.searchCount.textContent = matchCount ? `${matchCount} match${matchCount > 1 ? 'es' : ''}` : 'No matches';
+  if (firstMatch) firstMatch.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 // ── Controls ───────────────────────────────────────────────────────────────
 const MODELS = [
   { value: '',       label: 'Default' },
@@ -820,6 +909,11 @@ function wireEvents() {
   DOM.generateSummaryBtn.addEventListener('click', generateSummary);
   DOM.exitSummaryBtn.addEventListener('click', () => setViewMode('normal'));
 
+  // Search
+  DOM.searchBtn.addEventListener('click', () => _search.active ? closeSearch() : openSearch());
+  DOM.searchInput.addEventListener('input', () => runSearch(DOM.searchInput.value.trim()));
+  DOM.searchClose.addEventListener('click', closeSearch);
+
   // Export button
   DOM.exportBtn.addEventListener('click', exportTranscript);
 
@@ -827,24 +921,25 @@ function wireEvents() {
   DOM.permissionDenyBtn.addEventListener('click',   () => respondPermission(false, false));
   DOM.permissionAllowBtn.addEventListener('click',  () => respondPermission(true,  false));
   DOM.permissionAlwaysBtn.addEventListener('click', () => respondPermission(true,  true));
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && DOM.permissionModal.classList.contains('visible')) {
-      respondPermission(false, false);
-    }
-  });
 
   // Attach button
   DOM.attachBtn.addEventListener('click', () => { if (bridge) bridge.pickImages(); });
 
-  // Image preview modal close (click, button, or Escape)
+  // Image preview modal close (click or button)
   DOM.imagePreviewClose.addEventListener('click', () => DOM.imagePreviewModal.classList.remove('visible'));
   DOM.imagePreviewModal.addEventListener('click', (e) => {
     if (e.target === DOM.imagePreviewModal) DOM.imagePreviewModal.classList.remove('visible');
   });
+
+  // Global Escape + ⌘F — ordered by overlay priority
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && DOM.imagePreviewModal.classList.contains('visible')) {
-      DOM.imagePreviewModal.classList.remove('visible');
+    if (e.key === 'Escape') {
+      if (DOM.imagePreviewModal.classList.contains('visible')) { DOM.imagePreviewModal.classList.remove('visible'); return; }
+      if (DOM.permissionModal.classList.contains('visible'))   { respondPermission(false, false); return; }
+      if (_search.active)                                       { closeSearch(); return; }
+      if (state.viewMode === 'summary')                        { setViewMode('normal'); return; }
     }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); openSearch(); }
   });
 
   // Paste images from clipboard — delegate to C++ which reads QApplication::clipboard()

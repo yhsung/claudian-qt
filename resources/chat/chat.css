@@ -126,6 +126,32 @@ html, body {
 .font-size-btn.md-btn { font-size: 13px; }
 .font-size-btn.lg-btn { font-size: 15px; }
 
+/* ── Search bar ────────────────────────────────────────────────────────── */
+#search-bar {
+  display: none; align-items: center; gap: 8px;
+  padding: 6px 16px; border-bottom: 1px solid var(--border);
+  background: var(--bg-surface); flex-shrink: 0;
+}
+#search-bar.visible { display: flex; }
+#search-bar svg { flex-shrink: 0; color: var(--text-faint); }
+#search-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  font-size: 13px; color: var(--text); font-family: var(--font-ui);
+}
+#search-input::placeholder { color: var(--text-faint); }
+#search-count { font-size: 11px; color: var(--text-faint); flex-shrink: 0; font-family: var(--font-mono); }
+#search-close {
+  background: transparent; border: none; color: var(--text-faint);
+  cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px;
+}
+#search-close:hover { color: var(--text); }
+#search-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-faint); border-radius: var(--radius-sm);
+  padding: 4px 8px; cursor: pointer; display: flex; align-items: center;
+}
+#search-btn:hover { border-color: var(--accent); color: var(--text); }
+
 /* ── Messages ──────────────────────────────────────────────────────────── */
 #messages {
   flex: 1; overflow-y: auto;
@@ -135,6 +161,18 @@ html, body {
 #messages.fs-sm { font-size: var(--font-size-sm); }
 #messages.fs-md { font-size: var(--font-size-md); }
 #messages.fs-lg { font-size: var(--font-size-lg); }
+
+/* ── Message timestamps ────────────────────────────────────────────────── */
+.msg-timestamp {
+  font-size: 10px; color: var(--text-faint);
+  margin-top: 3px; font-family: var(--font-mono);
+  user-select: none;
+}
+.msg-user .msg-timestamp { text-align: right; }
+
+/* ── Search match highlighting ─────────────────────────────────────────── */
+.search-match { outline: 1px solid rgba(124,106,247,0.4); border-radius: var(--radius); }
+.search-dim { opacity: 0.3; }
 
 .msg-user { display: flex; justify-content: flex-end; }
 .msg-user .msg-bubble {
@@ -175,14 +213,24 @@ html, body {
 .tool-status.running { color: var(--orange); }
 .tool-status.done { color: var(--green); }
 .tool-status.error { color: var(--red); }
+.tool-result-wrapper { position: relative; margin: 2px 0 0; }
 .tool-result {
   font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
   white-space: pre-wrap; word-break: break-all;
   max-height: 160px; overflow-y: auto;
   background: rgba(0,0,0,0.2); border-radius: var(--radius-sm);
-  padding: 6px 8px; margin: 2px 0 0; border: none;
+  padding: 6px 8px; border: none; margin: 0;
 }
 .tool-result-error { color: var(--red); }
+.tool-result-copy-btn {
+  position: absolute; top: 4px; right: 4px;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  color: var(--text-muted); border-radius: var(--radius-sm);
+  padding: 1px 6px; font-size: 9px; font-family: var(--font-ui);
+  cursor: pointer; opacity: 0; transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.tool-result-wrapper:hover .tool-result-copy-btn { opacity: 1; }
+.tool-result-copy-btn.copied { color: var(--green); border-color: var(--green); }
 
 /* ── Code block copy button ────────────────────────────────────────────── */
 .code-block-wrapper { position: relative; }
@@ -299,6 +347,15 @@ html, body {
   padding: 0;
 }
 .attachment-remove:hover { background: var(--red); }
+
+/* ── Attachment clear-all ─────────────────────────────────────────────────── */
+.attachment-clear-all {
+  align-self: center; flex-shrink: 0;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-faint); border-radius: var(--radius-sm);
+  padding: 3px 10px; font-size: 11px; cursor: pointer;
+}
+.attachment-clear-all:hover { border-color: var(--red); color: var(--red); }
 
 /* ── History galleries ────────────────────────────────────────────────────── */
 .history-attachment-row {
