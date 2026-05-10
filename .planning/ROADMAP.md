@@ -1,8 +1,8 @@
-# Roadmap: ClaudianQt — Conversation Tracing
+# Roadmap: ClaudianQt
 
 ## Overview
 
-This milestone adds always-on conversation logging to an existing Qt6/WebEngine app. The work is purely additive C++ — no UI changes, no new dependencies. Phase 1 unlocks metadata that is currently discarded. Phase 2 introduces the ConversationLogger class with the full JSONL output pipeline. Phase 3 adds the human-readable Markdown sidecar. Every phase builds on the one before it; none can be reordered.
+UX enhancement roadmap for ClaudianQt, a Qt6 desktop wrapper for the Claude Code CLI.
 
 ## Phases
 
