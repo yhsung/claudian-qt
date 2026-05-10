@@ -36,8 +36,9 @@ cmake --build "$BUILD_DIR" --parallel "$(sysctl -n hw.ncpu)"
 # ── 3. Deploy Qt frameworks and plugins ───────────────────────────────────────
 echo "==> Deploying Qt frameworks..."
 
-# Remove previously-deployed Frameworks so macdeployqt runs cleanly.
+# Remove previously-deployed Frameworks and qt.conf so macdeployqt runs cleanly.
 rm -rf "$APP_BUNDLE/Contents/Frameworks"
+rm -f  "$APP_BUNDLE/Contents/Resources/qt.conf"
 
 "$MACDEPLOYQT" "$APP_BUNDLE" \
   -verbose=1 \
