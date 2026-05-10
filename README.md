@@ -192,7 +192,8 @@ claudian-qt/
 - Every user and assistant message shows a relative timestamp (`just now`, `3m ago`, `2h ago`, etc.) rendered below the bubble using the `relativeTime()` helper. User timestamps are right-aligned; assistant timestamps are left-aligned.
 
 **Transcript search**
-- ⌘F or the magnifier icon in the top bar opens an inline search bar. Typing highlights matching messages with a subtle accent outline and dims non-matching ones, scrolls the first hit into view, and shows a match count. Escape or × closes and clears all highlights.
+- ⌘F or the magnifier icon in the top bar opens an inline search bar. Typing uses a `TreeWalker` to wrap every matching text node in a `<mark>` element inside `.msg-content`, `.msg-bubble`, and `.tool-result` blocks — preserving the HTML structure. Non-matching messages are dimmed.
+- ↑ / ↓ buttons and Shift+Enter / Enter navigate between individual occurrences. The current mark is highlighted with a brighter amber; the count shows `N of M`. Escape or × unwraps all marks and restores the DOM.
 
 **Attachment tray**
 - When two or more images are staged for sending, a "Clear all" button appears alongside the individual × remove buttons.
@@ -200,6 +201,22 @@ claudian-qt/
 **Keyboard shortcuts**
 - Escape is handled by a single prioritised listener that dismisses overlays from innermost to outermost: image preview → permission dialog → search bar → summary view.
 - ⌘F / Ctrl+F opens transcript search from anywhere.
+
+**Per-turn token badge and stop reason**
+- After each assistant turn the C++ `resultReceived` handler now includes `stopReason` and `subtype` in the `usageUpdated` payload alongside the token counts.
+- A `.msg-meta-badge` is stamped below the last assistant message showing total tokens for the turn (e.g. `3.2k tokens`). When the turn ended for a reason other than `end_turn` (e.g. `max_tokens`, an error subtype) that reason is appended after a `·` separator.
+
+**Regenerate last response**
+- Every `sendMessage` call saves `_lastPrompt` (text + attachments JSON). After streaming completes, a hover-revealed "↺ Retry" button appears on the last assistant message.
+- Clicking removes that message from `state.messages` and the DOM, then re-calls `bridge.sendMessage` with the cached prompt so a new response streams into a fresh slot.
+
+**Session management**
+- Each sidebar session item shows a hover-revealed `×` delete button. Confirming sends a `delete_session` command to the daemon, which unlinks the `.jsonl` file from `~/.claude/projects/<cwd>/` and re-emits `sessions_listed` to refresh the sidebar.
+- If the deleted session was active, the message list and statusline are cleared locally before deletion.
+
+**Permission mode**
+- A three-state cycle button sits left of the YOLO toggle: **Safe** (default — prompts for all tool permissions), **Smart** (`acceptEdits` — auto-approves file read/write operations, prompts for network and shell), **Auto** (SDK classifier approves or denies without user interaction).
+- The selected mode is persisted in `localStorage` and sent to the daemon as `permissionMode` on every `query()` call. YOLO overrides to `bypassPermissions` regardless of this setting.
 
 **Permission dialog**
 - The Claude Agent SDK requires `--permission-prompt-tool stdio` on the spawned CLI process to route permission requests over IPC rather than a terminal. This flag is only added when a `canUseTool` callback is provided, so the daemon always supplies one.
