@@ -10,6 +10,7 @@ const state = {
   cwd: '',
   model: '',
   yolo: false,
+  permissionMode: localStorage.getItem('permissionMode') || 'default',
   viewMode: localStorage.getItem('viewMode') || 'normal',
   fontSize: localStorage.getItem('fontSize') || 'md',
   summaryData: null,
@@ -18,6 +19,7 @@ const state = {
   _rafPending: false,
   _streamBuffer: '',
   _summaryCapturing: false,
+  _lastPrompt: null,       // { text, attachmentsJson } for regenerate
   pendingAttachments: [],
   previewAttachment: null,
 };
@@ -170,6 +172,7 @@ function initDOM() {
     modelBtn:           document.getElementById('model-btn'),
     modelBtnLabel:      document.getElementById('model-btn-label'),
     modelDropdown:      document.getElementById('model-dropdown'),
+    permModeBtn:        document.getElementById('perm-mode-btn'),
     yoloBtn:            document.getElementById('yolo-btn'),
     sidebarToggle:      document.getElementById('sidebar-toggle'),
     searchBtn:          document.getElementById('search-btn'),
@@ -456,6 +459,15 @@ function endStreaming() {
       msgEl.querySelectorAll('.tool-status.running').forEach(el => {
         el.className = 'tool-status done'; el.textContent = '✓ done';
       });
+      // Regenerate button (appears on hover via CSS)
+      if (!msgEl.querySelector('.msg-regenerate') && !state._summaryCapturing) {
+        const regenBtn = document.createElement('button');
+        regenBtn.className = 'msg-regenerate';
+        regenBtn.title = 'Regenerate response';
+        regenBtn.innerHTML = '↺ Retry';
+        regenBtn.addEventListener('click', regenerate);
+        msgEl.appendChild(regenBtn);
+      }
     }
   }
   if (state._summaryCapturing) {
@@ -509,8 +521,22 @@ function sendMessage() {
   state.pendingAttachments = [];
   renderPendingAttachments();
 
+  const attachmentsJson = JSON.stringify(attachments);
+  state._lastPrompt = { text, attachmentsJson };
   startStreaming();
-  bridge.sendMessage(text, JSON.stringify(attachments));
+  bridge.sendMessage(text, attachmentsJson);
+}
+
+function regenerate() {
+  if (!bridge || state.streaming || !state._lastPrompt) return;
+  // Remove last assistant message so the new response takes its place
+  const lastAsst = [...state.messages].reverse().find(m => m.role === 'assistant');
+  if (lastAsst) {
+    state.messages = state.messages.filter(m => m.id !== lastAsst.id);
+    DOM.messages.querySelector(`[data-msg-id="${lastAsst.id}"]`)?.remove();
+  }
+  startStreaming();
+  bridge.sendMessage(state._lastPrompt.text, state._lastPrompt.attachmentsJson);
 }
 
 // ── Sessions ───────────────────────────────────────────────────────────────
@@ -525,7 +551,24 @@ function renderSessions(sessions) {
     const item = document.createElement('div');
     item.className = 'session-item' + (s.id === state.activeSessionId ? ' active' : '');
     item.dataset.sid = s.id;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'session-delete-btn';
+    delBtn.title = 'Delete session';
+    delBtn.textContent = '×';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete this session? This cannot be undone.')) return;
+      if (s.id === state.activeSessionId) {
+        state.messages = [];
+        state.activeSessionId = '';
+        DOM.messages.innerHTML = '';
+        hideSummaryView();
+        resetStatusline();
+      }
+      bridge.deleteSession(s.id);
+    });
     item.innerHTML = `<div class="session-preview">${escHtml(s.preview)}</div><div class="session-time">${relativeTime(s.timestamp)}</div>`;
+    item.appendChild(delBtn);
     item.addEventListener('click', () => {
       state.activeSessionId = s.id;
       DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.sid === s.id));
@@ -840,8 +883,25 @@ function syncModel(val) {
 
 function syncYolo(enabled) {
   state.yolo = !!enabled;
-  DOM.yoloBtn.textContent = state.yolo ? 'YOLO' : 'Safe';
   DOM.yoloBtn.classList.toggle('yolo-on', state.yolo);
+}
+
+const PERM_MODES = [
+  { value: 'default',     label: 'Safe',   title: 'Prompt for all tool permissions' },
+  { value: 'acceptEdits', label: 'Smart',  title: 'Auto-approve file edits; prompt for network/shell' },
+  { value: 'auto',        label: 'Auto',   title: 'AI classifier approves/denies permissions' },
+];
+
+function syncPermMode(mode) {
+  state.permissionMode = mode;
+  localStorage.setItem('permissionMode', mode);
+  const found = PERM_MODES.find(m => m.value === mode) || PERM_MODES[0];
+  DOM.permModeBtn.textContent = found.label;
+  DOM.permModeBtn.title = found.title;
+  DOM.permModeBtn.dataset.mode = mode;
+  DOM.permModeBtn.classList.toggle('perm-smart', mode === 'acceptEdits');
+  DOM.permModeBtn.classList.toggle('perm-auto', mode === 'auto');
+  if (bridge) bridge.setPermissionMode(mode);
 }
 
 function syncCwd(path) {
@@ -874,7 +934,21 @@ function resetStatusline() {
 function onUsageUpdated(jsonStr) {
   let data;
   try { data = JSON.parse(jsonStr); } catch { return; }
-  const { inputTokens = 0, outputTokens = 0, contextWindow = 0, numTurns = 0 } = data;
+  const { inputTokens = 0, outputTokens = 0, contextWindow = 0, numTurns = 0, stopReason = '', subtype = '' } = data;
+
+  // Stamp token + stop-reason badge on the last assistant message
+  const lastAsstEl = [...DOM.messages.querySelectorAll('[data-msg-id]')].reverse()
+    .find(el => el.classList.contains('msg-assistant'));
+  if (lastAsstEl) {
+    let badge = lastAsstEl.querySelector('.msg-meta-badge');
+    if (!badge) { badge = document.createElement('div'); badge.className = 'msg-meta-badge'; lastAsstEl.appendChild(badge); }
+    const fmt = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+    const total = inputTokens + outputTokens;
+    const reasonLabel = stopReason === 'end_turn' ? '' : stopReason ? ` · ${stopReason.replace(/_/g, ' ')}` : '';
+    const subtypeWarn = subtype && subtype !== 'success' ? ` · ${subtype.replace(/_/g, ' ')}` : '';
+    badge.textContent = `${fmt(total)} tokens${reasonLabel}${subtypeWarn}`;
+    badge.title = `${fmt(inputTokens)} in + ${fmt(outputTokens)} out`;
+  }
 
   DOM.statuslineTurns.textContent = numTurns === 1 ? '1 turn' : `${numTurns} turns`;
 
@@ -954,6 +1028,10 @@ function wireEvents() {
   document.addEventListener('click', () => DOM.modelDropdown.classList.remove('open'));
   DOM.modelDropdown.addEventListener('click', e => e.stopPropagation());
   DOM.yoloBtn.addEventListener('click', () => { const v = !state.yolo; if (bridge) bridge.setYolo(v); syncYolo(v); });
+  DOM.permModeBtn.addEventListener('click', () => {
+    const idx = PERM_MODES.findIndex(m => m.value === state.permissionMode);
+    syncPermMode(PERM_MODES[(idx + 1) % PERM_MODES.length].value);
+  });
   DOM.viewSelectorBtn.addEventListener('click', e => { e.stopPropagation(); toggleViewPopup(); });
   document.addEventListener('click', () => DOM.viewPopup.classList.remove('open'));
   DOM.viewPopup.addEventListener('click', e => e.stopPropagation());
@@ -1107,6 +1185,7 @@ function wireBridgeSignals() {
   syncModel(bridge.model);
   syncStatuslineModel(bridge.model);
   syncYolo(bridge.yolo);
+  syncPermMode(state.permissionMode);
   bridge.requestSessions();
 }
 

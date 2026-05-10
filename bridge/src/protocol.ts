@@ -37,7 +37,9 @@ export type DaemonCommand =
   | { type: "new_session" }
   | { type: "request_sessions" }
   | { type: "load_session"; sessionId: string }
-  | { type: "permission_response"; requestId: string; allow: boolean; alwaysAllow: boolean };
+  | { type: "permission_response"; requestId: string; allow: boolean; alwaysAllow: boolean }
+  | { type: "delete_session"; sessionId: string }
+  | { type: "set_permission_mode"; mode: string };
 
 export type DaemonEvent =
   | { type: "text_ready"; text: string }

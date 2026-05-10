@@ -5,6 +5,8 @@ import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sd
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
 import { listSessions, loadSessionHistory } from "./session-history.js";
+import { unlink } from "fs/promises";
+import { join } from "path";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment } from "./protocol.js";
 
 function emit(event: DaemonEvent): void {
@@ -12,11 +14,12 @@ function emit(event: DaemonEvent): void {
 }
 
 const state = {
-  cwd:       os.homedir(),
-  model:     "",
-  yolo:      false,
-  sessionId: "",
-  turnIndex: -1,
+  cwd:            os.homedir(),
+  model:          "",
+  yolo:           false,
+  permissionMode: "default",
+  sessionId:      "",
+  turnIndex:      -1,
 };
 
 let currentAbort: AbortController | null = null;
@@ -82,6 +85,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
         resume:                          state.sessionId || undefined,
         model:                           (model ?? state.model) || undefined,
         allowDangerouslySkipPermissions: effectiveYolo,
+        permissionMode:                  effectiveYolo ? "bypassPermissions" : (state.permissionMode as any) || "default",
         includePartialMessages:          true,
         canUseTool:                      makeCanUseTool(effectiveYolo),
       },
@@ -234,6 +238,22 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       emit({ type: "session_history_loaded", json: JSON.stringify(history) });
       break;
     }
+
+    case "delete_session": {
+      const sessionFile = join(
+        os.homedir(), ".claude", "projects",
+        state.cwd.replace(/\//g, "-"),
+        cmd.sessionId + ".jsonl"
+      );
+      try { await unlink(sessionFile); } catch { /* already gone */ }
+      const sessions = await listSessions(state.cwd);
+      emit({ type: "sessions_listed", json: JSON.stringify(sessions) });
+      break;
+    }
+
+    case "set_permission_mode":
+      state.permissionMode = cmd.mode;
+      break;
 
     case "permission_response": {
       const pending = pendingPermissions.get(cmd.requestId);

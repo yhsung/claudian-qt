@@ -39,6 +39,8 @@ public slots:
     void newSession();
     void writeTextFile(const QString &suggestedName, const QString &content);
     void respondToPermission(const QString &requestId, bool allow, bool alwaysAllow);
+    void deleteSession(const QString &sessionId);
+    void setPermissionMode(const QString &mode);
 
 signals:
     void textReady(const QString &text);

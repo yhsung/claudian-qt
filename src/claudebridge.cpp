@@ -53,7 +53,9 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
             {"inputTokens",   inputTokens},
             {"outputTokens",  outputTokens},
             {"contextWindow", contextWindow},
-            {"numTurns",      numTurns}
+            {"numTurns",      numTurns},
+            {"stopReason",    result["stop_reason"].toString()},
+            {"subtype",       result["subtype"].toString()}
         };
         emit usageUpdated(
             QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact))
@@ -185,6 +187,14 @@ void ClaudeBridge::loadSession(const QString &sessionId) {
 
 void ClaudeBridge::newSession() {
     m_daemon->sendCommand(QJsonObject{{"type", "new_session"}});
+}
+
+void ClaudeBridge::deleteSession(const QString &sessionId) {
+    m_daemon->sendCommand(QJsonObject{{"type", "delete_session"}, {"sessionId", sessionId}});
+}
+
+void ClaudeBridge::setPermissionMode(const QString &mode) {
+    m_daemon->sendCommand(QJsonObject{{"type", "set_permission_mode"}, {"mode", mode}});
 }
 
 void ClaudeBridge::respondToPermission(const QString &requestId, bool allow, bool alwaysAllow) {
