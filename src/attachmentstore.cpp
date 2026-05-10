@@ -9,7 +9,6 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUuid>
-#include <QUrl>
 
 AttachmentStore::AttachmentStore(QObject *parent)
     : QObject(parent)
@@ -48,7 +47,7 @@ QString AttachmentStore::importBytes(
         {"originalName", originalName},
         {"mimeType", mimeType},
         {"stagedPath", path},
-        {"fileUrl", QUrl::fromLocalFile(path).toString()},
+        {"fileUrl", "data:" + mimeType + ";base64," + QString::fromLatin1(bytes.toBase64())},
         {"sizeBytes", static_cast<qint64>(bytes.size())},
         {"width", size.isValid() ? size.width() : QJsonValue()},
         {"height", size.isValid() ? size.height() : QJsonValue()}
@@ -67,10 +66,7 @@ QString AttachmentStore::importBase64Image(
     const QString &mimeType,
     const QString &base64Data
 ) {
-    const QByteArray bytes = QByteArray::fromBase64(
-        base64Data.toUtf8(),
-        QByteArray::Base64Encoding | QByteArray::AbortOnBase64DecodingErrors
-    );
+    const QByteArray bytes = QByteArray::fromBase64(base64Data.toUtf8());
     if (bytes.isEmpty()) return {};
     return importBytes(bytes, originalName, mimeType);
 }

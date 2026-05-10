@@ -684,7 +684,14 @@ function wireEvents() {
 
   // Paste images from clipboard
   DOM.textarea.addEventListener('paste', async (e) => {
-    const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+    // clipboardData.files is empty for screenshots on macOS — fall back to items
+    let files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+    if (!files.length) {
+      files = [...(e.clipboardData?.items || [])]
+        .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
+        .map(it => it.getAsFile())
+        .filter(Boolean);
+    }
     if (!files.length) return;
     e.preventDefault();
     const results = await Promise.allSettled(files.map(importClipboardFile));
