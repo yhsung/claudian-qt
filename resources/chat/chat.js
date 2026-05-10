@@ -166,7 +166,12 @@ function initDOM() {
     imagePreviewModal:  document.getElementById('image-preview-modal'),
     imagePreviewImg:    document.getElementById('image-preview-img'),
     imagePreviewCaption: document.getElementById('image-preview-caption'),
-    imagePreviewClose:  document.getElementById('image-preview-close'),
+    imagePreviewClose:    document.getElementById('image-preview-close'),
+    statuslineModel:      document.getElementById('statusline-model'),
+    statuslineBarTrack:   document.getElementById('statusline-bar-track'),
+    statuslineBarFill:    document.getElementById('statusline-bar-fill'),
+    statuslinePct:        document.getElementById('statusline-pct'),
+    statuslineTurns:      document.getElementById('statusline-turns'),
   };
 }
 
@@ -554,6 +559,55 @@ function syncCwd(path) {
   DOM.cwdBtn.title = state.cwd;
 }
 
+// ── Statusline ─────────────────────────────────────────────────────────────
+function shortModelName(model) {
+  return model ? model.replace(/^claude-/, '') : 'default';
+}
+
+function syncStatuslineModel(model) {
+  DOM.statuslineModel.textContent = shortModelName(model);
+}
+
+function resetStatusline() {
+  DOM.statuslineBarFill.style.width = '0%';
+  DOM.statuslineBarFill.classList.remove('bar-warn', 'bar-danger');
+  DOM.statuslineBarTrack.style.display = '';
+  DOM.statuslineBarTrack.title = '';
+  DOM.statuslinePct.textContent = '—';
+  DOM.statuslinePct.title = '';
+  DOM.statuslineTurns.textContent = '—';
+}
+
+function onUsageUpdated(jsonStr) {
+  let data;
+  try { data = JSON.parse(jsonStr); } catch { return; }
+  const { inputTokens = 0, outputTokens = 0, contextWindow = 0, numTurns = 0 } = data;
+
+  DOM.statuslineTurns.textContent = numTurns === 1 ? '1 turn' : `${numTurns} turns`;
+
+  if (contextWindow > 0) {
+    const total = inputTokens + outputTokens;
+    const pct   = Math.min(100, Math.round((total / contextWindow) * 100));
+    const fmt   = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+    const tip   = `${fmt(inputTokens)} in + ${fmt(outputTokens)} out / ${fmt(contextWindow)} ctx tokens`;
+
+    DOM.statuslineBarTrack.style.display = '';
+    DOM.statuslineBarFill.style.width = pct + '%';
+    DOM.statuslineBarFill.classList.toggle('bar-warn',   pct >= 60 && pct < 85);
+    DOM.statuslineBarFill.classList.toggle('bar-danger', pct >= 85);
+    DOM.statuslineBarTrack.title = tip;
+    DOM.statuslinePct.textContent = pct + '%';
+    DOM.statuslinePct.title = tip;
+  } else {
+    const total = inputTokens + outputTokens;
+    const fmt   = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+    DOM.statuslineBarTrack.style.display = 'none';
+    DOM.statuslinePct.textContent = `${fmt(total)} tokens`;
+    DOM.statuslinePct.title = '';
+    DOM.statuslineBarTrack.title = '';
+  }
+}
+
 // ── Sidebar toggle ────────────────────────────────────────────────────────
 function initSidebarState() {
   if (localStorage.getItem('sidebarCollapsed') === 'true') {
@@ -683,11 +737,15 @@ function wireBridgeSignals() {
     state.messages.push(errMsg);
     DOM.messages.appendChild(renderMessage(errMsg));
   });
-  bridge.sessionReady.connect(id => { state.activeSessionId = id; bridge.requestSessions(); });
+  bridge.sessionReady.connect(id => {
+    state.activeSessionId = id;
+    if (!id) resetStatusline();
+    bridge.requestSessions();
+  });
   bridge.sessionsListed.connect(json => { try { renderSessions(JSON.parse(json)); } catch {} });
   bridge.sessionHistoryLoaded.connect(json => { try { loadSessionHistory(JSON.parse(json)); } catch {} });
-  bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; bridge.requestSessions(); });
-  bridge.modelChanged.connect(model => syncModel(model));
+  bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; resetStatusline(); bridge.requestSessions(); });
+  bridge.modelChanged.connect(model => { syncModel(model); syncStatuslineModel(model); });
   bridge.yoloChanged.connect(enabled => syncYolo(enabled));
   bridge.imagesPicked.connect((json) => {
     try {
@@ -706,8 +764,10 @@ function wireBridgeSignals() {
       pending.reject(e);
     }
   });
+  bridge.usageUpdated.connect(json => onUsageUpdated(json));
   syncCwd(bridge.cwd);
   syncModel(bridge.model);
+  syncStatuslineModel(bridge.model);
   syncYolo(bridge.yolo);
   bridge.requestSessions();
 }
