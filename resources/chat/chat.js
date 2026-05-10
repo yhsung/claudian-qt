@@ -18,6 +18,7 @@ const state = {
   toolCallCount: 0,
   _rafPending: false,
   _streamBuffer: '',
+  _userScrolled: false,
   _thinkingBuffer: '',
   _summaryCapturing: false,
   _lastPrompt: null,
@@ -319,6 +320,15 @@ function renderMessages() {
   state.messages.forEach(msg => DOM.messages.appendChild(renderMessage(msg)));
   applyFontSize();
   DOM.messages.scrollTop = DOM.messages.scrollHeight;
+  state._userScrolled = false;
+  DOM.messages.addEventListener('scroll', onUserScroll, { passive: true });
+}
+
+function onUserScroll() {
+  if (!state.currentMsgId) return;
+  const { scrollTop, scrollHeight, clientHeight } = DOM.messages;
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  state._userScrolled = distanceFromBottom >= 120;
 }
 
 // ── Thinking block helpers ─────────────────────────────────────────────────
@@ -353,12 +363,40 @@ function appendThinkingChunk(text) {
 
 // ── Code block copy buttons ────────────────────────────────────────────────
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).catch(() => {
+  console.log('[copyToClipboard] text length:', text.length, 'first 50:', text.slice(0, 50));
+  navigator.clipboard.writeText(text).then(() => {
+    console.log('[copyToClipboard] success');
+  }).catch(err => {
+    console.error('[copyToClipboard] clipboard API failed:', err);
+    // Fallback
     const ta = document.createElement('textarea');
-    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;width:1px;height:1px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      const ok = document.execCommand('copy');
+      console.log('[copyToClipboard] execCommand result:', ok);
+    } catch(e) {
+      console.error('[copyToClipboard] execCommand failed:', e);
+    } finally {
+      document.body.removeChild(ta);
+    }
   });
+}
+
+// ── Toast helper ────────────────────────────────────────────────────────────
+function showToast(msg, duration = 2500) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast-visible'));
+  setTimeout(() => {
+    toast.classList.remove('toast-visible');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 
 function postProcessCodeBlocks(el) {
@@ -372,7 +410,9 @@ function postProcessCodeBlocks(el) {
     btn.className = 'code-copy-btn';
     btn.textContent = 'Copy';
     btn.addEventListener('click', () => {
-      copyToClipboard(pre.innerText);
+      const text = pre.textContent || '';
+      bridge.copyToClipboard(text);
+      showToast(text ? 'Copied!' : 'Nothing to copy');
       btn.textContent = 'Copied!';
       btn.classList.add('copied');
       setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
@@ -392,8 +432,13 @@ function flushStreamBuffer() {
     contentDiv.innerHTML = window.marked.parse(state._streamBuffer);
     postProcessCodeBlocks(contentDiv);
   }
+  // Smart auto-scroll: only scroll if user hasn't scrolled up
   const { scrollTop, scrollHeight, clientHeight } = DOM.messages;
-  if (scrollHeight - scrollTop - clientHeight < 120) DOM.messages.scrollTop = scrollHeight;
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  if (distanceFromBottom < 120) {
+    DOM.messages.scrollTop = scrollHeight;
+    state._userScrolled = false;
+  }
 }
 
 function appendToken(text) {
@@ -628,6 +673,7 @@ function renderSessions(sessions) {
         resetStatusline();
       }
       bridge.deleteSession(s.id);
+      showToast('Session deleted');
     });
     item.innerHTML = `<div class="session-preview">${escHtml(s.preview)}</div><div class="session-time">${relativeTime(s.timestamp)}</div>`;
     item.appendChild(delBtn);
@@ -1210,15 +1256,7 @@ function wireBridgeSignals() {
   bridge.fileWritten.connect((success, path) => {
     if (!success) return;
     const name = path.split('/').pop() || 'transcript.md';
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = `Saved: ${name}`;
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('toast-visible'));
-    setTimeout(() => {
-      toast.classList.remove('toast-visible');
-      setTimeout(() => toast.remove(), 300);
-    }, 2500);
+    showToast(`Saved: ${name}`);
   });
   bridge.errorOccurred.connect(msg => {
     if (state.streaming) endStreaming();

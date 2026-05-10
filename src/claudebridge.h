@@ -41,6 +41,7 @@ public slots:
     void respondToPermission(const QString &requestId, bool allow, bool alwaysAllow);
     void deleteSession(const QString &sessionId);
     void setPermissionMode(const QString &mode);
+    void copyToClipboard(const QString &text);
 
 signals:
     void textReady(const QString &text);
@@ -64,6 +65,7 @@ signals:
     void imageImported(const QString &requestId, const QString &json);
     void usageUpdated(const QString &json);
     void fileWritten(bool success, const QString &path);
+    void clipboardCopyRequested(const QString &text);
 
 private:
     BridgeDaemon    *m_daemon;

@@ -231,3 +231,9 @@ void ClaudeBridge::writeTextFile(const QString &suggestedName, const QString &co
     file.close();
     emit fileWritten(true, path);
 }
+
+void ClaudeBridge::copyToClipboard(const QString &text) {
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(text);
+    emit clipboardCopyRequested(text);
+}

@@ -3,6 +3,7 @@ set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/build"
+DEBUG_MODE="${DEBUG:-off}"
 
 # ── Platform detection ────────────────────────────────────────────────────────
 case "$(uname -s)" in
@@ -16,6 +17,17 @@ if [ "$PLATFORM" = "macos" ]; then
   JOBS="$(sysctl -n hw.ncpu)"
 else
   JOBS="${NUMBER_OF_PROCESSORS:-$(nproc 2>/dev/null || echo 4)}"
+fi
+
+# ── Debug mode ────────────────────────────────────────────────────────────────
+if [ "${1}" = "--inspect" ] || [ "${DEBUG}" = "on" ]; then
+  DEBUG_MODE="on"
+  export QTWEBENGINE_REMOTE_DEBUGGING="9222"
+  export NODE_OPTIONS="--inspect=9229"
+  echo "⚡ Debug mode: WebEngine DevTools on :9222, Node inspector on :9229"
+  echo "  → Chrome: chrome://inspect → Targets → configure port 9222"
+  echo "  → Node:   open http://localhost:9229/json"
+  shift
 fi
 
 # ── Configure ─────────────────────────────────────────────────────────────────
@@ -63,13 +75,23 @@ if [ "${1}" = "--run" ]; then
   if [ "$PLATFORM" = "macos" ]; then
     pkill -f "ClaudianQt" 2>/dev/null || true
     sleep 0.3
-    QT_PLUGIN_PATH=/opt/homebrew/Cellar/qtbase/6.11.0/share/qt/plugins \
-      "$BUILD_DIR/ClaudianQt.app/Contents/MacOS/ClaudianQt" &
+    if [ "$DEBUG_MODE" = "on" ]; then
+      DEBUG_LAUNCH=1 QTWEBENGINE_REMOTE_DEBUGGING="9222" NODE_OPTIONS="--inspect=9229" \
+        QT_PLUGIN_PATH=/opt/homebrew/Cellar/qtbase/6.11.0/share/qt/plugins \
+        "$BUILD_DIR/ClaudianQt.app/Contents/MacOS/ClaudianQt" &
+    else
+      QT_PLUGIN_PATH=/opt/homebrew/Cellar/qtbase/6.11.0/share/qt/plugins \
+        "$BUILD_DIR/ClaudianQt.app/Contents/MacOS/ClaudianQt" &
+    fi
 
   else
     taskkill //F //IM ClaudianQt.exe 2>/dev/null || true
     sleep 0.3
-    # Add QT_HOME/bin to PATH so Qt DLLs are found at runtime
-    PATH="$QT_HOME/bin:$PATH" "$BUILD_DIR/ClaudianQt.exe" &
+    if [ "$DEBUG_MODE" = "on" ]; then
+      QTWEBENGINE_REMOTE_DEBUGGING="9222" NODE_OPTIONS="--inspect=9229" \
+        PATH="$QT_HOME/bin:$PATH" "$BUILD_DIR/ClaudianQt.exe" &
+    else
+      PATH="$QT_HOME/bin:$PATH" "$BUILD_DIR/ClaudianQt.exe" &
+    fi
   fi
 fi
