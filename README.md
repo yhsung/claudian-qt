@@ -188,6 +188,13 @@ claudian-qt/
 - Each code block rendered from Markdown gets a hover-revealed "Copy" button that writes to the clipboard.
 - The "Stop" button sends an `abort` command to the daemon, which triggers the SDK's `AbortController`.
 
+**Permission dialog**
+- The Claude Agent SDK requires `--permission-prompt-tool stdio` on the spawned CLI process to route permission requests over IPC rather than a terminal. This flag is only added when a `canUseTool` callback is provided, so the daemon always supplies one.
+- In normal mode, when the CLI requests permission for a tool (e.g. WebFetch, file writes outside the working directory), the daemon emits a `permission_request` event with the tool name, human-readable title and description, and any blocked path. This flows through `BridgeDaemon` → `ClaudeBridge` → JS via `QWebChannel`.
+- The UI shows a modal dialog with **Deny**, **Allow Once**, and **Always Allow** buttons. The user's choice is sent back via `bridge.respondToPermission(requestId, allow, alwaysAllow)` → `ClaudeBridge::respondToPermission` → daemon stdin → the pending Promise resolves with the appropriate `PermissionResult`.
+- In YOLO mode, the same `canUseTool` callback is used but resolves immediately with `{ behavior: "allow" }` without showing the dialog, preserving the IPC channel while bypassing all prompts.
+- The dialog dismisses automatically on abort or turn complete. Escape also denies and closes it.
+
 **Transcript export**
 - The download icon in the top bar opens a native save dialog.
 - `ClaudeBridge::writeTextFile` serializes the current conversation (user messages, assistant responses, tool calls with their output) to Markdown and writes the file.
