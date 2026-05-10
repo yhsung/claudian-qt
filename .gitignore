@@ -25,6 +25,8 @@ bridge/node_modules/
 bridge/dist/
 bridge/coverage/
 bridge/.vitest/
+bridge/ClaudianQt_autogen/
+bridge/qt.conf
 *.tsbuildinfo
 
 # Local worktrees
