@@ -3,7 +3,7 @@ import * as fs from "fs";
 import { readdir } from "fs/promises";
 import { join } from "path";
 import * as os from "os";
-import { attachmentRoot, loadAttachmentManifest } from "./attachment-store.js";
+import { attachmentRoot, loadAttachmentManifest, rehydrateAttachment } from "./attachment-store.js";
 import type { HistoryAttachment, HistoryTurn } from "./protocol.js";
 
 export interface SessionEntry {
@@ -77,9 +77,13 @@ export async function loadSessionHistory(
 ): Promise<HistoryTurn[]> {
   const rootDir = attachmentRoot(home);
   const manifest = await loadAttachmentManifest(rootDir, sessionId);
-  const attachmentsByTurn = new Map<number, HistoryAttachment[]>(
-    manifest.map((turn) => [turn.turnIndex, turn.attachments])
-  );
+  const attachmentsByTurn = new Map<number, HistoryAttachment[]>();
+  for (const turn of manifest) {
+    const rehydrated = await Promise.all(
+      turn.attachments.map((att) => rehydrateAttachment(rootDir, att))
+    );
+    attachmentsByTurn.set(turn.turnIndex, rehydrated);
+  }
 
   const filePath = join(claudeProjectDir(cwd, home), sessionId + ".jsonl");
   const turns: HistoryTurn[] = [];

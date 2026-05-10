@@ -86,3 +86,17 @@ export async function appendManifestTurn(args: {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(next, null, 2));
 }
+
+// Re-read the attachment file from disk and return a base64 data URL.
+// file:// URLs stored in the manifest cannot load from the qrc:// WebEngine page.
+export async function rehydrateAttachment(
+  rootDir: string,
+  att: HistoryAttachment,
+): Promise<HistoryAttachment> {
+  try {
+    const bytes = await readFile(join(rootDir, att.relativePath));
+    return { ...att, fileUrl: `data:${att.mimeType};base64,${bytes.toString("base64")}` };
+  } catch {
+    return att;
+  }
+}
