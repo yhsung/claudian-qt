@@ -51,23 +51,29 @@ if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
 
   else
     # Windows (Git Bash / MSYS2): QT_HOME must point to the compiler-specific
-    # Qt install dir, e.g.:  C:\Qt\6.11.0\msvc2022_64
+    # Qt install dir, e.g.:  D:\loggin-tool-ws\qt653_windows_20250822
     if [ -z "$QT_HOME" ]; then
       echo "Error: QT_HOME is not set."
       echo "Set it to your Qt compiler dir, e.g.:"
-      echo "  export QT_HOME='C:/Qt/6.11.0/msvc2022_64'"
+      echo "  export QT_HOME='D:/loggin-tool-ws/qt653_windows_20250822'"
       exit 1
     fi
 
     cmake "$REPO_ROOT" \
       -B "$BUILD_DIR" \
-      -DCMAKE_PREFIX_PATH="$QT_HOME"
+      -DCMAKE_PREFIX_PATH="$QT_HOME" \
+      -G "Visual Studio 16 2019" \
+      -A x64
   fi
 fi
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 echo "Building..."
-cmake --build "$BUILD_DIR" --parallel "$JOBS"
+if [ "$PLATFORM" = "macos" ]; then
+  cmake --build "$BUILD_DIR" --parallel "$JOBS"
+else
+  cmake --build "$BUILD_DIR" --config Release --parallel "$JOBS"
+fi
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 if [ "${1}" = "--run" ]; then
@@ -89,9 +95,9 @@ if [ "${1}" = "--run" ]; then
     sleep 0.3
     if [ "$DEBUG_MODE" = "on" ]; then
       QTWEBENGINE_REMOTE_DEBUGGING="9222" NODE_OPTIONS="--inspect=9229" \
-        PATH="$QT_HOME/bin:$PATH" "$BUILD_DIR/ClaudianQt.exe" &
+        "$BUILD_DIR/Release/ClaudianQt.exe" &
     else
-      PATH="$QT_HOME/bin:$PATH" "$BUILD_DIR/ClaudianQt.exe" &
+      "$BUILD_DIR/Release/ClaudianQt.exe" &
     fi
   fi
 fi
