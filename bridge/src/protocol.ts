@@ -55,4 +55,9 @@ export type DaemonEvent =
   | { type: "sessions_listed"; json: string }
   | { type: "session_renamed"; sessionId: string; name: string }
   | { type: "session_history_loaded"; json: string }
-  | { type: "result"; data: Record<string, unknown> };
+  | { type: "result"; data: Record<string, unknown> }
+  | { type: "tool_progress"; id: string; name: string; elapsedSeconds: number }
+  | { type: "rate_limit"; status: "allowed" | "allowed_warning" | "rejected"; resetsAt?: string; rateLimitType?: string; utilization?: number }
+  | { type: "fast_mode_state"; state: "off" | "cooldown" | "on" }
+  | { type: "prompt_suggestion"; suggestion: string }
+  | { type: "compact_boundary"; preTokens: number; postTokens: number; durationMs: number; trigger: "manual" | "auto" };

@@ -108,6 +108,10 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
       if (m.type === "system" && m.subtype === "init") {
         state.sessionId = m.session_id as string;
         emit({ type: "session_ready", sessionId: state.sessionId });
+        const fastModeState = (m as Record<string, unknown>).fast_mode_state as string | undefined;
+        if (fastModeState) {
+          emit({ type: "fast_mode_state", state: fastModeState as "off" | "cooldown" | "on" });
+        }
 
       } else if (m.type === "stream_event") {
         const event = m.event as Record<string, unknown> | undefined;
@@ -127,6 +131,14 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
           const usage = (event.usage as Record<string, unknown>) || {};
           turnCacheRead    += Number(usage.cache_read_input_tokens)    || 0;
           turnCacheCreated += Number(usage.cache_creation_input_tokens) || 0;
+        } else if (event.type === "tool_progress") {
+          const tp = event as Record<string, unknown>;
+          emit({
+            type: "tool_progress",
+            id: String(tp.tool_use_id || tp.id || ""),
+            name: String(tp.tool_name || ""),
+            elapsedSeconds: Number(tp.elapsed_time_seconds || 0),
+          });
         }
 
       } else if (m.type === "assistant") {
@@ -184,6 +196,32 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
           successful = true;
           emit({ type: "result", data: { ...m, cacheReadTokens: turnCacheRead, cacheCreatedTokens: turnCacheCreated } });
         }
+
+      } else if (m.type === "rate_limit") {
+        const r = m as Record<string, unknown>;
+        const rli = r.rate_limit_info as Record<string, unknown> | undefined;
+        emit({
+          type: "rate_limit",
+          status: String(rli?.status || "allowed") as "allowed" | "allowed_warning" | "rejected",
+          resetsAt: rli?.resetsAt ? String(rli.resetsAt) : undefined,
+          rateLimitType: rli?.rateLimitType ? String(rli.rateLimitType) : undefined,
+          utilization: typeof rli?.utilization === "number" ? rli.utilization : undefined,
+        });
+
+      } else if (m.type === "prompt_suggestion") {
+        const ps = m as Record<string, unknown>;
+        emit({ type: "prompt_suggestion", suggestion: String(ps.suggestion || "") });
+
+      } else if (m.type === "compact_boundary") {
+        const cb = m as Record<string, unknown>;
+        const meta = cb.compact_metadata as Record<string, unknown> | undefined;
+        emit({
+          type: "compact_boundary",
+          preTokens: Number(cb.pre_tokens || 0),
+          postTokens: Number(cb.post_tokens || 0),
+          durationMs: Number(cb.duration_ms || 0),
+          trigger: String(meta?.trigger || "auto") as "manual" | "auto",
+        });
       }
     }
 
