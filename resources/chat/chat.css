@@ -231,6 +231,35 @@ html, body {
 .msg-assistant:hover .msg-regenerate { display: inline-flex; }
 .msg-regenerate:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ── Message copy button ──────────────────────────────────────────────────── */
+.msg-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.msg-user { position: relative; }
+.msg-assistant { position: relative; }
+.msg-user:hover .msg-copy-btn,
+.msg-assistant:hover .msg-copy-btn {
+  opacity: 1;
+}
+.msg-copy-btn:hover {
+  color: var(--text-muted);
+  background: var(--bg-surface);
+}
+
 /* ── Per-turn meta badge ───────────────────────────────────────────────── */
 .msg-meta-badge {
   font-size: 10px; color: var(--text-faint); font-family: var(--font-mono);
