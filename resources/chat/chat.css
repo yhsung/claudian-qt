@@ -772,3 +772,9 @@ mark.search-highlight.current {
   background: var(--accent);
   border-radius: 2px;
 }
+
+/* ── Compact boundary separator ─────────────────────────────────────────────── */
+.compact-separator {
+  text-align: center; color: var(--text-faint); font-size: 11px;
+  padding: 8px 16px; margin: 4px 0;
+}
