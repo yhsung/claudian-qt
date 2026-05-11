@@ -1465,6 +1465,26 @@ function wireBridgeSignals() {
       statusEl.textContent = `⏳ running (${elapsedSeconds.toFixed(1)}s)`;
     }
   });
+  bridge.promptSuggestion.connect(suggestion => {
+    if (!suggestion) return;
+    // Remove any existing chips
+    DOM.messages.querySelectorAll('.suggestion-chips').forEach(el => el.remove());
+    const lastAsst = [...DOM.messages.querySelectorAll('[data-msg-id]')].reverse()
+      .find(el => el.classList.contains('msg-assistant'));
+    if (!lastAsst) return;
+    const chips = document.createElement('div');
+    chips.className = 'suggestion-chips';
+    const chip = document.createElement('button');
+    chip.className = 'suggestion-chip';
+    chip.textContent = `→ ${suggestion}`;
+    chip.addEventListener('click', () => {
+      DOM.textarea.value = suggestion;
+      DOM.textarea.focus();
+      chips.remove();
+    });
+    chips.appendChild(chip);
+    lastAsst.appendChild(chips);
+  });
   bridge.rateLimit.connect(json => {
     const data = JSON.parse(json);
     const { status, resetsAt, rateLimitType } = data;
@@ -1529,6 +1549,17 @@ function wireBridgeSignals() {
     }
   });
   bridge.usageUpdated.connect(json => onUsageUpdated(json));
+  bridge.compactBoundary.connect(json => {
+    const data = JSON.parse(json);
+    const { preTokens, postTokens, durationMs, trigger } = data;
+    const fmt = n => n >= 1000 ? (n / 1000).toFixed(0) + 'k' : String(n);
+    const label = `— context compacted (${fmt(preTokens)} → ${fmt(postTokens)} tokens, ${((durationMs || 0) / 1000).toFixed(1)}s${trigger === 'manual' ? ', manual' : ''}) —`;
+    const sep = document.createElement('div');
+    sep.className = 'compact-separator';
+    sep.textContent = label;
+    DOM.messages.appendChild(sep);
+    DOM.messages.scrollTop = DOM.messages.scrollHeight;
+  });
   syncCwd(bridge.cwd);
   syncModel(bridge.model);
   syncStatuslineModel(bridge.model);

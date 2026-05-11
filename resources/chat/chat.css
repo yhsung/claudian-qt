@@ -747,6 +747,17 @@ mark.search-highlight.current {
 }
 #scroll-to-bottom:hover { background: var(--accent-hover); }
 
+/* ── Prompt suggestions ────────────────────────────────────────────────────── */
+.suggestion-chips {
+  display: flex; gap: 8px; padding: 8px 0; flex-wrap: wrap;
+}
+.suggestion-chip {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  color: var(--text-muted); border-radius: 16px; padding: 4px 12px;
+  font-size: 12px; cursor: pointer; transition: border-color 0.15s;
+}
+.suggestion-chip:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ── Focused message highlight ─────────────────────────────────────────────── */
 .msg-focused {
   position: relative;
