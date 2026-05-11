@@ -654,6 +654,7 @@ function sendMessage() {
 
   DOM.textarea.value = '';
   DOM.textarea.style.height = '';
+  clearDraft();
   state.pendingAttachments = [];
   renderPendingAttachments();
 
@@ -710,6 +711,7 @@ function renderSessions(sessions) {
       state.activeSessionId = s.id;
       DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.sid === s.id));
       bridge.loadSession(s.id);
+      restoreDraft();
     });
     DOM.sessionList.appendChild(item);
   });
@@ -1134,6 +1136,27 @@ function toggleSidebar() {
   localStorage.setItem('sidebarCollapsed', collapsed);
 }
 
+// ── Draft persistence ───────────────────────────────────────────────────────
+function saveDraft() {
+  const sid = state.activeSessionId || 'draft';
+  if (DOM.textarea.value.trim()) {
+    sessionStorage.setItem(`draft:${sid}`, DOM.textarea.value);
+  } else {
+    sessionStorage.removeItem(`draft:${sid}`);
+  }
+}
+
+function restoreDraft() {
+  const sid = state.activeSessionId || 'draft';
+  const draft = sessionStorage.getItem(`draft:${sid}`);
+  if (draft) DOM.textarea.value = draft;
+}
+
+function clearDraft() {
+  const sid = state.activeSessionId || 'draft';
+  sessionStorage.removeItem(`draft:${sid}`);
+}
+
 // ── Events ─────────────────────────────────────────────────────────────────
 function wireEvents() {
   DOM.sidebarToggle.addEventListener('click', toggleSidebar);
@@ -1141,6 +1164,7 @@ function wireEvents() {
   DOM.textarea.addEventListener('input', () => {
     DOM.textarea.style.height = 'auto';
     DOM.textarea.style.height = Math.min(DOM.textarea.scrollHeight, 200) + 'px';
+    saveDraft();
   });
   DOM.textarea.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -1169,6 +1193,7 @@ function wireEvents() {
     state.pendingAttachments = [];
     renderPendingAttachments();
     bridge.newSession();
+    clearDraft();
   });
   DOM.modelBtn.addEventListener('click', e => {
     e.stopPropagation();
@@ -1303,10 +1328,11 @@ function wireBridgeSignals() {
   bridge.sessionReady.connect(id => {
     state.activeSessionId = id;
     if (!id) resetStatusline();
+    restoreDraft();
     bridge.requestSessions();
   });
   bridge.sessionsListed.connect(json => { try { renderSessions(JSON.parse(json)); } catch {} });
-  bridge.sessionHistoryLoaded.connect(json => { try { loadSessionHistory(JSON.parse(json)); } catch {} });
+  bridge.sessionHistoryLoaded.connect(json => { try { loadSessionHistory(JSON.parse(json)); restoreDraft(); } catch {} });
   bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; resetStatusline(); bridge.requestSessions(); });
   bridge.modelChanged.connect(model => { syncModel(model); syncStatuslineModel(model); });
   bridge.yoloChanged.connect(enabled => syncYolo(enabled));
