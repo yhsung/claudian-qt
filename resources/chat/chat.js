@@ -268,6 +268,16 @@ function renderToolCalls(toolCalls) {
   return group;
 }
 
+// ── Message copy ─────────────────────────────────────────────────────────────
+function copyMsgContent(msg, btnEl) {
+  const text = msg.content || '';
+  copyToClipboard(text);
+  showToast('Copied!');
+  const original = btnEl.innerHTML;
+  btnEl.innerHTML = '✓';
+  setTimeout(() => { btnEl.innerHTML = original; }, 1500);
+}
+
 function renderMessage(msg) {
   const outer = document.createElement('div');
   outer.dataset.msgId = msg.id;
@@ -282,6 +292,13 @@ function renderMessage(msg) {
     bubble.className = 'msg-bubble';
     bubble.textContent = msg.content;
     outer.appendChild(bubble);
+    // Copy button (user messages)
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'msg-copy-btn';
+    copyBtn.title = 'Copy message';
+    copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copyMsgContent(msg, copyBtn); });
+    outer.appendChild(copyBtn);
     if (msg.timestamp) {
       const ts = document.createElement('div');
       ts.className = 'msg-timestamp';
@@ -300,6 +317,13 @@ function renderMessage(msg) {
       postProcessCodeBlocks(contentDiv);
     }
     outer.appendChild(contentDiv);
+    // Copy button (assistant messages)
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'msg-copy-btn';
+    copyBtn.title = 'Copy message';
+    copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copyMsgContent(msg, copyBtn); });
+    outer.appendChild(copyBtn);
     if (msg.toolCalls && msg.toolCalls.length > 0 && state.viewMode !== 'summary') {
       const toolEl = renderToolCalls(msg.toolCalls);
       if (toolEl) outer.appendChild(toolEl);
