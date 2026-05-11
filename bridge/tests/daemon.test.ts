@@ -113,6 +113,53 @@ describe("daemon protocol — no API key required", () => {
     }).filter(Boolean);
     expect(events.find((e) => e!.type === "error")).toBeDefined();
   });
+
+  it("emits session_renamed and sessions_listed on rename_session", async () => {
+    const tmpCwd = "/tmp/__claudian_rename_test__";
+    const { handle } = startDaemon();
+    handle.send({ type: "set_cwd", cwd: tmpCwd });
+    handle.send({ type: "rename_session", sessionId: "test-session-id", name: "My Renamed Session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_renamed"),
+      2000
+    );
+    handle.close();
+
+    const renamed = evts.find((ev) => ev.type === "session_renamed");
+    expect(renamed).toBeDefined();
+    expect(renamed!.sessionId).toBe("test-session-id");
+    expect(renamed!.name).toBe("My Renamed Session");
+
+    // sessions_listed should also be emitted after rename
+    expect(evts.find((ev) => ev.type === "sessions_listed")).toBeDefined();
+  });
+
+  it("survives a permission_response for unknown requestId without crashing", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "permission_response", requestId: "nonexistent-req", allow: true, alwaysAllow: true });
+    // Should still respond to a subsequent command
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+
+  it("clears session state on set_cwd followed by new_session", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_cwd", cwd: "/tmp/__claudian_cwd_test__" });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    const ready = evts.find((ev) => ev.type === "session_ready");
+    expect(ready).toBeDefined();
+    expect(ready!.sessionId).toBe("");
+  });
 });
 
 const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY);
