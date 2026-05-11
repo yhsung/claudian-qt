@@ -1457,7 +1457,6 @@ function wireBridgeSignals() {
     state.activeSessionId = id;
     if (!id) resetStatusline();
     restoreDraft();
-    bridge.requestSessions();
   });
   bridge.sessionsListed.connect(json => { try { renderSessions(JSON.parse(json)); } catch {} });
   bridge.sessionHistoryLoaded.connect(json => { try { loadSessionHistory(JSON.parse(json)); restoreDraft(); } catch {} });
