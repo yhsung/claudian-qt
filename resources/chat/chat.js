@@ -790,7 +790,12 @@ function startSessionRename(sessionId, previewEl) {
   function commit() {
     if (committed) return;
     committed = true;
-    const newName = input.value.trim() || currentText;
+    const newName = input.value.trim();
+    if (!newName) {
+      // Empty input — cancel instead
+      input.replaceWith(previewEl);
+      return;
+    }
     bridge.renameSession(sessionId, newName);
   }
 

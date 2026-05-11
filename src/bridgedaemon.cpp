@@ -157,6 +157,7 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     else if (type == "error")                   emit errorOccurred(event["msg"].toString());
     else if (type == "sessions_listed")         emit sessionsListed(event["json"].toString());
     else if (type == "session_history_loaded")  emit sessionHistoryLoaded(event["json"].toString());
+    else if (type == "session_renamed")         { /* sessions_listed is also emitted after rename — sidebar updates via sessionsListed signal */ }
     else if (type == "result")                  emit resultReceived(event["data"].toObject());
 }
 

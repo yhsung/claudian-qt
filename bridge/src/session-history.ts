@@ -1,6 +1,6 @@
 import * as readline from "readline";
 import * as fs from "fs";
-import { readdir, writeFile, mkdir } from "fs/promises";
+import { readdir, readFile, writeFile, mkdir } from "fs/promises";
 import { join, dirname } from "path";
 import * as os from "os";
 import { attachmentRoot, loadAttachmentManifest, rehydrateAttachment } from "./attachment-store.js";
@@ -10,6 +10,7 @@ export interface SessionEntry {
   id: string;
   preview: string;
   timestamp: string;
+  name?: string;
 }
 
 // Legacy alias kept for backward compatibility within this file
@@ -64,7 +65,17 @@ export async function listSessions(
     }
     rl.close();
 
-    if (preview) sessions.push({ id: sessionId, preview, timestamp });
+    if (preview) {
+      const entry: SessionEntry = { id: sessionId, preview, timestamp };
+      try {
+        const metaRaw = await readFile(join(dir, filename.replace('.jsonl', '.name')), "utf8");
+        const meta = JSON.parse(metaRaw);
+        entry.name = meta.name || undefined;
+      } catch {
+        // no .name file — session has no custom name
+      }
+      sessions.push(entry);
+    }
   }
 
   return sessions.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
