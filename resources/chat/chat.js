@@ -1128,11 +1128,13 @@ function wireEvents() {
   }, true);
   DOM.sendBtn.addEventListener('click', sendMessage);
   DOM.stopBtn.addEventListener('click', () => { if (bridge) bridge.abort(); });
-  DOM.scrollToBottomBtn.addEventListener('click', () => {
-    DOM.messages.scrollTop = DOM.messages.scrollHeight;
-    state._userScrolled = false;
-    DOM.scrollToBottomBtn.classList.remove('visible');
-  });
+  if (DOM.scrollToBottomBtn) {
+    DOM.scrollToBottomBtn.addEventListener('click', () => {
+      DOM.messages.scrollTop = DOM.messages.scrollHeight;
+      state._userScrolled = false;
+      DOM.scrollToBottomBtn.classList.remove('visible');
+    });
+  }
   DOM.cwdBtn.addEventListener('click', () => { if (bridge) bridge.pickFolder(); });
   DOM.newSessionBtn.addEventListener('click', () => {
     if (!bridge) return;
