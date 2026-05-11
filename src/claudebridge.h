@@ -40,6 +40,7 @@ public slots:
     void writeTextFile(const QString &suggestedName, const QString &content);
     void respondToPermission(const QString &requestId, bool allow, bool alwaysAllow);
     void deleteSession(const QString &sessionId);
+    void renameSession(const QString &sessionId, const QString &name);
     void setPermissionMode(const QString &mode);
     void copyToClipboard(const QString &text);
 

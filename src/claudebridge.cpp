@@ -197,6 +197,14 @@ void ClaudeBridge::deleteSession(const QString &sessionId) {
     m_daemon->sendCommand(QJsonObject{{"type", "delete_session"}, {"sessionId", sessionId}});
 }
 
+void ClaudeBridge::renameSession(const QString &sessionId, const QString &name) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",      "rename_session"},
+        {"sessionId", sessionId},
+        {"name",      name}
+    });
+}
+
 void ClaudeBridge::setPermissionMode(const QString &mode) {
     m_daemon->sendCommand(QJsonObject{{"type", "set_permission_mode"}, {"mode", mode}});
 }
