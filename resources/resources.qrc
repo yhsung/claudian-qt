@@ -5,5 +5,9 @@
     <file alias="chat.css">chat/chat.css</file>
     <file alias="chat.js">chat/chat.js</file>
     <file alias="marked.min.js">chat/marked.min.js</file>
+    <file alias="chat-draft.js">chat/chat-draft.js</file>
+    <file alias="chat-scroll.js">chat/chat-scroll.js</file>
+    <file alias="chat-nav.js">chat/chat-nav.js</file>
+    <file alias="chat-copy.js">chat/chat-copy.js</file>
   </qresource>
 </RCC>
