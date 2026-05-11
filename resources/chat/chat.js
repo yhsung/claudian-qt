@@ -251,6 +251,25 @@ function renderToolCallItem(tc) {
   return div;
 }
 
+function makeToolGroupCopyBtn(toolCalls) {
+  const btn = document.createElement('button');
+  btn.className = 'tool-group-copy-btn';
+  btn.textContent = 'Copy all results';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const text = toolCalls.map(tc => {
+      const name = tc.name || 'tool';
+      const result = tc.result || '';
+      return `=== ${name} ===\n${result}`;
+    }).join('\n\n');
+    copyToClipboard(text);
+    showToast('Copied all results');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = 'Copy all results'; }, 1500);
+  });
+  return btn;
+}
+
 function renderToolCalls(toolCalls) {
   if (!toolCalls || toolCalls.length === 0) return null;
   const group = document.createElement('div');
@@ -264,6 +283,8 @@ function renderToolCalls(toolCalls) {
   const body = document.createElement('div');
   body.className = 'tool-group-body';
   toolCalls.forEach(tc => body.appendChild(renderToolCallItem(tc)));
+  const copyAllBtn = makeToolGroupCopyBtn(toolCalls);
+  body.appendChild(copyAllBtn);
   group.append(header, body);
   return group;
 }

@@ -316,6 +316,22 @@ mark.search-highlight.current {
 .tool-group.expanded .tool-group-arrow { transform: rotate(90deg); }
 .tool-group-body { display: none; border-top: 1px solid var(--border); }
 .tool-group.expanded .tool-group-body { display: block; }
+/* ── Tool group copy all button ───────────────────────────────────────────── */
+.tool-group-copy-btn {
+  display: none;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+}
+.tool-group-copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tool-group.expanded .tool-group-copy-btn { display: block; }
 .tool-call-item { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
 .tool-call-item:last-child { border-bottom: none; }
 .tool-name { font-family: var(--font-mono); font-size: 11px; color: var(--orange); font-weight: 600; }
