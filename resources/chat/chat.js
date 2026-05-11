@@ -1,4 +1,11 @@
-'use strict';
+import {
+  saveDraft as _saveDraft,
+  restoreDraft as _restoreDraft,
+  clearDraft as _clearDraft,
+} from './chat-draft.js';
+import { computeUserScrolled, shouldAutoScroll } from './chat-scroll.js';
+import { navigateUp, navigateDown } from './chat-nav.js';
+import { buildMsgCopyText, buildToolGroupCopyText } from './chat-copy.js';
 
 // ── State ──────────────────────────────────────────────────────────────────
 const state = {
@@ -259,12 +266,7 @@ function makeToolGroupCopyBtn(toolCalls) {
   btn.textContent = 'Copy all results';
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const text = toolCalls.map(tc => {
-      const name = tc.name || 'tool';
-      const result = tc.result || '';
-      return `=== ${name} ===\n${result}`;
-    }).join('\n\n');
-    copyToClipboard(text);
+    copyToClipboard(buildToolGroupCopyText(toolCalls));
     showToast('Copied all results');
     btn.textContent = '✓ Copied!';
     setTimeout(() => { btn.textContent = 'Copy all results'; }, 1500);
@@ -293,8 +295,7 @@ function renderToolCalls(toolCalls) {
 
 // ── Message copy ─────────────────────────────────────────────────────────────
 function copyMsgContent(msg, btnEl) {
-  const text = msg.content || '';
-  copyToClipboard(text);
+  copyToClipboard(buildMsgCopyText(msg));
   showToast('Copied!');
   const original = btnEl.innerHTML;
   btnEl.innerHTML = '✓';
@@ -395,8 +396,7 @@ function focusMsgByIdx(idx) {
 function onUserScroll() {
   if (!state.currentMsgId) return;
   const { scrollTop, scrollHeight, clientHeight } = DOM.messages;
-  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-  state._userScrolled = distanceFromBottom >= 120;
+  state._userScrolled = computeUserScrolled(scrollTop, scrollHeight, clientHeight);
   if (DOM.scrollToBottomBtn) {
     DOM.scrollToBottomBtn.classList.toggle('visible', state._userScrolled);
   }
@@ -505,8 +505,7 @@ function flushStreamBuffer() {
   }
   // Smart auto-scroll: only scroll if user hasn't scrolled up
   const { scrollTop, scrollHeight, clientHeight } = DOM.messages;
-  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-  if (distanceFromBottom < 120) {
+  if (shouldAutoScroll(scrollTop, scrollHeight, clientHeight)) {
     DOM.messages.scrollTop = scrollHeight;
     state._userScrolled = false;
   }
@@ -1246,23 +1245,16 @@ function toggleSidebar() {
 
 // ── Draft persistence ───────────────────────────────────────────────────────
 function saveDraft() {
-  const sid = state.activeSessionId || 'draft';
-  if (DOM.textarea.value.trim()) {
-    sessionStorage.setItem(`draft:${sid}`, DOM.textarea.value);
-  } else {
-    sessionStorage.removeItem(`draft:${sid}`);
-  }
+  _saveDraft(state.activeSessionId, DOM.textarea.value);
 }
 
 function restoreDraft() {
-  const sid = state.activeSessionId || 'draft';
-  const draft = sessionStorage.getItem(`draft:${sid}`);
-  if (draft) DOM.textarea.value = draft;
+  const val = _restoreDraft(state.activeSessionId);
+  if (val) DOM.textarea.value = val;
 }
 
 function clearDraft() {
-  const sid = state.activeSessionId || 'draft';
-  sessionStorage.removeItem(`draft:${sid}`);
+  _clearDraft(state.activeSessionId);
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────
@@ -1367,12 +1359,12 @@ function wireEvents() {
     if (document.activeElement !== DOM.textarea) {
       if (e.key === 'ArrowUp' && state.messages.length) {
         e.preventDefault();
-        focusMsgByIdx(state._focusedMsgIdx <= 0 ? state.messages.length - 1 : state._focusedMsgIdx - 1);
+        focusMsgByIdx(navigateUp(state._focusedMsgIdx, state.messages.length));
         return;
       }
       if (e.key === 'ArrowDown' && state.messages.length) {
         e.preventDefault();
-        focusMsgByIdx(state._focusedMsgIdx < 0 ? 0 : Math.min(state._focusedMsgIdx + 1, state.messages.length - 1));
+        focusMsgByIdx(navigateDown(state._focusedMsgIdx, state.messages.length));
         return;
       }
     }
