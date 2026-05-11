@@ -1333,7 +1333,7 @@ function wireBridgeSignals() {
   });
   bridge.sessionsListed.connect(json => { try { renderSessions(JSON.parse(json)); } catch {} });
   bridge.sessionHistoryLoaded.connect(json => { try { loadSessionHistory(JSON.parse(json)); restoreDraft(); } catch {} });
-  bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; resetStatusline(); bridge.requestSessions(); });
+  bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; resetStatusline(); clearDraft(); DOM.textarea.value = ''; DOM.textarea.style.height = ''; bridge.requestSessions(); });
   bridge.modelChanged.connect(model => { syncModel(model); syncStatuslineModel(model); });
   bridge.yoloChanged.connect(enabled => syncYolo(enabled));
   bridge.imagesPicked.connect((json) => {
