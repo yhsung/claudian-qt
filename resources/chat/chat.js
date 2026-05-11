@@ -22,6 +22,7 @@ const state = {
   _thinkingBuffer: '',
   _summaryCapturing: false,
   _lastPrompt: null,
+  _focusedMsgIdx: -1,
   pendingAttachments: [],
   previewAttachment: null,
 };
@@ -362,12 +363,32 @@ function renderMessage(msg) {
 function renderMessages() {
   if (state.viewMode === 'summary') { showSummaryView(); return; }
   hideSummaryView();
+  clearFocusedMsg();
   DOM.messages.innerHTML = '';
   state.messages.forEach(msg => DOM.messages.appendChild(renderMessage(msg)));
   applyFontSize();
   DOM.messages.scrollTop = DOM.messages.scrollHeight;
   state._userScrolled = false;
   DOM.messages.addEventListener('scroll', onUserScroll, { passive: true });
+}
+
+// ── Message focus ────────────────────────────────────────────────────────────
+function clearFocusedMsg() {
+  state._focusedMsgIdx = -1;
+  DOM.messages.querySelectorAll('.msg-focused').forEach(el => el.classList.remove('msg-focused'));
+}
+
+function focusMsgByIdx(idx) {
+  if (!state.messages.length) return;
+  idx = Math.max(0, Math.min(idx, state.messages.length - 1));
+  clearFocusedMsg();
+  state._focusedMsgIdx = idx;
+  const msg = state.messages[idx];
+  const msgEl = DOM.messages.querySelector(`[data-msg-id="${msg.id}"]`);
+  if (msgEl) {
+    msgEl.classList.add('msg-focused');
+    msgEl.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 function onUserScroll() {
