@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.26)
+cmake_minimum_required(VERSION 3.16)
 project(ClaudianQt VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
@@ -19,13 +19,32 @@ qt_add_executable(ClaudianQt
     resources/resources.qrc
 )
 
-set_target_properties(ClaudianQt PROPERTIES
-    MACOSX_BUNDLE TRUE
-    MACOSX_BUNDLE_BUNDLE_NAME "ClaudianQt"
-    MACOSX_BUNDLE_GUI_IDENTIFIER "com.claudianqt.app"
-    MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
-)
+if(APPLE)
+    set_target_properties(ClaudianQt PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_BUNDLE_NAME "ClaudianQt"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.claudianqt.app"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+    )
+
+    # Bundle the cocoa platform plugin and qt.conf so the app launches without QT_PLUGIN_PATH
+    file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/qt.conf"
+        CONTENT "[Paths]\nPlugins = PlugIns\n")
+
+    add_custom_command(TARGET ClaudianQt POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/PlugIns/platforms"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:Qt6::QCocoaIntegrationPlugin>"
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/PlugIns/platforms/"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_BINARY_DIR}/qt.conf"
+            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/qt.conf"
+    )
+endif()
 
 target_include_directories(ClaudianQt PRIVATE src)
 
@@ -37,22 +56,27 @@ target_link_libraries(ClaudianQt PRIVATE
     Qt6::WebChannel
 )
 
-# Bundle the cocoa platform plugin and qt.conf so the app launches without QT_PLUGIN_PATH
-file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/qt.conf"
-    CONTENT "[Paths]\nPlugins = PlugIns\n")
-
-add_custom_command(TARGET ClaudianQt POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/PlugIns/platforms"
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:Qt6::QCocoaIntegrationPlugin>"
-        "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/PlugIns/platforms/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_BINARY_DIR}/qt.conf"
-        "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/qt.conf"
-)
+# ---------------------------------------------------------------------------
+# Windows: run windeployqt to bundle Qt DLLs and WebEngine resources
+# ---------------------------------------------------------------------------
+if(WIN32)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt
+        HINTS "${Qt6_DIR}/../../../bin"
+    )
+    if(WINDEPLOYQT_EXECUTABLE)
+        add_custom_command(TARGET ClaudianQt POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXECUTABLE}"
+                --no-translations
+                --no-system-d3d-compiler
+                --no-opengl-sw
+                "$<TARGET_FILE:ClaudianQt>"
+            COMMENT "Running windeployqt"
+            VERBATIM
+        )
+    else()
+        message(WARNING "windeployqt not found — run it manually: windeployqt build/Release/ClaudianQt.exe")
+    endif()
+endif()
 
 # ---------------------------------------------------------------------------
 # TypeScript bridge: build and bundle into app
@@ -85,40 +109,69 @@ if(NPM_EXECUTABLE)
     )
     add_dependencies(ClaudianQt ClaudeBridge)
 
-    # Sync daemon dist after TS-only rebuilds (ClaudianQt's POST_BUILD only runs on relink).
-    add_custom_command(TARGET ClaudeBridge POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-            "${CMAKE_BINARY_DIR}/ClaudianQt.app/Contents/Resources/bridge"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-            "${CMAKE_SOURCE_DIR}/bridge/dist"
-            "${CMAKE_BINARY_DIR}/ClaudianQt.app/Contents/Resources/bridge"
-        COMMENT "Syncing daemon dist to app bundle after TS rebuild"
-        VERBATIM
-    )
+    if(APPLE)
+        # Sync daemon dist after TS-only rebuilds (ClaudianQt's POST_BUILD only runs on relink).
+        add_custom_command(TARGET ClaudeBridge POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_BINARY_DIR}/ClaudianQt.app/Contents/Resources/bridge"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/bridge/dist"
+                "${CMAKE_BINARY_DIR}/ClaudianQt.app/Contents/Resources/bridge"
+            COMMENT "Syncing daemon dist to app bundle after TS rebuild"
+            VERBATIM
+        )
+
+        # Copy entire dist/ into app bundle Resources/bridge/
+        add_custom_command(TARGET ClaudianQt POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/bridge/dist"
+                "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
+            COMMENT "Bundling TypeScript daemon dist into app bundle"
+            VERBATIM
+        )
+        add_custom_command(TARGET ClaudianQt POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/bridge/node_modules"
+                "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge/node_modules"
+            COMMENT "Copying bridge node_modules into app bundle"
+            VERBATIM
+        )
+    else()
+        # Windows: copy bridge dist next to the executable (build/<Config>/bridge/)
+        add_custom_command(TARGET ClaudeBridge POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_BINARY_DIR}/$<CONFIG>/bridge"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/bridge/dist"
+                "${CMAKE_BINARY_DIR}/$<CONFIG>/bridge"
+            COMMENT "Syncing daemon dist next to executable after TS rebuild"
+            VERBATIM
+        )
+
+        add_custom_command(TARGET ClaudianQt POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:ClaudianQt>/bridge"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/bridge/dist"
+                "$<TARGET_FILE_DIR:ClaudianQt>/bridge"
+            COMMENT "Bundling TypeScript daemon dist next to executable"
+            VERBATIM
+        )
+        add_custom_command(TARGET ClaudianQt POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/bridge/node_modules"
+                "$<TARGET_FILE_DIR:ClaudianQt>/bridge/node_modules"
+            COMMENT "Copying bridge node_modules next to executable"
+            VERBATIM
+        )
+    endif()
 
     add_test(
         NAME BridgeTests
         COMMAND ${NPM_EXECUTABLE} test
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bridge
-    )
-
-    # Copy entire dist/ into app bundle Resources/bridge/ (daemon.js imports session-history.js etc.)
-    add_custom_command(TARGET ClaudianQt POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-            "${CMAKE_SOURCE_DIR}/bridge/dist"
-            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge"
-        COMMENT "Bundling TypeScript daemon dist into app bundle"
-        VERBATIM
-    )
-    # Copy node_modules into app bundle so Node can resolve imports at runtime
-    add_custom_command(TARGET ClaudianQt POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-            "${CMAKE_SOURCE_DIR}/bridge/node_modules"
-            "$<TARGET_BUNDLE_DIR:ClaudianQt>/Contents/Resources/bridge/node_modules"
-        COMMENT "Copying bridge node_modules into app bundle"
-        VERBATIM
     )
 else()
     message(WARNING "npm not found — bridge will not be built automatically. "
