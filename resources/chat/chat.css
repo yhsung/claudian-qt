@@ -715,6 +715,13 @@ mark.search-highlight.current {
 #statusline-pct { flex-shrink: 0; }
 #statusline-turns { margin-left: auto; flex-shrink: 0; }
 
+/* ── Fast mode badge ───────────────────────────────────────────────────────── */
+.fast-mode-badge {
+  font-size: 11px; margin-left: 2px;
+}
+.fast-mode-badge.fast-mode-on { color: var(--green); }
+.fast-mode-badge.fast-mode-cooldown { color: var(--text-faint); }
+
 /* ── Scroll-to-bottom FAB ────────────────────────────────────────────────── */
 #scroll-to-bottom {
   display: none;

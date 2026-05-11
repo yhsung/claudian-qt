@@ -203,6 +203,7 @@ function initDOM() {
     imagePreviewCaption: document.getElementById('image-preview-caption'),
     imagePreviewClose:    document.getElementById('image-preview-close'),
     statuslineModel:      document.getElementById('statusline-model'),
+    statuslineFastMode: document.getElementById('statusline-fast-mode'),
     statuslineBarTrack:   document.getElementById('statusline-bar-track'),
     statuslineBarFill:    document.getElementById('statusline-bar-fill'),
     statuslinePct:        document.getElementById('statusline-pct'),
@@ -1179,6 +1180,16 @@ function syncStatuslineModel(model) {
   DOM.statuslineModel.textContent = shortModelName(model);
 }
 
+function syncFastMode(state) {
+  if (!DOM.statuslineFastMode) return;
+  DOM.statuslineFastMode.className = 'fast-mode-badge ' + (
+    state === 'on' ? 'fast-mode-on' :
+    state === 'cooldown' ? 'fast-mode-cooldown' : ''
+  );
+  DOM.statuslineFastMode.textContent = state === 'on' ? '⚡' : state === 'cooldown' ? '⚡̱' : '';
+  DOM.statuslineFastMode.title = state === 'on' ? 'Fast mode on' : state === 'cooldown' ? 'Fast mode recharging' : '';
+}
+
 function resetStatusline() {
   DOM.statuslineBarFill.style.width = '0%';
   DOM.statuslineBarFill.classList.remove('bar-warn', 'bar-danger');
@@ -1498,6 +1509,7 @@ function wireBridgeSignals() {
   bridge.sessionHistoryLoaded.connect(json => { try { loadSessionHistory(JSON.parse(json)); restoreDraft(); } catch {} });
   bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; resetStatusline(); clearDraft(); DOM.textarea.value = ''; DOM.textarea.style.height = ''; bridge.requestSessions(); });
   bridge.modelChanged.connect(model => { syncModel(model); syncStatuslineModel(model); });
+  bridge.fastModeStateChanged.connect(state => syncFastMode(state));
   bridge.yoloChanged.connect(enabled => syncYolo(enabled));
   bridge.imagesPicked.connect((json) => {
     try {
@@ -1535,6 +1547,7 @@ function wireBridgeSignals() {
   new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge = channel.objects.claude;
     window.__qtBridge__ = bridge;
+    syncFastMode('off');
     wireBridgeSignals();
   });
 })();
