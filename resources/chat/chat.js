@@ -217,6 +217,8 @@ function initDOM() {
     permissionSessionBtn: document.getElementById('permission-session-btn'),
     permissionAlwaysBtn:  document.getElementById('permission-always-btn'),
     scrollToBottomBtn:    document.getElementById('scroll-to-bottom'),
+    rateLimitBanner:      document.getElementById('rate-limit-banner'),
+    rateLimitText:        document.getElementById('rate-limit-text'),
   };
 }
 
@@ -608,6 +610,7 @@ function appendSubAgentMessage(parentToolUseId, text) {
 
 function startStreaming() {
   state.streaming = true;
+  if (DOM.rateLimitBanner) DOM.rateLimitBanner.classList.remove('visible');
   const msg = { id: mkId(), role: 'assistant', content: '', toolCalls: [], timestamp: new Date().toISOString() };
   state.messages.push(msg);
   state.currentMsgId = msg.id;
@@ -1449,6 +1452,22 @@ function wireBridgeSignals() {
     const statusEl = el.querySelector('.tool-status');
     if (statusEl && tc.status === 'running') {
       statusEl.textContent = `⏳ running (${elapsedSeconds.toFixed(1)}s)`;
+    }
+  });
+  bridge.rateLimit.connect(json => {
+    const data = JSON.parse(json);
+    const { status, resetsAt, rateLimitType } = data;
+    const banner = DOM.rateLimitBanner;
+    const text = DOM.rateLimitText;
+    banner.classList.remove('visible', 'warning', 'rejected');
+    if (status === 'rejected') {
+      banner.classList.add('visible', 'rejected');
+      text.textContent = `Rate limit reached${rateLimitType ? ` (${rateLimitType})` : ''}. Limit resets at ${resetsAt || 'unknown'}.`;
+    } else if (status === 'allowed_warning') {
+      banner.classList.add('visible', 'warning');
+      text.textContent = `Approaching rate limit${rateLimitType ? ` (${rateLimitType})` : ''}.`;
+    } else {
+      banner.classList.remove('visible');
     }
   });
   bridge.subAgentMessage.connect((parentToolUseId, text) => appendSubAgentMessage(parentToolUseId, text));

@@ -593,6 +593,23 @@ mark.search-highlight.current {
   white-space: nowrap;
 }
 
+/* ── Rate limit banner ─────────────────────────────────────────────────────── */
+#rate-limit-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--orange);
+  color: #000;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+#rate-limit-banner.visible { display: flex; }
+#rate-limit-banner.warning { background: var(--orange); }
+#rate-limit-banner.rejected { background: var(--red); color: #fff; }
+#rate-limit-banner svg { flex-shrink: 0; }
+
 /* ── Permission dialog ───────────────────────────────────────────────────── */
 #permission-modal {
   position: fixed; inset: 0; z-index: 1500;
