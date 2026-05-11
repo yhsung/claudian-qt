@@ -207,6 +207,7 @@ function initDOM() {
     permissionDenyBtn:    document.getElementById('permission-deny-btn'),
     permissionAllowBtn:   document.getElementById('permission-allow-btn'),
     permissionAlwaysBtn:  document.getElementById('permission-always-btn'),
+    scrollToBottomBtn:    document.getElementById('scroll-to-bottom'),
   };
 }
 
@@ -329,6 +330,9 @@ function onUserScroll() {
   const { scrollTop, scrollHeight, clientHeight } = DOM.messages;
   const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
   state._userScrolled = distanceFromBottom >= 120;
+  if (DOM.scrollToBottomBtn) {
+    DOM.scrollToBottomBtn.classList.toggle('visible', state._userScrolled);
+  }
 }
 
 // ── Thinking block helpers ─────────────────────────────────────────────────
@@ -544,6 +548,7 @@ function startStreaming() {
   DOM.sendBtn.style.display = 'none';
   DOM.inputArea.classList.add('locked');
   DOM.textarea.disabled = true;
+  if (DOM.scrollToBottomBtn) DOM.scrollToBottomBtn.classList.remove('visible');
 }
 
 function endStreaming() {
@@ -1123,6 +1128,11 @@ function wireEvents() {
   }, true);
   DOM.sendBtn.addEventListener('click', sendMessage);
   DOM.stopBtn.addEventListener('click', () => { if (bridge) bridge.abort(); });
+  DOM.scrollToBottomBtn.addEventListener('click', () => {
+    DOM.messages.scrollTop = DOM.messages.scrollHeight;
+    state._userScrolled = false;
+    DOM.scrollToBottomBtn.classList.remove('visible');
+  });
   DOM.cwdBtn.addEventListener('click', () => { if (bridge) bridge.pickFolder(); });
   DOM.newSessionBtn.addEventListener('click', () => {
     if (!bridge) return;

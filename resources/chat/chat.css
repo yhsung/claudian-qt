@@ -631,3 +631,28 @@ mark.search-highlight.current {
 #statusline-bar-fill.bar-danger { background: var(--red); }
 #statusline-pct { flex-shrink: 0; }
 #statusline-turns { margin-left: auto; flex-shrink: 0; }
+
+/* ── Scroll-to-bottom FAB ────────────────────────────────────────────────── */
+#scroll-to-bottom {
+  display: none;
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 500;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  transition: opacity 0.2s, transform 0.2s;
+}
+#scroll-to-bottom.visible {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#scroll-to-bottom:hover { background: var(--accent-hover); }
