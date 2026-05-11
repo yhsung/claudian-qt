@@ -699,3 +699,18 @@ mark.search-highlight.current {
   justify-content: center;
 }
 #scroll-to-bottom:hover { background: var(--accent-hover); }
+
+/* ── Focused message highlight ─────────────────────────────────────────────── */
+.msg-focused {
+  position: relative;
+}
+.msg-focused::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}

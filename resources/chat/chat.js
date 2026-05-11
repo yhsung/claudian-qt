@@ -1296,6 +1296,20 @@ function wireEvents() {
 
   // Global Escape + ⌘F — ordered by overlay priority
   document.addEventListener('keydown', (e) => {
+    // Keyboard shortcuts — only when not focused on textarea
+    if (document.activeElement !== DOM.textarea) {
+      if (e.key === 'ArrowUp' && state.messages.length) {
+        e.preventDefault();
+        focusMsgByIdx(state._focusedMsgIdx <= 0 ? state.messages.length - 1 : state._focusedMsgIdx - 1);
+        return;
+      }
+      if (e.key === 'ArrowDown' && state.messages.length) {
+        e.preventDefault();
+        focusMsgByIdx(state._focusedMsgIdx < 0 ? 0 : Math.min(state._focusedMsgIdx + 1, state.messages.length - 1));
+        return;
+      }
+    }
+
     if (e.key === 'Escape') {
       if (DOM.imagePreviewModal.classList.contains('visible')) { DOM.imagePreviewModal.classList.remove('visible'); return; }
       if (DOM.permissionModal.classList.contains('visible'))   { respondPermission(false, false); return; }
