@@ -26,20 +26,27 @@ static QString findNodeBinary() {
 }
 
 static QString findDaemonScript() {
-    // Production: app bundle Contents/Resources/bridge/daemon.js
-    const QString bundlePath = QCoreApplication::applicationDirPath()
-                               + "/../Resources/bridge/daemon.js";
-    const QFileInfo bundleInfo(bundlePath);
-    if (bundleInfo.exists())
-        return bundleInfo.canonicalFilePath();
+    const QString appDir = QCoreApplication::applicationDirPath();
 
-    // Development: <project-root>/bridge/dist/daemon.js
-    // Binary is at build/ClaudianQt.app/Contents/MacOS/ (4 levels up to project root)
-    const QString devPath = QCoreApplication::applicationDirPath()
-                            + "/../../../../bridge/dist/daemon.js";
-    const QFileInfo devInfo(devPath);
-    if (devInfo.exists())
-        return devInfo.canonicalFilePath();
+    // Windows production / any platform: bridge/ next to the executable
+    const QString nextToExe = appDir + "/bridge/daemon.js";
+    if (QFileInfo::exists(nextToExe))
+        return QFileInfo(nextToExe).canonicalFilePath();
+
+    // macOS app bundle: Contents/Resources/bridge/daemon.js
+    const QString bundlePath = appDir + "/../Resources/bridge/daemon.js";
+    if (QFileInfo(bundlePath).exists())
+        return QFileInfo(bundlePath).canonicalFilePath();
+
+    // macOS development: binary at build/ClaudianQt.app/Contents/MacOS/ (4 levels up)
+    const QString macDevPath = appDir + "/../../../../bridge/dist/daemon.js";
+    if (QFileInfo(macDevPath).exists())
+        return QFileInfo(macDevPath).canonicalFilePath();
+
+    // Windows development: binary at build/Release/ (2 levels up to project root)
+    const QString winDevPath = appDir + "/../../bridge/dist/daemon.js";
+    if (QFileInfo(winDevPath).exists())
+        return QFileInfo(winDevPath).canonicalFilePath();
 
     return {};
 }
