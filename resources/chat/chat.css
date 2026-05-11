@@ -249,8 +249,6 @@ html, body {
   justify-content: center;
   z-index: 10;
 }
-.msg-user { position: relative; }
-.msg-assistant { position: relative; }
 .msg-user:hover .msg-copy-btn,
 .msg-assistant:hover .msg-copy-btn {
   opacity: 1;
@@ -287,14 +285,14 @@ mark.search-highlight.current {
   outline: 1px solid rgba(255, 180, 0, 0.9);
 }
 
-.msg-user { display: flex; justify-content: flex-end; }
+.msg-user { position: relative; display: flex; justify-content: flex-end; }
 .msg-user .msg-bubble {
   background: var(--accent); color: #fff;
   border-radius: 16px 16px 4px 16px;
   padding: 10px 14px; max-width: 70%;
   font-size: inherit; white-space: pre-wrap; word-break: break-word;
 }
-.msg-assistant { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
+.msg-assistant { position: relative; display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
 .msg-content { font-size: inherit; line-height: 1.6; color: var(--text); word-break: break-word; }
 .msg-content p { margin: 0 0 0.6em; }
 .msg-content p:last-child { margin-bottom: 0; }
