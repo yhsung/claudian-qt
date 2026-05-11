@@ -14,18 +14,19 @@ function emit(event: DaemonEvent): void {
 }
 
 const state = {
-  cwd:            os.homedir(),
-  model:          "",
-  yolo:           false,
-  permissionMode: "default",
-  sessionId:      "",
-  turnIndex:      -1,
+  cwd:                os.homedir(),
+  model:              "",
+  yolo:               false,
+  permissionMode:     "default",
+  sessionId:          "",
+  turnIndex:          -1,
+  sessionPermissions: {} as Record<string, boolean>,
 };
 
 let currentAbort: AbortController | null = null;
 
 // Pending permission promises keyed by requestId
-const pendingPermissions = new Map<string, { resolve: (result: PermissionResult) => void }>();
+const pendingPermissions = new Map<string, { resolve: (result: PermissionResult) => void; toolName: string }>();
 
 // Build a canUseTool callback for a given send invocation.
 // Must always be provided so the SDK adds --permission-prompt-tool stdio to the CLI;
@@ -42,8 +43,12 @@ function makeCanUseTool(yoloMode: boolean): CanUseTool {
         resolve({ behavior: "allow", updatedInput: {} });
         return;
       }
+      if (state.sessionPermissions[toolName]) {
+        resolve({ behavior: "allow", updatedInput: {} });
+        return;
+      }
       const requestId = `perm_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      pendingPermissions.set(requestId, { resolve });
+      pendingPermissions.set(requestId, { resolve, toolName });
 
       options.signal.addEventListener("abort", () => {
         if (pendingPermissions.delete(requestId)) {
@@ -229,9 +234,10 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       break;
 
     case "set_cwd":
-      state.cwd       = cmd.cwd;
-      state.sessionId = "";
-      state.turnIndex = -1;
+      state.cwd                = cmd.cwd;
+      state.sessionId          = "";
+      state.turnIndex          = -1;
+      state.sessionPermissions = {};
       break;
 
     case "set_model":
@@ -243,8 +249,9 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       break;
 
     case "new_session":
-      state.sessionId = "";
-      state.turnIndex = -1;
+      state.sessionId          = "";
+      state.turnIndex          = -1;
+      state.sessionPermissions = {};
       emit({ type: "session_ready", sessionId: "" });
       break;
 
@@ -284,6 +291,9 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       if (pending) {
         pendingPermissions.delete(cmd.requestId);
         if (cmd.allow) {
+          if (cmd.alwaysAllow) {
+            state.sessionPermissions[pending.toolName] = true;
+          }
           pending.resolve({ behavior: "allow", updatedInput: {} });
         } else {
           pending.resolve({ behavior: "deny", message: "Permission denied by user." });
