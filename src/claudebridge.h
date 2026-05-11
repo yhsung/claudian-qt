@@ -67,6 +67,11 @@ signals:
     void usageUpdated(const QString &json);
     void fileWritten(bool success, const QString &path);
     void clipboardCopyRequested(const QString &text);
+    void toolProgress(const QString &id, const QString &name, double elapsedSeconds);
+    void rateLimit(const QString &json);
+    void fastModeStateChanged(const QString &state);
+    void promptSuggestion(const QString &suggestion);
+    void compactBoundary(const QString &json);
 
 private:
     BridgeDaemon    *m_daemon;

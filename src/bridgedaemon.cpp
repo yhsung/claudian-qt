@@ -159,6 +159,16 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     else if (type == "session_history_loaded")  emit sessionHistoryLoaded(event["json"].toString());
     else if (type == "session_renamed")         { /* sessions_listed is also emitted after rename — sidebar updates via sessionsListed signal */ }
     else if (type == "result")                  emit resultReceived(event["data"].toObject());
+    else if (type == "tool_progress")           emit toolProgress(event["id"].toString(), event["name"].toString(), event["elapsedSeconds"].toDouble());
+    else if (type == "rate_limit")              emit rateLimit(QString::fromUtf8(QJsonDocument(event).toJson(QJsonDocument::Compact)));
+    else if (type == "fast_mode_state")         emit fastModeStateChanged(event["state"].toString());
+    else if (type == "prompt_suggestion")       emit promptSuggestion(event["suggestion"].toString());
+    else if (type == "compact_boundary")        emit compactBoundary(QString::fromUtf8(QJsonDocument(QJsonObject{
+                                                    {"preTokens",  event["preTokens"]},
+                                                    {"postTokens", event["postTokens"]},
+                                                    {"durationMs", event["durationMs"]},
+                                                    {"trigger",    event["trigger"]}
+                                                }).toJson(QJsonDocument::Compact)));
 }
 
 void BridgeDaemon::onDaemonFinished(int exitCode, QProcess::ExitStatus) {

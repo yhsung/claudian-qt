@@ -33,6 +33,11 @@ signals:
     void sessionsListed(const QString &json);
     void sessionHistoryLoaded(const QString &json);
     void resultReceived(const QJsonObject &result);
+    void toolProgress(const QString &id, const QString &name, double elapsedSeconds);
+    void rateLimit(const QString &json);
+    void fastModeStateChanged(const QString &state);
+    void promptSuggestion(const QString &suggestion);
+    void compactBoundary(const QString &json);
 
 private slots:
     void onReadyRead();
