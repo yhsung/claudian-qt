@@ -4,7 +4,7 @@ import { query, AbortError } from "@anthropic-ai/claude-agent-sdk";
 import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
-import { listSessions, loadSessionHistory } from "./session-history.js";
+import { listSessions, loadSessionHistory, renameSession } from "./session-history.js";
 import { unlink } from "fs/promises";
 import { join } from "path";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment } from "./protocol.js";
@@ -277,6 +277,14 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
         cmd.sessionId + ".jsonl"
       );
       try { await unlink(sessionFile); } catch { /* already gone */ }
+      const sessions = await listSessions(state.cwd);
+      emit({ type: "sessions_listed", json: JSON.stringify(sessions) });
+      break;
+    }
+
+    case "rename_session": {
+      await renameSession(state.cwd, cmd.sessionId, cmd.name);
+      emit({ type: "session_renamed", sessionId: cmd.sessionId, name: cmd.name });
       const sessions = await listSessions(state.cwd);
       emit({ type: "sessions_listed", json: JSON.stringify(sessions) });
       break;

@@ -1,7 +1,7 @@
 import * as readline from "readline";
 import * as fs from "fs";
-import { readdir } from "fs/promises";
-import { join } from "path";
+import { readdir, writeFile, mkdir } from "fs/promises";
+import { join, dirname } from "path";
 import * as os from "os";
 import { attachmentRoot, loadAttachmentManifest, rehydrateAttachment } from "./attachment-store.js";
 import type { HistoryAttachment, HistoryTurn } from "./protocol.js";
@@ -160,4 +160,15 @@ export async function countUserTurns(
 ): Promise<number> {
   const turns = await loadSessionHistory(cwd, sessionId, home);
   return turns.filter((t) => t.role === "user").length;
+}
+
+export async function renameSession(
+  cwd: string,
+  sessionId: string,
+  name: string,
+  home = os.homedir()
+): Promise<void> {
+  const metaPath = join(claudeProjectDir(cwd, home), `${sessionId}.name`);
+  await mkdir(dirname(metaPath), { recursive: true });
+  await writeFile(metaPath, JSON.stringify({ name, updatedAt: new Date().toISOString() }), "utf8");
 }
