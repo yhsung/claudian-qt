@@ -564,7 +564,8 @@ function appendToolResult(toolUseId, content, isError) {
   const statusEl = itemEl.querySelector('.tool-status');
   if (statusEl) {
     statusEl.className = `tool-status ${isError ? 'error' : 'done'}`;
-    statusEl.textContent = isError ? '✗ error' : '✓ done';
+    const elapsedStr = tc.elapsedSeconds != null ? ` (${tc.elapsedSeconds.toFixed(1)}s)` : '';
+    statusEl.textContent = isError ? `✗ error${elapsedStr}` : `✓ done${elapsedStr}`;
   }
   let wrapper = itemEl.querySelector('.tool-result-wrapper');
   if (!wrapper) {
@@ -1447,7 +1448,7 @@ function wireBridgeSignals() {
     if (!el) return;
     const statusEl = el.querySelector('.tool-status');
     if (statusEl && tc.status === 'running') {
-      statusEl.textContent = `⏳ ${elapsedSeconds.toFixed(1)}s`;
+      statusEl.textContent = `⏳ running (${elapsedSeconds.toFixed(1)}s)`;
     }
   });
   bridge.subAgentMessage.connect((parentToolUseId, text) => appendSubAgentMessage(parentToolUseId, text));
