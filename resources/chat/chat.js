@@ -207,6 +207,7 @@ function initDOM() {
     permissionBlockedPath: document.getElementById('permission-blocked-path'),
     permissionDenyBtn:    document.getElementById('permission-deny-btn'),
     permissionAllowBtn:   document.getElementById('permission-allow-btn'),
+    permissionSessionBtn: document.getElementById('permission-session-btn'),
     permissionAlwaysBtn:  document.getElementById('permission-always-btn'),
     scrollToBottomBtn:    document.getElementById('scroll-to-bottom'),
   };
@@ -1281,9 +1282,10 @@ function wireEvents() {
   DOM.exportBtn.addEventListener('click', exportTranscript);
 
   // Permission dialog buttons
-  DOM.permissionDenyBtn.addEventListener('click',   () => respondPermission(false, false));
-  DOM.permissionAllowBtn.addEventListener('click',  () => respondPermission(true,  false));
-  DOM.permissionAlwaysBtn.addEventListener('click', () => respondPermission(true,  true));
+  DOM.permissionDenyBtn.addEventListener('click',    () => respondPermission(false, false));
+  DOM.permissionAllowBtn.addEventListener('click',   () => respondPermission(true,  false));
+  DOM.permissionSessionBtn.addEventListener('click', () => respondPermission(true,  true));
+  DOM.permissionAlwaysBtn.addEventListener('click',  () => respondPermission(true,  true));
 
   // Attach button
   DOM.attachBtn.addEventListener('click', () => { if (bridge) bridge.pickImages(); });

@@ -627,6 +627,12 @@ mark.search-highlight.current {
   padding: 7px 14px; font-size: 12px; cursor: pointer;
 }
 #permission-allow-btn:hover { background: rgba(124,106,247,0.12); }
+#permission-session-btn {
+  flex: 1; background: transparent; border: 1px solid var(--accent);
+  color: var(--accent); border-radius: var(--radius-sm);
+  padding: 7px 14px; font-size: 12px; font-weight: 500; cursor: pointer;
+}
+#permission-session-btn:hover { background: rgba(124,106,247,0.12); }
 #permission-always-btn {
   flex: 1; background: var(--accent); border: none;
   color: #fff; border-radius: var(--radius-sm);
