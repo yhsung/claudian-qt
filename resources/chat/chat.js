@@ -1317,6 +1317,19 @@ function wireEvents() {
       if (state.viewMode === 'summary')                        { setViewMode('normal'); return; }
     }
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); openSearch(); }
+
+    // ⌘K — focus the textarea
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      DOM.textarea.focus();
+      DOM.textarea.scrollIntoView({ block: 'nearest' });
+    }
+
+    // ⌘N — new session (only when not typing in textarea)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'n' && document.activeElement !== DOM.textarea) {
+      e.preventDefault();
+      DOM.newSessionBtn.click();
+    }
   });
 
   // Paste images from clipboard — delegate to C++ which reads QApplication::clipboard()
