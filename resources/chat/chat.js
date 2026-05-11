@@ -248,8 +248,12 @@ function renderToolCallItem(tc) {
     try { return JSON.stringify(JSON.parse(tc.inputJson), null, 2); }
     catch { return tc.inputJson; }
   })();
-  const statusText = tc.status === 'running' ? '⏳ running'
-    : tc.status === 'done' ? '✓ done' : '✗ error';
+  const elapsedStr = tc.elapsedSeconds != null ? ` (${tc.elapsedSeconds.toFixed(1)}s)` : '';
+  const statusText = tc.status === 'running'
+    ? `⏳ running${elapsedStr}`
+    : tc.status === 'done'
+      ? `✓ done${elapsedStr}`
+      : `✗ error${elapsedStr}`;
   div.innerHTML =
     `<div class="tool-name">${escHtml(tc.name)}</div>` +
     (state.viewMode === 'verbose'
@@ -1434,6 +1438,18 @@ function wireBridgeSignals() {
   bridge.thinkingChunk.connect(text => appendThinkingChunk(text));
   bridge.toolUse.connect((id, name, inputJson) => appendToolCall(id, name, inputJson));
   bridge.toolResult.connect((toolUseId, content, isError) => appendToolResult(toolUseId, content, isError));
+  bridge.toolProgress.connect((id, name, elapsedSeconds) => {
+    const msg = state.messages.find(m => m.id === state.currentMsgId);
+    const tc = msg?.toolCalls.find(t => t.id === id);
+    if (!tc) return;
+    tc.elapsedSeconds = elapsedSeconds;
+    const el = DOM.messages.querySelector(`[data-tool-id="${id}"]`);
+    if (!el) return;
+    const statusEl = el.querySelector('.tool-status');
+    if (statusEl && tc.status === 'running') {
+      statusEl.textContent = `⏳ ${elapsedSeconds.toFixed(1)}s`;
+    }
+  });
   bridge.subAgentMessage.connect((parentToolUseId, text) => appendSubAgentMessage(parentToolUseId, text));
   bridge.permissionRequested.connect((requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath) => {
     showPermissionDialog(requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath);
