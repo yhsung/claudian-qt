@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import { mkdtemp, mkdir, writeFile } from "fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { listSessions, loadSessionHistory } from "../src/session-history.js";
+import { listSessions, loadSessionHistory, renameSession } from "../src/session-history.js";
 
 const TMP = join(tmpdir(), "claudian-test-" + process.pid);
 const CWD = "/test/project";
@@ -102,5 +102,67 @@ describe("loadSessionHistory", () => {
     const home = await mkdtemp(join(tmpdir(), "claudian-history-home-missing-"));
     const turns = await loadSessionHistory("/tmp/nonexistent", "no-session", home);
     expect(turns).toEqual([]);
+  });
+});
+
+describe("renameSession", () => {
+  it("creates a .name sidecar file", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-rename-"));
+    const cwd = "/rename/test";
+    const sessionId = "sess-abc";
+    const dir = join(home, ".claude", "projects", "-rename-test");
+    await mkdir(dir, { recursive: true });
+
+    await renameSession(cwd, sessionId, "My Chat", home);
+
+    const raw = await readFile(join(dir, `${sessionId}.name`), "utf8");
+    const meta = JSON.parse(raw);
+    expect(meta.name).toBe("My Chat");
+    expect(typeof meta.updatedAt).toBe("string");
+  });
+
+  it("overwrites an existing .name sidecar file", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-rename-"));
+    const cwd = "/rename/test";
+    const sessionId = "sess-xyz";
+    const dir = join(home, ".claude", "projects", "-rename-test");
+    await mkdir(dir, { recursive: true });
+
+    await renameSession(cwd, sessionId, "First name", home);
+    await renameSession(cwd, sessionId, "Updated name", home);
+
+    const raw = await readFile(join(dir, `${sessionId}.name`), "utf8");
+    const meta = JSON.parse(raw);
+    expect(meta.name).toBe("Updated name");
+  });
+});
+
+describe("listSessions — name sidecar", () => {
+  it("includes name from .name sidecar when present", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-name-"));
+    const cwd = "/name/test";
+    const dir = join(home, ".claude", "projects", "-name-test");
+    await mkdir(dir, { recursive: true });
+    const sessionId = "sess-named";
+    await writeFile(
+      join(dir, `${sessionId}.jsonl`),
+      JSON.stringify({ type: "user", timestamp: "2026-05-01T00:00:00.000Z", message: { role: "user", content: [{ type: "text", text: "Hello" }] } })
+    );
+    await writeFile(
+      join(dir, `${sessionId}.name`),
+      JSON.stringify({ name: "My Session", updatedAt: "2026-05-01T00:00:00.000Z" })
+    );
+
+    const sessions = await listSessions(cwd, home);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].name).toBe("My Session");
+  });
+
+  it("has no name field when .name sidecar is absent", async () => {
+    // TMP/CWD fixture from beforeAll has abc123.jsonl with no .name file
+    const sessions = await listSessions(CWD, TMP);
+    const session = sessions.find(s => s.id === "abc123");
+    expect(session).toBeDefined();
+    expect(session!.name).toBeUndefined();
   });
 });
