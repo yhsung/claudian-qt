@@ -720,6 +720,94 @@ function regenerate() {
 }
 
 // ── Sessions ───────────────────────────────────────────────────────────────
+
+// ── Session rename ───────────────────────────────────────────────────────────
+function makeSessionItem(s) {
+  const item = document.createElement('div');
+  item.className = 'session-item' + (s.id === state.activeSessionId ? ' active' : '');
+  item.dataset.sid = s.id;
+
+  const preview = document.createElement('div');
+  preview.className = 'session-preview';
+  preview.textContent = s.name || s.preview;
+
+  const time = document.createElement('div');
+  time.className = 'session-time';
+  time.textContent = relativeTime(s.timestamp);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'session-delete-btn';
+  delBtn.title = 'Delete session';
+  delBtn.textContent = '×';
+  delBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!confirm('Delete this session? This cannot be undone.')) return;
+    if (s.id === state.activeSessionId) {
+      state.messages = [];
+      state.activeSessionId = '';
+      DOM.messages.innerHTML = '';
+      hideSummaryView();
+      resetStatusline();
+    }
+    bridge.deleteSession(s.id);
+    showToast('Session deleted');
+  });
+
+  item.appendChild(preview);
+  item.appendChild(time);
+  item.appendChild(delBtn);
+
+  // Double-click preview to rename
+  preview.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    startSessionRename(s.id, preview);
+  });
+
+  item.addEventListener('click', () => {
+    state.activeSessionId = s.id;
+    DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.sid === s.id));
+    bridge.loadSession(s.id);
+    restoreDraft();
+  });
+
+  return item;
+}
+
+function startSessionRename(sessionId, previewEl) {
+  const currentText = previewEl.textContent;
+  const input = document.createElement('input');
+  input.className = 'session-rename-input';
+  input.type = 'text';
+  input.value = currentText;
+  input.maxLength = 80;
+
+  previewEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let committed = false;
+
+  function commit() {
+    if (committed) return;
+    committed = true;
+    const newName = input.value.trim() || currentText;
+    bridge.renameSession(sessionId, newName);
+  }
+
+  function cancel() {
+    if (committed) return;
+    committed = true;
+    input.replaceWith(previewEl);
+  }
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); input.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  input.addEventListener('blur', () => commit());
+  input.addEventListener('click', (e) => e.stopPropagation());
+}
+
 function renderSessions(sessions) {
   state.sessions = (sessions || []).sort((a, b) => b.timestamp - a.timestamp);
   DOM.sessionList.innerHTML = '';
@@ -728,35 +816,7 @@ function renderSessions(sessions) {
     return;
   }
   state.sessions.forEach(s => {
-    const item = document.createElement('div');
-    item.className = 'session-item' + (s.id === state.activeSessionId ? ' active' : '');
-    item.dataset.sid = s.id;
-    const delBtn = document.createElement('button');
-    delBtn.className = 'session-delete-btn';
-    delBtn.title = 'Delete session';
-    delBtn.textContent = '×';
-    delBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!confirm('Delete this session? This cannot be undone.')) return;
-      if (s.id === state.activeSessionId) {
-        state.messages = [];
-        state.activeSessionId = '';
-        DOM.messages.innerHTML = '';
-        hideSummaryView();
-        resetStatusline();
-      }
-      bridge.deleteSession(s.id);
-      showToast('Session deleted');
-    });
-    item.innerHTML = `<div class="session-preview">${escHtml(s.preview)}</div><div class="session-time">${relativeTime(s.timestamp)}</div>`;
-    item.appendChild(delBtn);
-    item.addEventListener('click', () => {
-      state.activeSessionId = s.id;
-      DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.sid === s.id));
-      bridge.loadSession(s.id);
-      restoreDraft();
-    });
-    DOM.sessionList.appendChild(item);
+    DOM.sessionList.appendChild(makeSessionItem(s));
   });
 }
 
