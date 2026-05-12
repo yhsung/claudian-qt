@@ -33,6 +33,12 @@ export async function listSessions(
   }
 
   const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+  // Sessions with .name but no .jsonl (brand-new sessions renamed before first message)
+  const orphanNames = new Set(
+    files.filter((f) => f.endsWith(".name") && !files.includes(f.slice(0, -5) + ".jsonl"))
+      .map((f) => f.slice(0, -5))
+  );
+
   const sessions: SessionEntry[] = [];
 
   for (const filename of jsonlFiles) {
@@ -78,6 +84,24 @@ export async function listSessions(
     }
   }
 
+
+  // Add orphan .name files (brand-new sessions renamed before first message)
+  for (const sessionId of orphanNames) {
+    try {
+      const metaRaw = await readFile(join(dir, `${sessionId}.name`), "utf8");
+      const meta = JSON.parse(metaRaw);
+      if (meta.name) {
+        sessions.push({
+          id: sessionId,
+          preview: "(new session)",
+          timestamp: new Date().toISOString(),
+          name: meta.name,
+        });
+      }
+    } catch {
+      // skip
+    }
+  }
   return sessions.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 

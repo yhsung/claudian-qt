@@ -37,6 +37,24 @@ describe("listSessions", () => {
     const sessions = await listSessions("/no/such/path", TMP);
     expect(sessions).toEqual([]);
   });
+
+  it("returns session with custom name even when .jsonl has no user content", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-named-no-content-"));
+    const cwd = "/named/no/content";
+    const sessionId = "brand-new-session";
+    const projectDir = join(home, ".claude", "projects", cwd.replace(/\//g, "-"));
+    await mkdir(projectDir, { recursive: true });
+    // Write only a .name sidecar (no .jsonl yet — user renamed before sending first message)
+    await writeFile(join(projectDir, `${sessionId}.name`), JSON.stringify({
+      name: "My Custom Session",
+      updatedAt: "2026-05-11T00:00:00.000Z",
+    }));
+
+    const sessions = await listSessions(cwd, home);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].name).toBe("My Custom Session");
+    expect(sessions[0].preview).toBe("(new session)");
+  });
 });
 
 describe("loadSessionHistory", () => {
