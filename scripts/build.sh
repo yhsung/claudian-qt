@@ -67,6 +67,16 @@ if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
   fi
 fi
 
+# ── Icon (macOS only) ─────────────────────────────────────────────────────────
+if [ "$PLATFORM" = "macos" ]; then
+  SVG="$REPO_ROOT/resources/icons/claudianqt-icon.svg"
+  ICNS="$REPO_ROOT/resources/icons/ClaudianQt.icns"
+  if [ ! -f "$ICNS" ] || [ "$SVG" -nt "$ICNS" ]; then
+    echo "Generating icon..."
+    bash "$REPO_ROOT/scripts/generate-icns.sh"
+  fi
+fi
+
 # ── Build ─────────────────────────────────────────────────────────────────────
 echo "Building..."
 if [ "$PLATFORM" = "macos" ]; then

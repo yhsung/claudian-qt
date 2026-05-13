@@ -10,6 +10,9 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets WebEngineWidgets WebChannel)
 
+set(APP_ICON_MACOS "${CMAKE_SOURCE_DIR}/resources/icons/ClaudianQt.icns")
+set_source_files_properties(${APP_ICON_MACOS} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
 qt_add_executable(ClaudianQt
     src/main.cpp
     src/mainwindow.cpp
@@ -17,6 +20,7 @@ qt_add_executable(ClaudianQt
     src/claudebridge.cpp
     src/attachmentstore.cpp
     resources/resources.qrc
+    ${APP_ICON_MACOS}
 )
 
 if(APPLE)
@@ -26,6 +30,7 @@ if(APPLE)
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.claudianqt.app"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_ICON_FILE "ClaudianQt.icns"
     )
 
     # Bundle the cocoa platform plugin and qt.conf so the app launches without QT_PLUGIN_PATH
