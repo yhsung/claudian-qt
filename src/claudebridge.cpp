@@ -305,3 +305,13 @@ void ClaudeBridge::setToolControls(const QString &allowedJson, const QString &di
         {"disallowedTools", parseList(disallowedJson)},
     });
 }
+
+void ClaudeBridge::setMcpServers(const QString &serversJson) {
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(serversJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        emit errorOccurred("Invalid MCP servers JSON.");
+        return;
+    }
+    m_daemon->sendCommand(QJsonObject{{"type", "set_mcp_servers"}, {"servers", doc.object()}});
+}

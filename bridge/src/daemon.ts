@@ -489,6 +489,10 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       state.disallowedTools = cmd.disallowedTools?.length ? cmd.disallowedTools : undefined;
       break;
 
+    case "set_mcp_servers":
+      state.mcpServers = cmd.servers as Record<string, unknown>;
+      break;
+
     case "fork_session":
       state.forkNext = true;
       break;

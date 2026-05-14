@@ -147,6 +147,16 @@
         </label>
         <button id="apply-tool-controls-btn">Apply</button>
       </div>
+      <div class="run-options-row" id="mcp-panel" style="display:none">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px">MCP Servers</div>
+        <div id="mcp-server-list"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <input type="text" id="mcp-name-input" placeholder="Name" style="width:90px">
+          <input type="text" id="mcp-command-input" placeholder="Command (e.g. npx)" style="width:100px">
+          <input type="text" id="mcp-args-input" placeholder="Args (e.g. @playwright/mcp@latest)" style="flex:1;min-width:100px">
+          <button id="mcp-add-btn">Add</button>
+        </div>
+      </div>
       <div id="input-toolbar">
         <button id="attach-btn" title="Attach images (or paste/drag)">📎</button>
         <button id="cwd-btn" title="Change working directory">~/</button>

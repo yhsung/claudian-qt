@@ -233,6 +233,12 @@ function initDOM() {
     allowedToolsInput:    document.getElementById('allowed-tools-input'),
     disallowedToolsInput: document.getElementById('disallowed-tools-input'),
     applyToolControlsBtn: document.getElementById('apply-tool-controls-btn'),
+    mcpPanel:             document.getElementById('mcp-panel'),
+    mcpServerList:        document.getElementById('mcp-server-list'),
+    mcpNameInput:         document.getElementById('mcp-name-input'),
+    mcpCmdInput:          document.getElementById('mcp-command-input'),
+    mcpArgsInput:         document.getElementById('mcp-args-input'),
+    mcpAddBtn:            document.getElementById('mcp-add-btn'),
   };
 }
 
@@ -1365,6 +1371,9 @@ function wireEvents() {
       if (DOM.toolControlsRow) {
         DOM.toolControlsRow.style.display = visible ? 'none' : '';
       }
+      if (DOM.mcpPanel) {
+        DOM.mcpPanel.style.display = visible ? 'none' : '';
+      }
       DOM.runOptsToggle.classList.toggle('run-opts-active', !visible);
     });
   }
@@ -1390,6 +1399,45 @@ function wireEvents() {
       );
     });
   }
+
+  // ── MCP Servers ────────────────────────────────────────────────────────────
+  const mcpServers = {};
+
+  function renderMcpList() {
+    if (!DOM.mcpServerList) return;
+    DOM.mcpServerList.innerHTML = '';
+    Object.entries(mcpServers).forEach(([name, cfg]) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px';
+      row.textContent = `${name}: ${cfg.command} ${(cfg.args || []).join(' ')}`;
+      const rm = document.createElement('button');
+      rm.textContent = '×';
+      rm.style.cssText = 'margin-left:8px;padding:0 6px;cursor:pointer';
+      rm.addEventListener('click', () => {
+        delete mcpServers[name];
+        renderMcpList();
+        if (bridge) bridge.setMcpServers(JSON.stringify(mcpServers));
+      });
+      row.appendChild(rm);
+      DOM.mcpServerList.appendChild(row);
+    });
+  }
+
+  if (DOM.mcpAddBtn) {
+    DOM.mcpAddBtn.addEventListener('click', () => {
+      const name    = DOM.mcpNameInput?.value.trim();
+      const command = DOM.mcpCmdInput?.value.trim();
+      const argsStr = DOM.mcpArgsInput?.value.trim();
+      if (!name || !command) return;
+      mcpServers[name] = { command, args: argsStr ? argsStr.split(/\s+/) : [] };
+      if (DOM.mcpNameInput)  DOM.mcpNameInput.value  = '';
+      if (DOM.mcpCmdInput)   DOM.mcpCmdInput.value   = '';
+      if (DOM.mcpArgsInput)  DOM.mcpArgsInput.value  = '';
+      renderMcpList();
+      if (bridge) bridge.setMcpServers(JSON.stringify(mcpServers));
+    });
+  }
+
   DOM.permModeBtn.addEventListener('click', () => {
     const idx = PERM_MODES.findIndex(m => m.value === state.permissionMode);
     syncPermMode(PERM_MODES[(idx + 1) % PERM_MODES.length].value);
