@@ -239,6 +239,12 @@ function initDOM() {
     mcpCmdInput:          document.getElementById('mcp-command-input'),
     mcpArgsInput:         document.getElementById('mcp-args-input'),
     mcpAddBtn:            document.getElementById('mcp-add-btn'),
+    agentsPanel:          document.getElementById('agents-panel'),
+    agentList:            document.getElementById('agent-list'),
+    agentNameInput:       document.getElementById('agent-name-input'),
+    agentDescInput:       document.getElementById('agent-desc-input'),
+    agentPromptInput:     document.getElementById('agent-prompt-input'),
+    agentAddBtn:          document.getElementById('agent-add-btn'),
   };
 }
 
@@ -1374,6 +1380,9 @@ function wireEvents() {
       if (DOM.mcpPanel) {
         DOM.mcpPanel.style.display = visible ? 'none' : '';
       }
+      if (DOM.agentsPanel) {
+        DOM.agentsPanel.style.display = visible ? 'none' : '';
+      }
       DOM.runOptsToggle.classList.toggle('run-opts-active', !visible);
     });
   }
@@ -1435,6 +1444,44 @@ function wireEvents() {
       if (DOM.mcpArgsInput)  DOM.mcpArgsInput.value  = '';
       renderMcpList();
       if (bridge) bridge.setMcpServers(JSON.stringify(mcpServers));
+    });
+  }
+
+  // ── Custom Agents ──────────────────────────────────────────────────────────
+  const customAgents = {};
+
+  function renderAgentList() {
+    if (!DOM.agentList) return;
+    DOM.agentList.innerHTML = '';
+    Object.entries(customAgents).forEach(([name, cfg]) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px';
+      row.textContent = `${name}: ${cfg.description}`;
+      const rm = document.createElement('button');
+      rm.textContent = '×';
+      rm.style.cssText = 'margin-left:8px;padding:0 6px;cursor:pointer';
+      rm.addEventListener('click', () => {
+        delete customAgents[name];
+        renderAgentList();
+        if (bridge) bridge.setAgents(JSON.stringify(customAgents));
+      });
+      row.appendChild(rm);
+      DOM.agentList.appendChild(row);
+    });
+  }
+
+  if (DOM.agentAddBtn) {
+    DOM.agentAddBtn.addEventListener('click', () => {
+      const name   = DOM.agentNameInput?.value.trim();
+      const desc   = DOM.agentDescInput?.value.trim();
+      const prompt = DOM.agentPromptInput?.value.trim();
+      if (!name || !prompt) return;
+      customAgents[name] = { description: desc || name, prompt };
+      if (DOM.agentNameInput)   DOM.agentNameInput.value   = '';
+      if (DOM.agentDescInput)   DOM.agentDescInput.value   = '';
+      if (DOM.agentPromptInput) DOM.agentPromptInput.value = '';
+      renderAgentList();
+      if (bridge) bridge.setAgents(JSON.stringify(customAgents));
     });
   }
 

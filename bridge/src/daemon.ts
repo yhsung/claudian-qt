@@ -493,6 +493,10 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       state.mcpServers = cmd.servers as Record<string, unknown>;
       break;
 
+    case "set_agents":
+      state.agents = cmd.agents as Record<string, unknown>;
+      break;
+
     case "fork_session":
       state.forkNext = true;
       break;

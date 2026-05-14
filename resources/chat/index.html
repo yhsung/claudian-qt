@@ -157,6 +157,16 @@
           <button id="mcp-add-btn">Add</button>
         </div>
       </div>
+      <div class="run-options-row" id="agents-panel" style="display:none">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px">Custom Agents</div>
+        <div id="agent-list"></div>
+        <div style="margin-top:6px">
+          <input type="text" id="agent-name-input" placeholder="Name (e.g. code-reviewer)" style="width:130px">
+          <input type="text" id="agent-desc-input" placeholder="Description" style="flex:1;min-width:100px">
+          <textarea id="agent-prompt-input" rows="2" placeholder="System prompt for this agent…" style="width:100%;resize:vertical;margin-top:4px"></textarea>
+          <button id="agent-add-btn" style="margin-top:4px">Add agent</button>
+        </div>
+      </div>
       <div id="input-toolbar">
         <button id="attach-btn" title="Attach images (or paste/drag)">📎</button>
         <button id="cwd-btn" title="Change working directory">~/</button>

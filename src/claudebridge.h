@@ -49,6 +49,7 @@ public slots:
     void setRunOptions(int maxTurns, double maxBudgetUsd, const QString &effort, const QString &systemPrompt);
     void setToolControls(const QString &allowedJson, const QString &disallowedJson);
     void setMcpServers(const QString &serversJson);
+    void setAgents(const QString &agentsJson);
     void forkSession();
 
 signals:

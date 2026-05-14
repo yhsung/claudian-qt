@@ -315,3 +315,13 @@ void ClaudeBridge::setMcpServers(const QString &serversJson) {
     }
     m_daemon->sendCommand(QJsonObject{{"type", "set_mcp_servers"}, {"servers", doc.object()}});
 }
+
+void ClaudeBridge::setAgents(const QString &agentsJson) {
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(agentsJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        emit errorOccurred("Invalid agents JSON.");
+        return;
+    }
+    m_daemon->sendCommand(QJsonObject{{"type", "set_agents"}, {"agents", doc.object()}});
+}
