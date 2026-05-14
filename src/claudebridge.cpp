@@ -39,6 +39,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionForked,        this, &ClaudeBridge::sessionForked);
     connect(m_daemon, &BridgeDaemon::agentNotification,   this, &ClaudeBridge::agentNotification);
     connect(m_daemon, &BridgeDaemon::rewindResult,        this, &ClaudeBridge::rewindResult);
+    connect(m_daemon, &BridgeDaemon::accountInfoReceived, this, &ClaudeBridge::accountInfoReceived);
 
     connect(m_daemon, &BridgeDaemon::resultReceived, this, [this](const QJsonObject &result) {
         if (result["is_error"].toBool()) return;
@@ -333,4 +334,8 @@ void ClaudeBridge::rewindFiles(const QString &userMessageId, bool dryRun) {
         {"userMessageId", userMessageId},
         {"dryRun",        dryRun},
     });
+}
+
+void ClaudeBridge::requestAccountInfo() {
+    m_daemon->sendCommand(QJsonObject{{"type", "request_account_info"}});
 }

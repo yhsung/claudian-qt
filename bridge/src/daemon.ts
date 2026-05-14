@@ -582,6 +582,28 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       }
       break;
     }
+
+    case "request_account_info": {
+      try {
+        const tempQuery = query({
+          prompt: (async function* () { /* empty */ })(),
+          options: {
+            cwd: state.cwd,
+            maxTurns: 0,
+            allowDangerouslySkipPermissions: true,
+          },
+        });
+        const info = await tempQuery.accountInfo();
+        emit({
+          type: "account_info",
+          email: (info as Record<string, unknown>)?.email ? String((info as Record<string, unknown>).email) : undefined,
+          plan:  (info as Record<string, unknown>)?.planName ? String((info as Record<string, unknown>).planName) : undefined,
+        });
+      } catch {
+        emit({ type: "account_info" });
+      }
+      break;
+    }
   }
 }
 

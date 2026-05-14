@@ -43,6 +43,7 @@ signals:
     void sessionForked(const QString &newSessionId);
     void agentNotification(const QString &message, const QString &notificationType);
     void rewindResult(const QString &changedJson, const QString &restoredJson, const QString &failedJson);
+    void accountInfoReceived(const QString &json);
 
 private slots:
     void onReadyRead();

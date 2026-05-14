@@ -1822,6 +1822,15 @@ function wireBridgeSignals() {
       showToast(msg);
     } catch {}
   });
+  bridge.accountInfoReceived.connect((json) => {
+    try {
+      const info = JSON.parse(json);
+      const el = document.getElementById('account-status');
+      if (el && (info.email || info.plan)) {
+        el.textContent = [info.email, info.plan].filter(Boolean).join(' · ');
+      }
+    } catch {}
+  });
   syncCwd(bridge.cwd);
   syncModel(bridge.model);
   syncStatuslineModel(bridge.model);
@@ -1829,6 +1838,7 @@ function wireBridgeSignals() {
   syncPermMode(state.permissionMode);
   bridge.requestSessions();
   bridge.requestModels();
+  bridge.requestAccountInfo();
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────

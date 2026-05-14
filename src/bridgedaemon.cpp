@@ -179,6 +179,10 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
                                                     QString::fromUtf8(QJsonDocument(event["changedFiles"].toArray()).toJson(QJsonDocument::Compact)),
                                                     QString::fromUtf8(QJsonDocument(event["restoredFiles"].toArray()).toJson(QJsonDocument::Compact)),
                                                     QString::fromUtf8(QJsonDocument(event["failedFiles"].toArray()).toJson(QJsonDocument::Compact)));
+    else if (type == "account_info")            emit accountInfoReceived(QString::fromUtf8(QJsonDocument(QJsonObject{
+                                                    {"email", event["email"]},
+                                                    {"plan",  event["plan"]}
+                                                }).toJson(QJsonDocument::Compact)));
 }
 
 void BridgeDaemon::onDaemonFinished(int exitCode, QProcess::ExitStatus) {
