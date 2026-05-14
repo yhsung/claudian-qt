@@ -48,6 +48,7 @@ public slots:
     void setThinking(const QString &thinkingType, int budgetTokens = 8000);
     void setRunOptions(int maxTurns, double maxBudgetUsd, const QString &effort, const QString &systemPrompt);
     void setToolControls(const QString &allowedJson, const QString &disallowedJson);
+    void forkSession();
 
 signals:
     void textReady(const QString &text);
@@ -79,6 +80,7 @@ signals:
     void promptSuggestion(const QString &suggestion);
     void compactBoundary(const QString &json);
     void modelsListed(const QString &json);
+    void sessionForked(const QString &newSessionId);
 
 private:
     BridgeDaemon    *m_daemon;

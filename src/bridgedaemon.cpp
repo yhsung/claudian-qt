@@ -173,6 +173,7 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
                                                     {"durationMs", event["durationMs"]},
                                                     {"trigger",    event["trigger"]}
                                                 }).toJson(QJsonDocument::Compact)));
+    else if (type == "session_forked")          emit sessionForked(event["newSessionId"].toString());
 }
 
 void BridgeDaemon::onDaemonFinished(int exitCode, QProcess::ExitStatus) {

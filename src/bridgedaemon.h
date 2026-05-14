@@ -40,6 +40,7 @@ signals:
     void promptSuggestion(const QString &suggestion);
     void compactBoundary(const QString &json);
     void modelsListed(const QString &json);
+    void sessionForked(const QString &newSessionId);
 
 private slots:
     void onReadyRead();

@@ -1338,6 +1338,9 @@ function wireEvents() {
     bridge.newSession();
     clearDraft();
   });
+  document.getElementById('fork-session-btn')?.addEventListener('click', () => {
+    if (bridge && state.activeSessionId) bridge.forkSession();
+  });
   DOM.modelBtn.addEventListener('click', e => {
     e.stopPropagation();
     if (DOM.modelDropdown.classList.contains('open')) {
@@ -1705,6 +1708,10 @@ function wireBridgeSignals() {
     sep.textContent = label;
     DOM.messages.appendChild(sep);
     DOM.messages.scrollTop = DOM.messages.scrollHeight;
+  });
+  bridge.sessionForked.connect((newSessionId) => {
+    bridge.requestSessions();
+    showToast('Session forked — continuing from here in a new session.');
   });
   syncCwd(bridge.cwd);
   syncModel(bridge.model);

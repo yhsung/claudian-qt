@@ -460,6 +460,10 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       state.disallowedTools = cmd.disallowedTools?.length ? cmd.disallowedTools : undefined;
       break;
 
+    case "fork_session":
+      state.forkNext = true;
+      break;
+
     case "request_models": {
       try {
         const tempQuery = query({

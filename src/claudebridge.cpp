@@ -36,6 +36,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::promptSuggestion,     this, &ClaudeBridge::promptSuggestion);
     connect(m_daemon, &BridgeDaemon::compactBoundary,      this, &ClaudeBridge::compactBoundary);
     connect(m_daemon, &BridgeDaemon::modelsListed,         this, &ClaudeBridge::modelsListed);
+    connect(m_daemon, &BridgeDaemon::sessionForked,        this, &ClaudeBridge::sessionForked);
 
     connect(m_daemon, &BridgeDaemon::resultReceived, this, [this](const QJsonObject &result) {
         if (result["is_error"].toBool()) return;
@@ -285,6 +286,10 @@ void ClaudeBridge::setRunOptions(int maxTurns, double maxBudgetUsd,
     if (!effort.isEmpty())       cmd["effort"]        = effort;
     cmd["systemPrompt"] = systemPrompt;
     m_daemon->sendCommand(cmd);
+}
+
+void ClaudeBridge::forkSession() {
+    m_daemon->sendCommand(QJsonObject{{"type", "fork_session"}});
 }
 
 void ClaudeBridge::setToolControls(const QString &allowedJson, const QString &disallowedJson) {
