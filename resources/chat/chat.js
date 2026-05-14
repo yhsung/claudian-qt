@@ -466,26 +466,21 @@ function appendThinkingChunk(text) {
 
 // ── Code block copy buttons ────────────────────────────────────────────────
 function copyToClipboard(text) {
-  console.log('[copyToClipboard] text length:', text.length, 'first 50:', text.slice(0, 50));
-  navigator.clipboard.writeText(text).then(() => {
-    console.log('[copyToClipboard] success');
-  }).catch(err => {
-    console.error('[copyToClipboard] clipboard API failed:', err);
-    // Fallback
+  // Use C++ bridge clipboard for reliable access across Qt WebEngine
+  if (bridge) {
+    try { bridge.copyToClipboard(text); } catch {}
+    return;
+  }
+  // Fallback: Web Clipboard API
+  navigator.clipboard.writeText(text).catch(() => {
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;width:1px;height:1px';
     document.body.appendChild(ta);
     ta.focus();
     ta.select();
-    try {
-      const ok = document.execCommand('copy');
-      console.log('[copyToClipboard] execCommand result:', ok);
-    } catch(e) {
-      console.error('[copyToClipboard] execCommand failed:', e);
-    } finally {
-      document.body.removeChild(ta);
-    }
+    try { document.execCommand('copy'); } catch {}
+    document.body.removeChild(ta);
   });
 }
 
@@ -1763,7 +1758,7 @@ function wireBridgeSignals() {
   });
   bridge.sessionReady.connect(id => {
     state.activeSessionId = id;
-    if (!id) resetStatusline();
+    if (!id) { resetStatusline(); } else { bridge.requestSessions(); }
     restoreDraft();
   });
   bridge.sessionsListed.connect(json => { try { renderSessions(JSON.parse(json)); } catch {} });

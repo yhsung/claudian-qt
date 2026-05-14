@@ -21,6 +21,10 @@ MainWindow::MainWindow(QWidget *parent)
         QWebEngineSettings::LocalContentCanAccessFileUrls,
         true
     );
+    m_webView->settings()->setAttribute(
+        QWebEngineSettings::JavascriptCanAccessClipboard,
+        true
+    );
 
     m_webView->load(QUrl("qrc:/chat/index.html"));
 

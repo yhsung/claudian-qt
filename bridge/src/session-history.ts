@@ -123,37 +123,29 @@ export async function listSessions(
   try {
     const allSessions = await sdkListSessions({});
     // SDK returns all sessions across all projects; filter to the requested cwd
-    const filtered = allSessions.filter((s) => (s as { cwd?: string }).cwd === cwd);
-    if (filtered.length === 0 && allSessions.length === 0) {
-      // SDK returned nothing at all — fall through to file-based reading
-      throw new Error("empty SDK result");
+    const filtered = allSessions.filter((s) => s.cwd === cwd);
+    // If the filter produced results, use the SDK's richer metadata
+    if (filtered.length > 0) {
+      return filtered.map((s) => {
+        const timestamp = s.lastModified
+          ? new Date(s.lastModified).toISOString()
+          : s.createdAt
+          ? new Date(s.createdAt).toISOString()
+          : "";
+        const entry: SessionEntry = {
+          id: s.sessionId,
+          preview: (s.firstPrompt ?? s.summary ?? "(no preview)").slice(0, 120),
+          timestamp,
+        };
+        if (s.customTitle) entry.name = s.customTitle;
+        return entry;
+      }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     }
-    return filtered.map((s) => {
-      const session = s as {
-        sessionId: string;
-        firstPrompt?: string;
-        summary?: string;
-        customTitle?: string;
-        lastModified?: number;
-        createdAt?: number;
-      };
-      const timestamp = session.lastModified
-        ? new Date(session.lastModified).toISOString()
-        : session.createdAt
-        ? new Date(session.createdAt).toISOString()
-        : "";
-      const entry: SessionEntry = {
-        id: session.sessionId,
-        preview: (session.firstPrompt ?? session.summary ?? "(no preview)").slice(0, 120),
-        timestamp,
-      };
-      if (session.customTitle) entry.name = session.customTitle;
-      return entry;
-    }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    // SDK returned nothing or cwd mismatch — fall through to file-based reading
   } catch {
     // SDK unavailable or errored — fall back to manual JSONL parsing
-    return listSessionsFromFiles(cwd, home);
   }
+  return listSessionsFromFiles(cwd, home);
 }
 
 export async function loadSessionHistory(
