@@ -432,6 +432,7 @@ mark.search-highlight.current {
 #perm-mode-btn:hover { border-color: var(--accent); }
 #perm-mode-btn.perm-smart { border-color: var(--green); color: var(--green); background: rgba(48,209,88,0.08); }
 #perm-mode-btn.perm-auto  { border-color: var(--accent); color: var(--accent); background: rgba(124,106,247,0.08); }
+#perm-mode-btn.perm-bypassed { opacity: 0.45; cursor: default; pointer-events: none; border-color: var(--orange); color: var(--orange); }
 #yolo-btn { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-sm); padding: 4px 10px; font-size: 11px; cursor: pointer; }
 #yolo-btn.yolo-on { border-color: var(--orange); color: var(--orange); background: rgba(255,159,10,0.08); }
 #send-btn { margin-left: auto; background: var(--accent); border: none; color: #fff; border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; display: flex; align-items: center; }

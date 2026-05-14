@@ -1174,6 +1174,15 @@ function syncModel(val) {
 function syncYolo(enabled) {
   state.yolo = !!enabled;
   DOM.yoloBtn.classList.toggle('yolo-on', state.yolo);
+  DOM.permModeBtn.classList.toggle('perm-bypassed', state.yolo);
+  DOM.permModeBtn.disabled = state.yolo;
+  if (state.yolo) {
+    DOM.permModeBtn.textContent = 'Bypass';
+    DOM.permModeBtn.title = 'All permissions bypassed (YOLO on)';
+  } else {
+    DOM.permModeBtn.textContent = PERM_MODES.find(m => m.value === state.permissionMode)?.label || 'Safe';
+    DOM.permModeBtn.title = PERM_MODES.find(m => m.value === state.permissionMode)?.title || '';
+  }
 }
 
 const PERM_MODES = [
@@ -1185,13 +1194,15 @@ const PERM_MODES = [
 function syncPermMode(mode) {
   state.permissionMode = mode;
   localStorage.setItem('permissionMode', mode);
+  if (bridge) bridge.setPermissionMode(mode);
+  // When YOLO is on, the button shows "Bypass" — skip DOM label updates
+  if (state.yolo) return;
   const found = PERM_MODES.find(m => m.value === mode) || PERM_MODES[0];
   DOM.permModeBtn.textContent = found.label;
   DOM.permModeBtn.title = found.title;
   DOM.permModeBtn.dataset.mode = mode;
   DOM.permModeBtn.classList.toggle('perm-smart', mode === 'acceptEdits');
   DOM.permModeBtn.classList.toggle('perm-auto', mode === 'auto');
-  if (bridge) bridge.setPermissionMode(mode);
 }
 
 function syncCwd(path) {

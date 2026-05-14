@@ -165,19 +165,12 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
   try {
     const userMessage = await buildUserMessage(prompt, attachments);
 
-    // Check if we have a pre-warmed query and this is a fresh session
-    // If a warm query is available but we can't use it (resuming a session),
-    // close it to avoid leaking the pre-warmed subprocess.
-    let warm: WarmQuery | null = null;
+    // Always use cold-start path — close warm query if present
     if (warmQueryPromise) {
-      if (!state.sessionId) {
-        warm = await warmQueryPromise;
-      } else {
-        // Session is active — discard the warm query and close its subprocess
-        warmQueryPromise.then(w => w?.close()).catch(() => {});
-      }
+      warmQueryPromise.then(w => w?.close()).catch(() => {});
       warmQueryPromise = null;
     }
+    scheduleWarmup();
 
     const wasForking = state.forkNext;
     state.forkNext = false;
@@ -212,14 +205,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
 
     let queryResult: ReturnType<typeof query>;
 
-    if (warm && !state.sessionId) {
-      queryResult = warm.query(
-        (async function* () { yield userMessage; })()
-      );
-      scheduleWarmup();
-    } else {
-      if (warm) warm.close();
-      queryResult = query({
+    queryResult = query({
         prompt: (async function* () { yield userMessage; })(),
         options: {
           abortController,
@@ -237,8 +223,6 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
           ...buildRunOptions(),
         },
       });
-    }
-    activeQuery = queryResult;
 
     for await (const message of queryResult) {
       if (abortController.signal.aborted) break;
@@ -417,6 +401,12 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       state.sessionId          = "";
       state.turnIndex          = -1;
       state.sessionPermissions = {};
+      // Cancel any in-flight warm query — it was started with the old cwd
+      if (warmQueryPromise) {
+        warmQueryPromise.then(w => w?.close()).catch(() => {});
+        warmQueryPromise = null;
+      }
+      scheduleWarmup();
       break;
 
     case "set_model":
