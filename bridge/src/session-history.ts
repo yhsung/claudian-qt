@@ -3,6 +3,10 @@ import * as fs from "fs";
 import { readdir, readFile, writeFile, mkdir } from "fs/promises";
 import { join, dirname } from "path";
 import * as os from "os";
+import {
+  listSessions as sdkListSessions,
+  renameSession as sdkRenameSession,
+} from "@anthropic-ai/claude-agent-sdk";
 import { attachmentRoot, loadAttachmentManifest, rehydrateAttachment } from "./attachment-store.js";
 import type { HistoryAttachment, HistoryTurn } from "./protocol.js";
 
@@ -20,9 +24,10 @@ function claudeProjectDir(cwd: string, home = os.homedir()): string {
   return join(home, ".claude", "projects", cwd.replace(/\//g, "-"));
 }
 
-export async function listSessions(
+/** List sessions from JSONL files directly (used as fallback or in test mode). */
+async function listSessionsFromFiles(
   cwd: string,
-  home = os.homedir()
+  home: string,
 ): Promise<SessionEntry[]> {
   const dir = claudeProjectDir(cwd, home);
   let files: string[];
@@ -35,7 +40,8 @@ export async function listSessions(
   const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
   // Sessions with .name but no .jsonl (brand-new sessions renamed before first message)
   const orphanNames = new Set(
-    files.filter((f) => f.endsWith(".name") && !files.includes(f.slice(0, -5) + ".jsonl"))
+    files
+      .filter((f) => f.endsWith(".name") && !files.includes(f.slice(0, -5) + ".jsonl"))
       .map((f) => f.slice(0, -5))
   );
 
@@ -74,7 +80,7 @@ export async function listSessions(
     if (preview) {
       const entry: SessionEntry = { id: sessionId, preview, timestamp };
       try {
-        const metaRaw = await readFile(join(dir, filename.replace('.jsonl', '.name')), "utf8");
+        const metaRaw = await readFile(join(dir, filename.replace(".jsonl", ".name")), "utf8");
         const meta = JSON.parse(metaRaw);
         entry.name = meta.name || undefined;
       } catch {
@@ -83,7 +89,6 @@ export async function listSessions(
       sessions.push(entry);
     }
   }
-
 
   // Add orphan .name files (brand-new sessions renamed before first message)
   for (const sessionId of orphanNames) {
@@ -103,6 +108,52 @@ export async function listSessions(
     }
   }
   return sessions.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+}
+
+export async function listSessions(
+  cwd: string,
+  home = os.homedir()
+): Promise<SessionEntry[]> {
+  // When home is overridden (e.g. in tests), use manual JSONL reading directly.
+  // Otherwise, try the SDK first (it has richer metadata) and fall back to JSONL.
+  if (home !== os.homedir()) {
+    return listSessionsFromFiles(cwd, home);
+  }
+
+  try {
+    const allSessions = await sdkListSessions({});
+    // SDK returns all sessions across all projects; filter to the requested cwd
+    const filtered = allSessions.filter((s) => (s as { cwd?: string }).cwd === cwd);
+    if (filtered.length === 0 && allSessions.length === 0) {
+      // SDK returned nothing at all — fall through to file-based reading
+      throw new Error("empty SDK result");
+    }
+    return filtered.map((s) => {
+      const session = s as {
+        sessionId: string;
+        firstPrompt?: string;
+        summary?: string;
+        customTitle?: string;
+        lastModified?: number;
+        createdAt?: number;
+      };
+      const timestamp = session.lastModified
+        ? new Date(session.lastModified).toISOString()
+        : session.createdAt
+        ? new Date(session.createdAt).toISOString()
+        : "";
+      const entry: SessionEntry = {
+        id: session.sessionId,
+        preview: (session.firstPrompt ?? session.summary ?? "(no preview)").slice(0, 120),
+        timestamp,
+      };
+      if (session.customTitle) entry.name = session.customTitle;
+      return entry;
+    }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  } catch {
+    // SDK unavailable or errored — fall back to manual JSONL parsing
+    return listSessionsFromFiles(cwd, home);
+  }
 }
 
 export async function loadSessionHistory(
@@ -197,13 +248,37 @@ export async function countUserTurns(
   return turns.filter((t) => t.role === "user").length;
 }
 
+/** Write a .name sidecar file directly (used as fallback or in test mode). */
+async function renameSessionFile(
+  cwd: string,
+  sessionId: string,
+  name: string,
+  home: string,
+): Promise<void> {
+  const metaPath = join(claudeProjectDir(cwd, home), `${sessionId}.name`);
+  await mkdir(dirname(metaPath), { recursive: true });
+  await writeFile(metaPath, JSON.stringify({ name, updatedAt: new Date().toISOString() }), "utf8");
+}
+
 export async function renameSession(
   cwd: string,
   sessionId: string,
   name: string,
   home = os.homedir()
 ): Promise<void> {
-  const metaPath = join(claudeProjectDir(cwd, home), `${sessionId}.name`);
-  await mkdir(dirname(metaPath), { recursive: true });
-  await writeFile(metaPath, JSON.stringify({ name, updatedAt: new Date().toISOString() }), "utf8");
+  // When home is overridden (e.g. in tests), write the .name file directly.
+  // Otherwise, try the SDK first and fall back to file writing.
+  if (home !== os.homedir()) {
+    return renameSessionFile(cwd, sessionId, name, home);
+  }
+
+  try {
+    // SDK signature: renameSession(sessionId, name, options?)
+    await sdkRenameSession(sessionId, name);
+    // Also write the .name sidecar for local preview metadata (customTitle not always in SDK)
+    await renameSessionFile(cwd, sessionId, name, home);
+  } catch {
+    // SDK unavailable or errored — fall back to writing .name file directly
+    await renameSessionFile(cwd, sessionId, name, home);
+  }
 }

@@ -28,6 +28,7 @@ signals:
                              const QString &inputJson, const QString &title,
                              const QString &description, const QString &displayName,
                              const QString &decisionReason, const QString &blockedPath);
+    void askUserQuestion(const QString &requestId, const QString &questionsJson);
     void turnFinished();
     void errorOccurred(const QString &msg);
     void sessionsListed(const QString &json);
@@ -38,6 +39,11 @@ signals:
     void fastModeStateChanged(const QString &state);
     void promptSuggestion(const QString &suggestion);
     void compactBoundary(const QString &json);
+    void modelsListed(const QString &json);
+    void sessionForked(const QString &newSessionId);
+    void agentNotification(const QString &message, const QString &notificationType);
+    void rewindResult(const QString &changedJson, const QString &restoredJson, const QString &failedJson);
+    void accountInfoReceived(const QString &json);
 
 private slots:
     void onReadyRead();

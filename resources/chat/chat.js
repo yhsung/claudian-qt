@@ -220,6 +220,31 @@ function initDOM() {
     scrollToBottomBtn:    document.getElementById('scroll-to-bottom'),
     rateLimitBanner:      document.getElementById('rate-limit-banner'),
     rateLimitText:        document.getElementById('rate-limit-text'),
+    thinkingSelect:       document.getElementById('thinking-select'),
+    runOptsToggle:        document.getElementById('run-opts-toggle'),
+    runOptionsRow:        document.getElementById('run-options-row'),
+    systemPromptRow:      document.getElementById('system-prompt-row'),
+    maxTurnsInput:        document.getElementById('max-turns-input'),
+    maxBudgetInput:       document.getElementById('max-budget-input'),
+    effortSelect:         document.getElementById('effort-select'),
+    systemPromptInput:    document.getElementById('system-prompt-input'),
+    applyRunOptsBtn:      document.getElementById('apply-run-options-btn'),
+    toolControlsRow:      document.getElementById('tool-controls-row'),
+    allowedToolsInput:    document.getElementById('allowed-tools-input'),
+    disallowedToolsInput: document.getElementById('disallowed-tools-input'),
+    applyToolControlsBtn: document.getElementById('apply-tool-controls-btn'),
+    mcpPanel:             document.getElementById('mcp-panel'),
+    mcpServerList:        document.getElementById('mcp-server-list'),
+    mcpNameInput:         document.getElementById('mcp-name-input'),
+    mcpCmdInput:          document.getElementById('mcp-command-input'),
+    mcpArgsInput:         document.getElementById('mcp-args-input'),
+    mcpAddBtn:            document.getElementById('mcp-add-btn'),
+    agentsPanel:          document.getElementById('agents-panel'),
+    agentList:            document.getElementById('agent-list'),
+    agentNameInput:       document.getElementById('agent-name-input'),
+    agentDescInput:       document.getElementById('agent-desc-input'),
+    agentPromptInput:     document.getElementById('agent-prompt-input'),
+    agentAddBtn:          document.getElementById('agent-add-btn'),
   };
 }
 
@@ -1134,6 +1159,17 @@ function buildModelDropdown() {
   });
 }
 
+function populateModelPicker(models) {
+  if (!models || !models.length) return;
+  // Keep the 'Default' entry and replace the rest with SDK-provided models
+  MODELS.length = 1; // keep index 0 (Default)
+  models.forEach(m => {
+    if (m.id) MODELS.push({ value: m.id, label: m.displayName || m.id });
+  });
+  buildModelDropdown();
+  syncModel(state.model);
+}
+
 function syncModel(val) {
   state.model = val;
   const found = MODELS.find(m => m.value === val || (m.value && val && val.toLowerCase().includes(m.value)));
@@ -1314,6 +1350,9 @@ function wireEvents() {
     bridge.newSession();
     clearDraft();
   });
+  document.getElementById('fork-session-btn')?.addEventListener('click', () => {
+    if (bridge && state.activeSessionId) bridge.forkSession();
+  });
   DOM.modelBtn.addEventListener('click', e => {
     e.stopPropagation();
     if (DOM.modelDropdown.classList.contains('open')) {
@@ -1325,6 +1364,127 @@ function wireEvents() {
   document.addEventListener('click', () => DOM.modelDropdown.classList.remove('open'));
   DOM.modelDropdown.addEventListener('click', e => e.stopPropagation());
   DOM.yoloBtn.addEventListener('click', () => { const v = !state.yolo; if (bridge) bridge.setYolo(v); syncYolo(v); });
+  if (DOM.thinkingSelect) {
+    DOM.thinkingSelect.addEventListener('change', () => {
+      if (bridge) bridge.setThinking(DOM.thinkingSelect.value, 8000);
+    });
+  }
+  if (DOM.runOptsToggle) {
+    DOM.runOptsToggle.addEventListener('click', () => {
+      const visible = DOM.runOptionsRow.style.display !== 'none';
+      DOM.runOptionsRow.style.display = visible ? 'none' : '';
+      DOM.systemPromptRow.style.display = visible ? 'none' : '';
+      if (DOM.toolControlsRow) {
+        DOM.toolControlsRow.style.display = visible ? 'none' : '';
+      }
+      if (DOM.mcpPanel) {
+        DOM.mcpPanel.style.display = visible ? 'none' : '';
+      }
+      if (DOM.agentsPanel) {
+        DOM.agentsPanel.style.display = visible ? 'none' : '';
+      }
+      DOM.runOptsToggle.classList.toggle('run-opts-active', !visible);
+    });
+  }
+  if (DOM.applyRunOptsBtn) {
+    DOM.applyRunOptsBtn.addEventListener('click', () => {
+      if (!bridge) return;
+      const maxTurns   = parseInt(DOM.maxTurnsInput?.value || '0', 10) || 0;
+      const maxBudget  = parseFloat(DOM.maxBudgetInput?.value || '0') || 0;
+      const effort     = DOM.effortSelect?.value || '';
+      const sysPrompt  = DOM.systemPromptInput?.value?.trim() || '';
+      bridge.setRunOptions(maxTurns, maxBudget, effort, sysPrompt);
+    });
+  }
+  if (DOM.applyToolControlsBtn) {
+    DOM.applyToolControlsBtn.addEventListener('click', () => {
+      if (!bridge) return;
+      const parseTools = (s) => JSON.stringify(
+        (s || '').split(',').map(t => t.trim()).filter(Boolean)
+      );
+      bridge.setToolControls(
+        parseTools(DOM.allowedToolsInput?.value),
+        parseTools(DOM.disallowedToolsInput?.value)
+      );
+    });
+  }
+
+  // ── MCP Servers ────────────────────────────────────────────────────────────
+  const mcpServers = {};
+
+  function renderMcpList() {
+    if (!DOM.mcpServerList) return;
+    DOM.mcpServerList.innerHTML = '';
+    Object.entries(mcpServers).forEach(([name, cfg]) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px';
+      row.textContent = `${name}: ${cfg.command} ${(cfg.args || []).join(' ')}`;
+      const rm = document.createElement('button');
+      rm.textContent = '×';
+      rm.style.cssText = 'margin-left:8px;padding:0 6px;cursor:pointer';
+      rm.addEventListener('click', () => {
+        delete mcpServers[name];
+        renderMcpList();
+        if (bridge) bridge.setMcpServers(JSON.stringify(mcpServers));
+      });
+      row.appendChild(rm);
+      DOM.mcpServerList.appendChild(row);
+    });
+  }
+
+  if (DOM.mcpAddBtn) {
+    DOM.mcpAddBtn.addEventListener('click', () => {
+      const name    = DOM.mcpNameInput?.value.trim();
+      const command = DOM.mcpCmdInput?.value.trim();
+      const argsStr = DOM.mcpArgsInput?.value.trim();
+      if (!name || !command) return;
+      mcpServers[name] = { command, args: argsStr ? argsStr.split(/\s+/) : [] };
+      if (DOM.mcpNameInput)  DOM.mcpNameInput.value  = '';
+      if (DOM.mcpCmdInput)   DOM.mcpCmdInput.value   = '';
+      if (DOM.mcpArgsInput)  DOM.mcpArgsInput.value  = '';
+      renderMcpList();
+      if (bridge) bridge.setMcpServers(JSON.stringify(mcpServers));
+    });
+  }
+
+  // ── Custom Agents ──────────────────────────────────────────────────────────
+  const customAgents = {};
+
+  function renderAgentList() {
+    if (!DOM.agentList) return;
+    DOM.agentList.innerHTML = '';
+    Object.entries(customAgents).forEach(([name, cfg]) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px';
+      row.textContent = `${name}: ${cfg.description}`;
+      const rm = document.createElement('button');
+      rm.textContent = '×';
+      rm.style.cssText = 'margin-left:8px;padding:0 6px;cursor:pointer';
+      rm.addEventListener('click', () => {
+        delete customAgents[name];
+        renderAgentList();
+        if (bridge) bridge.setAgents(JSON.stringify(customAgents));
+      });
+      row.appendChild(rm);
+      DOM.agentList.appendChild(row);
+    });
+  }
+
+  if (DOM.agentAddBtn) {
+    DOM.agentAddBtn.addEventListener('click', () => {
+      const name   = DOM.agentNameInput?.value.trim();
+      const desc   = DOM.agentDescInput?.value.trim();
+      const prompt = DOM.agentPromptInput?.value.trim();
+      if (!name || !prompt) return;
+      customAgents[name] = { description: desc || name, prompt };
+      if (DOM.agentNameInput)   DOM.agentNameInput.value   = '';
+      if (DOM.agentDescInput)   DOM.agentDescInput.value   = '';
+      if (DOM.agentPromptInput) DOM.agentPromptInput.value = '';
+      renderAgentList();
+      if (bridge) bridge.setAgents(JSON.stringify(customAgents));
+    });
+  }
+
   DOM.permModeBtn.addEventListener('click', () => {
     const idx = PERM_MODES.findIndex(m => m.value === state.permissionMode);
     syncPermMode(PERM_MODES[(idx + 1) % PERM_MODES.length].value);
@@ -1448,6 +1608,84 @@ function wireEvents() {
   });
 }
 
+function onAskUserQuestion(requestId, questions) {
+  const card = document.createElement('div');
+  card.className = 'ask-question-card';
+  card.dataset.requestId = requestId;
+
+  const answers = {};
+
+  questions.forEach(q => {
+    const section = document.createElement('div');
+    section.className = 'ask-question-section';
+
+    const header = document.createElement('div');
+    header.className = 'ask-question-header';
+    header.textContent = q.header ? `${q.header}: ${q.question}` : q.question;
+    section.appendChild(header);
+
+    const chips = document.createElement('div');
+    chips.className = 'ask-chips';
+    let otherInput;
+
+    q.options.forEach(opt => {
+      const chip = document.createElement('button');
+      chip.className = 'ask-chip';
+      chip.textContent = opt.label;
+      chip.title = opt.description || '';
+      chip.addEventListener('click', () => {
+        if (q.multiSelect) {
+          chip.classList.toggle('ask-chip--selected');
+          answers[q.question] = Array.from(chips.querySelectorAll('.ask-chip--selected'))
+            .map(c => c.textContent);
+        } else {
+          chips.querySelectorAll('.ask-chip').forEach(c => c.classList.remove('ask-chip--selected'));
+          chip.classList.add('ask-chip--selected');
+          answers[q.question] = opt.label;
+          if (otherInput) otherInput.value = '';
+        }
+      });
+      chips.appendChild(chip);
+    });
+
+    otherInput = document.createElement('input');
+    otherInput.type = 'text';
+    otherInput.className = 'ask-other-input';
+    otherInput.placeholder = 'Or type your own answer…';
+    otherInput.addEventListener('input', () => {
+      if (otherInput.value.trim()) {
+        chips.querySelectorAll('.ask-chip').forEach(c => c.classList.remove('ask-chip--selected'));
+        answers[q.question] = otherInput.value.trim();
+      } else {
+        delete answers[q.question];
+      }
+    });
+
+    section.appendChild(chips);
+    section.appendChild(otherInput);
+    card.appendChild(section);
+  });
+
+  const submitBtn = document.createElement('button');
+  submitBtn.className = 'ask-submit-btn';
+  submitBtn.textContent = 'Send answers';
+  submitBtn.addEventListener('click', () => {
+    questions.forEach(q => {
+      if (answers[q.question] === undefined && q.options.length > 0) {
+        answers[q.question] = q.options[0].label;
+      }
+    });
+    bridge.respondToAskUser(requestId, JSON.stringify(answers));
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sent ✓';
+    card.classList.add('ask-question-card--done');
+  });
+
+  card.appendChild(submitBtn);
+  DOM.messages.appendChild(card);
+  DOM.messages.scrollTop = DOM.messages.scrollHeight;
+}
+
 function wireBridgeSignals() {
   bridge.textReady.connect(text => appendToken(text));
   bridge.thinkingChunk.connect(text => appendThinkingChunk(text));
@@ -1505,6 +1743,9 @@ function wireBridgeSignals() {
   bridge.permissionRequested.connect((requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath) => {
     showPermissionDialog(requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath);
   });
+  bridge.askUserQuestion.connect((requestId, questionsJson) => {
+    onAskUserQuestion(requestId, JSON.parse(questionsJson));
+  });
   bridge.turnComplete.connect(() => {
     dismissPermissionDialog();
     if (state.streaming) endStreaming();
@@ -1548,6 +1789,9 @@ function wireBridgeSignals() {
       pending.reject(e);
     }
   });
+  bridge.modelsListed.connect(json => {
+    try { populateModelPicker(JSON.parse(json)); } catch {}
+  });
   bridge.usageUpdated.connect(json => onUsageUpdated(json));
   bridge.compactBoundary.connect(json => {
     const data = JSON.parse(json);
@@ -1560,12 +1804,41 @@ function wireBridgeSignals() {
     DOM.messages.appendChild(sep);
     DOM.messages.scrollTop = DOM.messages.scrollHeight;
   });
+  bridge.sessionForked.connect((newSessionId) => {
+    bridge.requestSessions();
+    showToast('Session forked — continuing from here in a new session.');
+  });
+  bridge.agentNotification.connect((message, notificationType) => {
+    if (!message || notificationType === 'subagent_stop') return;
+    showToast(`Claude: ${message}`);
+  });
+  bridge.rewindResult.connect((changedJson, restoredJson, failedJson) => {
+    try {
+      const restored = JSON.parse(restoredJson);
+      const failed   = JSON.parse(failedJson);
+      const msg = failed.length
+        ? `Rewound ${restored.length} file(s). Failed: ${failed.join(', ')}`
+        : `Rewound ${restored.length} file(s) successfully.`;
+      showToast(msg);
+    } catch {}
+  });
+  bridge.accountInfoReceived.connect((json) => {
+    try {
+      const info = JSON.parse(json);
+      const el = document.getElementById('account-status');
+      if (el && (info.email || info.plan)) {
+        el.textContent = [info.email, info.plan].filter(Boolean).join(' · ');
+      }
+    } catch {}
+  });
   syncCwd(bridge.cwd);
   syncModel(bridge.model);
   syncStatuslineModel(bridge.model);
   syncYolo(bridge.yolo);
   syncPermMode(state.permissionMode);
   bridge.requestSessions();
+  bridge.requestModels();
+  bridge.requestAccountInfo();
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────

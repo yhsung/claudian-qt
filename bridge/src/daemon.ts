@@ -1,13 +1,13 @@
 import * as readline from "readline";
 import * as os from "os";
-import { query, AbortError } from "@anthropic-ai/claude-agent-sdk";
-import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
+import { query, startup, AbortError } from "@anthropic-ai/claude-agent-sdk";
+import type { CanUseTool, HookCallback, HookCallbackMatcher, HookEvent, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
 import { listSessions, loadSessionHistory, renameSession } from "./session-history.js";
 import { unlink } from "fs/promises";
 import { join } from "path";
-import type { DaemonCommand, DaemonEvent, OutboundAttachment } from "./protocol.js";
+import type { DaemonCommand, DaemonEvent, OutboundAttachment, AskUserQuestionItem } from "./protocol.js";
 
 function emit(event: DaemonEvent): void {
   process.stdout.write(JSON.stringify(event) + "\n");
@@ -21,12 +21,38 @@ const state = {
   sessionId:          "",
   turnIndex:          -1,
   sessionPermissions: {} as Record<string, boolean>,
+  // New fields for Task 4+:
+  thinking:           "disabled" as "disabled" | "adaptive" | "enabled",
+  thinkingBudget:     8000,
+  effort:             undefined as "low" | "medium" | "high" | "xhigh" | "max" | undefined,
+  maxTurns:           undefined as number | undefined,
+  maxBudgetUsd:       undefined as number | undefined,
+  systemPrompt:       undefined as string | undefined,
+  allowedTools:       undefined as string[] | undefined,
+  disallowedTools:    undefined as string[] | undefined,
+  mcpServers:         {} as Record<string, unknown>,
+  agents:             {} as Record<string, unknown>,
+  forkNext:           false,
 };
 
 let currentAbort: AbortController | null = null;
+let warmQueryPromise: Promise<WarmQuery | null> | null = null;
+let activeQuery: ReturnType<typeof query> | null = null;
 
 // Pending permission promises keyed by requestId
-const pendingPermissions = new Map<string, { resolve: (result: PermissionResult) => void; toolName: string }>();
+const pendingPermissions = new Map<string, {
+  resolve: (result: PermissionResult) => void;
+  toolName: string;
+  originalInput?: Record<string, unknown>;
+}>();
+
+function scheduleWarmup(): void {
+  warmQueryPromise = startup({
+    options: { cwd: state.cwd },
+    initializeTimeoutMs: 12000,
+  }).catch(() => null);
+}
+scheduleWarmup();
 
 // Build a canUseTool callback for a given send invocation.
 // Must always be provided so the SDK adds --permission-prompt-tool stdio to the CLI;
@@ -39,6 +65,29 @@ function makeCanUseTool(yoloMode: boolean): CanUseTool {
         resolve({ behavior: "deny", message: "Request aborted." });
         return;
       }
+
+      // AskUserQuestion: Claude is asking the user clarifying questions.
+      if (toolName === "AskUserQuestion") {
+        const requestId = `ask_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const typedInput = input as Record<string, unknown>;
+        pendingPermissions.set(requestId, {
+          resolve,
+          toolName,
+          originalInput: typedInput,
+        });
+        options.signal.addEventListener("abort", () => {
+          if (pendingPermissions.delete(requestId)) {
+            resolve({ behavior: "deny", message: "Request aborted." });
+          }
+        }, { once: true });
+        emit({
+          type: "ask_user_question",
+          requestId,
+          questions: (typedInput.questions ?? []) as AskUserQuestionItem[],
+        });
+        return;
+      }
+
       if (yoloMode) {
         resolve({ behavior: "allow", updatedInput: {} });
         return;
@@ -71,6 +120,35 @@ function makeCanUseTool(yoloMode: boolean): CanUseTool {
   };
 }
 
+function buildRunOptions(): Record<string, unknown> {
+  const opts: Record<string, unknown> = {};
+
+  if (state.thinking === "enabled") {
+    opts.thinking = { type: "enabled", budget_tokens: state.thinkingBudget };
+  } else if (state.thinking === "adaptive") {
+    opts.thinking = { type: "adaptive" };
+  } else {
+    opts.thinking = { type: "disabled" };
+  }
+
+  if (state.effort !== undefined) opts.effort = state.effort;
+  if (state.maxTurns !== undefined) opts.maxTurns = state.maxTurns;
+  if (state.maxBudgetUsd !== undefined) opts.maxBudgetUsd = state.maxBudgetUsd;
+  if (state.systemPrompt) opts.systemPrompt = state.systemPrompt;
+  if (state.allowedTools) opts.allowedTools = state.allowedTools;
+  if (state.disallowedTools) opts.disallowedTools = state.disallowedTools;
+  if (Object.keys(state.mcpServers).length) opts.mcpServers = state.mcpServers;
+  if (Object.keys(state.agents).length) {
+    opts.agents = state.agents;
+    // Agent tool must be allowed for subagents to be callable
+    if (state.allowedTools && !state.allowedTools.includes("Agent")) {
+      opts.allowedTools = [...state.allowedTools, "Agent"];
+    }
+  }
+
+  return opts;
+}
+
 async function handleSend(prompt: string, attachments: OutboundAttachment[], model?: string, yolo?: boolean): Promise<void> {
   if (currentAbort) currentAbort.abort();
 
@@ -86,28 +164,91 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
 
   try {
     const userMessage = await buildUserMessage(prompt, attachments);
-    const queryResult = query({
-      prompt: (async function* () { yield userMessage; })(),
-      options: {
-        abortController,
-        cwd:                             state.cwd,
-        resume:                          state.sessionId || undefined,
-        model:                           (model ?? state.model) || undefined,
-        allowDangerouslySkipPermissions: effectiveYolo,
-        permissionMode:                  effectiveYolo ? "bypassPermissions" : (state.permissionMode as any) || "default",
-        includePartialMessages:          true,
-        forwardSubagentText:             true,
-        canUseTool:                      makeCanUseTool(effectiveYolo),
-      },
-    });
+
+    // Check if we have a pre-warmed query and this is a fresh session
+    // If a warm query is available but we can't use it (resuming a session),
+    // close it to avoid leaking the pre-warmed subprocess.
+    let warm: WarmQuery | null = null;
+    if (warmQueryPromise) {
+      if (!state.sessionId) {
+        warm = await warmQueryPromise;
+      } else {
+        // Session is active — discard the warm query and close its subprocess
+        warmQueryPromise.then(w => w?.close()).catch(() => {});
+      }
+      warmQueryPromise = null;
+    }
+
+    const wasForking = state.forkNext;
+    state.forkNext = false;
+
+    const hooks: Partial<Record<HookEvent, HookCallbackMatcher[]>> = {
+      Notification: [{
+        hooks: [async (input) => {
+          const inp = input as Record<string, unknown>;
+          emit({
+            type: "notification",
+            message: String(inp["message"] ?? ""),
+            notificationType: String(inp["notification_type"] ?? ""),
+          });
+          return {};
+        }] as HookCallback[],
+      }],
+      SubagentStop: [{
+        hooks: [async (input) => {
+          const inp = input as Record<string, unknown>;
+          const agentId = String(inp["agent_id"] ?? "");
+          if (agentId) {
+            emit({
+              type: "notification",
+              message: `Subagent finished: ${agentId}`,
+              notificationType: "subagent_stop",
+            });
+          }
+          return {};
+        }] as HookCallback[],
+      }],
+    };
+
+    let queryResult: ReturnType<typeof query>;
+
+    if (warm && !state.sessionId) {
+      queryResult = warm.query(
+        (async function* () { yield userMessage; })()
+      );
+      scheduleWarmup();
+    } else {
+      if (warm) warm.close();
+      queryResult = query({
+        prompt: (async function* () { yield userMessage; })(),
+        options: {
+          abortController,
+          cwd:                             state.cwd,
+          resume:                          wasForking ? undefined : (state.sessionId || undefined),
+          forkSession:                     wasForking || undefined,
+          model:                           (model ?? state.model) || undefined,
+          allowDangerouslySkipPermissions: effectiveYolo,
+          permissionMode:                  effectiveYolo ? "bypassPermissions" : (state.permissionMode as any) || "default",
+          enableFileCheckpointing:         true,
+          includePartialMessages:          true,
+          forwardSubagentText:             true,
+          canUseTool:                      makeCanUseTool(effectiveYolo),
+          hooks,
+          ...buildRunOptions(),
+        },
+      });
+    }
+    activeQuery = queryResult;
 
     for await (const message of queryResult) {
       if (abortController.signal.aborted) break;
       const m = message as Record<string, unknown>;
 
       if (m.type === "system" && m.subtype === "init") {
-        state.sessionId = m.session_id as string;
-        emit({ type: "session_ready", sessionId: state.sessionId });
+        const newSessionId = m.session_id as string;
+        state.sessionId = newSessionId;
+        emit({ type: "session_ready", sessionId: newSessionId });
+        if (wasForking) emit({ type: "session_forked", newSessionId });
         const fastModeState = (m as Record<string, unknown>).fast_mode_state as string | undefined;
         if (fastModeState) {
           emit({ type: "fast_mode_state", state: fastModeState as "off" | "cooldown" | "on" });
@@ -332,6 +473,59 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       state.permissionMode = cmd.mode;
       break;
 
+    case "set_thinking":
+      state.thinking = cmd.thinkingType;
+      if (cmd.budgetTokens !== undefined) state.thinkingBudget = cmd.budgetTokens;
+      break;
+
+    case "set_run_options":
+      if (cmd.maxTurns !== undefined)     state.maxTurns     = cmd.maxTurns > 0 ? cmd.maxTurns : undefined;
+      if (cmd.maxBudgetUsd !== undefined) state.maxBudgetUsd = cmd.maxBudgetUsd > 0 ? cmd.maxBudgetUsd : undefined;
+      if (cmd.effort !== undefined)       state.effort       = cmd.effort || undefined;
+      if (cmd.systemPrompt !== undefined) state.systemPrompt = cmd.systemPrompt.trim() || undefined;
+      break;
+
+    case "set_tool_controls":
+      state.allowedTools   = cmd.allowedTools?.length   ? cmd.allowedTools   : undefined;
+      state.disallowedTools = cmd.disallowedTools?.length ? cmd.disallowedTools : undefined;
+      break;
+
+    case "set_mcp_servers":
+      state.mcpServers = cmd.servers as Record<string, unknown>;
+      break;
+
+    case "set_agents":
+      state.agents = cmd.agents as Record<string, unknown>;
+      break;
+
+    case "fork_session":
+      state.forkNext = true;
+      break;
+
+    case "request_models": {
+      try {
+        const tempQuery = query({
+          prompt: (async function* () { /* empty */ })(),
+          options: {
+            cwd: state.cwd,
+            maxTurns: 0,
+            allowDangerouslySkipPermissions: true,
+          },
+        });
+        const models = await tempQuery.supportedModels();
+        emit({
+          type: "models_listed",
+          models: models.map((m: Record<string, unknown>) => ({
+            id: String(m.id ?? m.modelId ?? ""),
+            displayName: m.displayName ? String(m.displayName) : undefined,
+          })),
+        });
+      } catch (err) {
+        emit({ type: "models_listed", models: [] });
+      }
+      break;
+    }
+
     case "permission_response": {
       const pending = pendingPermissions.get(cmd.requestId);
       if (pending) {
@@ -344,6 +538,69 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
         } else {
           pending.resolve({ behavior: "deny", message: "Permission denied by user." });
         }
+      }
+      break;
+    }
+
+    case "ask_user_response": {
+      const pending = pendingPermissions.get(cmd.requestId);
+      if (pending) {
+        pendingPermissions.delete(cmd.requestId);
+        pending.resolve({
+          behavior: "allow",
+          updatedInput: {
+            questions: pending.originalInput?.questions ?? [],
+            answers: cmd.answers,
+          },
+        });
+      }
+      break;
+    }
+
+    case "rewind_files": {
+      if (!activeQuery) {
+        emit({ type: "error", msg: "No active session to rewind." });
+        break;
+      }
+      try {
+        const qWithRewind = activeQuery as unknown as {
+          rewindFiles: (userMessageId: string, opts?: { dryRun?: boolean }) => Promise<{
+            changedFiles?: string[];
+            restoredFiles?: string[];
+            failedFiles?: string[];
+          }>;
+        };
+        const result = await qWithRewind.rewindFiles(cmd.userMessageId, { dryRun: cmd.dryRun ?? false });
+        emit({
+          type: "rewind_result",
+          changedFiles:  result.changedFiles  ?? [],
+          restoredFiles: result.restoredFiles ?? [],
+          failedFiles:   result.failedFiles   ?? [],
+        });
+      } catch (err) {
+        emit({ type: "error", msg: `Rewind failed: ${err instanceof Error ? err.message : String(err)}` });
+      }
+      break;
+    }
+
+    case "request_account_info": {
+      try {
+        const tempQuery = query({
+          prompt: (async function* () { /* empty */ })(),
+          options: {
+            cwd: state.cwd,
+            maxTurns: 0,
+            allowDangerouslySkipPermissions: true,
+          },
+        });
+        const info = await tempQuery.accountInfo();
+        emit({
+          type: "account_info",
+          email: (info as Record<string, unknown>)?.email ? String((info as Record<string, unknown>).email) : undefined,
+          plan:  (info as Record<string, unknown>)?.planName ? String((info as Record<string, unknown>).planName) : undefined,
+        });
+      } catch {
+        emit({ type: "account_info" });
       }
       break;
     }

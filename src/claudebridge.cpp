@@ -25,6 +25,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::thinkingChunkReceived,   this, &ClaudeBridge::thinkingChunk);
     connect(m_daemon, &BridgeDaemon::subAgentMessageReceived, this, &ClaudeBridge::subAgentMessage);
     connect(m_daemon, &BridgeDaemon::permissionRequested,     this, &ClaudeBridge::permissionRequested);
+    connect(m_daemon, &BridgeDaemon::askUserQuestion,         this, &ClaudeBridge::askUserQuestion);
     connect(m_daemon, &BridgeDaemon::turnFinished,         this, &ClaudeBridge::turnComplete);
     connect(m_daemon, &BridgeDaemon::errorOccurred,        this, &ClaudeBridge::errorOccurred);
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
@@ -34,6 +35,11 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::fastModeStateChanged, this, &ClaudeBridge::fastModeStateChanged);
     connect(m_daemon, &BridgeDaemon::promptSuggestion,     this, &ClaudeBridge::promptSuggestion);
     connect(m_daemon, &BridgeDaemon::compactBoundary,      this, &ClaudeBridge::compactBoundary);
+    connect(m_daemon, &BridgeDaemon::modelsListed,         this, &ClaudeBridge::modelsListed);
+    connect(m_daemon, &BridgeDaemon::sessionForked,        this, &ClaudeBridge::sessionForked);
+    connect(m_daemon, &BridgeDaemon::agentNotification,   this, &ClaudeBridge::agentNotification);
+    connect(m_daemon, &BridgeDaemon::rewindResult,        this, &ClaudeBridge::rewindResult);
+    connect(m_daemon, &BridgeDaemon::accountInfoReceived, this, &ClaudeBridge::accountInfoReceived);
 
     connect(m_daemon, &BridgeDaemon::resultReceived, this, [this](const QJsonObject &result) {
         if (result["is_error"].toBool()) return;
@@ -223,6 +229,20 @@ void ClaudeBridge::respondToPermission(const QString &requestId, bool allow, boo
     });
 }
 
+void ClaudeBridge::respondToAskUser(const QString &requestId, const QString &answersJson) {
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(answersJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        emit errorOccurred("Invalid answers payload.");
+        return;
+    }
+    m_daemon->sendCommand(QJsonObject{
+        {"type",      "ask_user_response"},
+        {"requestId", requestId},
+        {"answers",   doc.object()}
+    });
+}
+
 void ClaudeBridge::writeTextFile(const QString &suggestedName, const QString &content) {
     const QString path = QFileDialog::getSaveFileName(
         nullptr,
@@ -249,4 +269,73 @@ void ClaudeBridge::copyToClipboard(const QString &text) {
     QClipboard *clipboard = QApplication::clipboard();
     clipboard->setText(text);
     emit clipboardCopyRequested(text);
+}
+
+void ClaudeBridge::requestModels() {
+    m_daemon->sendCommand(QJsonObject{{"type", "request_models"}});
+}
+
+void ClaudeBridge::setThinking(const QString &thinkingType, int budgetTokens) {
+    QJsonObject cmd{{"type", "set_thinking"}, {"thinkingType", thinkingType}};
+    if (budgetTokens > 0) cmd["budgetTokens"] = budgetTokens;
+    m_daemon->sendCommand(cmd);
+}
+
+void ClaudeBridge::setRunOptions(int maxTurns, double maxBudgetUsd,
+                                  const QString &effort, const QString &systemPrompt) {
+    QJsonObject cmd{{"type", "set_run_options"}};
+    if (maxTurns > 0)            cmd["maxTurns"]     = maxTurns;
+    if (maxBudgetUsd > 0.0)      cmd["maxBudgetUsd"] = maxBudgetUsd;
+    if (!effort.isEmpty())       cmd["effort"]        = effort;
+    cmd["systemPrompt"] = systemPrompt;
+    m_daemon->sendCommand(cmd);
+}
+
+void ClaudeBridge::forkSession() {
+    m_daemon->sendCommand(QJsonObject{{"type", "fork_session"}});
+}
+
+void ClaudeBridge::setToolControls(const QString &allowedJson, const QString &disallowedJson) {
+    auto parseList = [](const QString &json) -> QJsonArray {
+        QJsonParseError err;
+        const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+        return (err.error == QJsonParseError::NoError && doc.isArray()) ? doc.array() : QJsonArray{};
+    };
+    m_daemon->sendCommand(QJsonObject{
+        {"type",            "set_tool_controls"},
+        {"allowedTools",    parseList(allowedJson)},
+        {"disallowedTools", parseList(disallowedJson)},
+    });
+}
+
+void ClaudeBridge::setMcpServers(const QString &serversJson) {
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(serversJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        emit errorOccurred("Invalid MCP servers JSON.");
+        return;
+    }
+    m_daemon->sendCommand(QJsonObject{{"type", "set_mcp_servers"}, {"servers", doc.object()}});
+}
+
+void ClaudeBridge::setAgents(const QString &agentsJson) {
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(agentsJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        emit errorOccurred("Invalid agents JSON.");
+        return;
+    }
+    m_daemon->sendCommand(QJsonObject{{"type", "set_agents"}, {"agents", doc.object()}});
+}
+
+void ClaudeBridge::rewindFiles(const QString &userMessageId, bool dryRun) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",          "rewind_files"},
+        {"userMessageId", userMessageId},
+        {"dryRun",        dryRun},
+    });
+}
+
+void ClaudeBridge::requestAccountInfo() {
+    m_daemon->sendCommand(QJsonObject{{"type", "request_account_info"}});
 }

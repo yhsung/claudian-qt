@@ -18,6 +18,7 @@
         </svg>
         New Session
       </button>
+      <button id="fork-session-btn" title="Fork current session — start a new session from this conversation&#39;s history">&#x2387; Fork</button>
     </div>
     <div id="session-list"></div>
   </div>
@@ -103,12 +104,69 @@
         <span id="statusline-pct">—</span>
       </div>
       <span id="statusline-turns">—</span>
+      <div id="account-status" class="account-status"></div>
     </div>
 
     <div id="input-area">
       <div id="textarea-wrapper">
         <textarea id="input-textarea" rows="1"
                   placeholder="Message Claude…"></textarea>
+      </div>
+      <div id="run-options-row" style="display:none">
+        <label class="run-opt-label">
+          Max turns
+          <input type="number" id="max-turns-input" min="1" max="200" placeholder="∞">
+        </label>
+        <label class="run-opt-label">
+          Budget ($)
+          <input type="number" id="max-budget-input" min="0" step="0.01" placeholder="∞">
+        </label>
+        <label class="run-opt-label">
+          Effort
+          <select id="effort-select">
+            <option value="">Default</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">X-High</option>
+            <option value="max">Max</option>
+          </select>
+        </label>
+      </div>
+      <div id="system-prompt-row" style="display:none">
+        <textarea id="system-prompt-input" placeholder="System prompt…" rows="2" style="width:100%;resize:vertical"></textarea>
+        <button id="apply-run-options-btn">Apply</button>
+      </div>
+      <div class="tool-controls-row" id="tool-controls-row" style="display:none">
+        <label class="run-opt-label">
+          Allowed tools (comma-separated, empty = all):
+          <input type="text" id="allowed-tools-input" placeholder="Read,Glob,Grep">
+        </label>
+        <label class="run-opt-label">
+          Blocked tools:
+          <input type="text" id="disallowed-tools-input" placeholder="Bash,Write">
+        </label>
+        <button id="apply-tool-controls-btn">Apply</button>
+      </div>
+      <div class="run-options-row" id="mcp-panel" style="display:none">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px">MCP Servers</div>
+        <div id="mcp-server-list"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <input type="text" id="mcp-name-input" placeholder="Name" style="width:90px">
+          <input type="text" id="mcp-command-input" placeholder="Command (e.g. npx)" style="width:100px">
+          <input type="text" id="mcp-args-input" placeholder="Args (e.g. @playwright/mcp@latest)" style="flex:1;min-width:100px">
+          <button id="mcp-add-btn">Add</button>
+        </div>
+      </div>
+      <div class="run-options-row" id="agents-panel" style="display:none">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px">Custom Agents</div>
+        <div id="agent-list"></div>
+        <div style="margin-top:6px">
+          <input type="text" id="agent-name-input" placeholder="Name (e.g. code-reviewer)" style="width:130px">
+          <input type="text" id="agent-desc-input" placeholder="Description" style="flex:1;min-width:100px">
+          <textarea id="agent-prompt-input" rows="2" placeholder="System prompt for this agent…" style="width:100%;resize:vertical;margin-top:4px"></textarea>
+          <button id="agent-add-btn" style="margin-top:4px">Add agent</button>
+        </div>
       </div>
       <div id="input-toolbar">
         <button id="attach-btn" title="Attach images (or paste/drag)">📎</button>
@@ -124,7 +182,16 @@
           <div id="model-dropdown"></div>
         </div>
         <button id="perm-mode-btn" title="Permission mode">Safe</button>
+        <label class="thinking-toggle" title="Extended thinking mode">
+          <span>Think</span>
+          <select id="thinking-select">
+            <option value="disabled">Off</option>
+            <option value="adaptive">Auto</option>
+            <option value="enabled">On</option>
+          </select>
+        </label>
         <button id="yolo-btn">YOLO</button>
+        <button id="run-opts-toggle" title="Run options">⚙</button>
         <button id="send-btn" title="Send (Enter)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2" stroke-linecap="round">

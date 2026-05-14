@@ -152,6 +152,9 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
                                                     event["displayName"].toString(),
                                                     event["decisionReason"].toString(),
                                                     event["blockedPath"].toString());
+    else if (type == "ask_user_question")       emit askUserQuestion(
+                                                    event["requestId"].toString(),
+                                                    QString::fromUtf8(QJsonDocument(event["questions"].toArray()).toJson(QJsonDocument::Compact)));
     else if (type == "turn_complete")           emit turnFinished();
     else if (type == "session_ready")           emit sessionInitialized(event["sessionId"].toString());
     else if (type == "error")                   emit errorOccurred(event["msg"].toString());
@@ -163,11 +166,22 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     else if (type == "rate_limit")              emit rateLimit(QString::fromUtf8(QJsonDocument(event).toJson(QJsonDocument::Compact)));
     else if (type == "fast_mode_state")         emit fastModeStateChanged(event["state"].toString());
     else if (type == "prompt_suggestion")       emit promptSuggestion(event["suggestion"].toString());
+    else if (type == "models_listed")           emit modelsListed(QString::fromUtf8(QJsonDocument(event["models"].toArray()).toJson(QJsonDocument::Compact)));
     else if (type == "compact_boundary")        emit compactBoundary(QString::fromUtf8(QJsonDocument(QJsonObject{
                                                     {"preTokens",  event["preTokens"]},
                                                     {"postTokens", event["postTokens"]},
                                                     {"durationMs", event["durationMs"]},
                                                     {"trigger",    event["trigger"]}
+                                                }).toJson(QJsonDocument::Compact)));
+    else if (type == "session_forked")          emit sessionForked(event["newSessionId"].toString());
+    else if (type == "notification")            emit agentNotification(event["message"].toString(), event["notificationType"].toString());
+    else if (type == "rewind_result")           emit rewindResult(
+                                                    QString::fromUtf8(QJsonDocument(event["changedFiles"].toArray()).toJson(QJsonDocument::Compact)),
+                                                    QString::fromUtf8(QJsonDocument(event["restoredFiles"].toArray()).toJson(QJsonDocument::Compact)),
+                                                    QString::fromUtf8(QJsonDocument(event["failedFiles"].toArray()).toJson(QJsonDocument::Compact)));
+    else if (type == "account_info")            emit accountInfoReceived(QString::fromUtf8(QJsonDocument(QJsonObject{
+                                                    {"email", event["email"]},
+                                                    {"plan",  event["plan"]}
                                                 }).toJson(QJsonDocument::Compact)));
 }
 

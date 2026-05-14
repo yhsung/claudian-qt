@@ -39,10 +39,20 @@ public slots:
     void newSession();
     void writeTextFile(const QString &suggestedName, const QString &content);
     void respondToPermission(const QString &requestId, bool allow, bool alwaysAllow);
+    void respondToAskUser(const QString &requestId, const QString &answersJson);
     void deleteSession(const QString &sessionId);
     void renameSession(const QString &sessionId, const QString &name);
     void setPermissionMode(const QString &mode);
     void copyToClipboard(const QString &text);
+    void requestModels();
+    void setThinking(const QString &thinkingType, int budgetTokens = 8000);
+    void setRunOptions(int maxTurns, double maxBudgetUsd, const QString &effort, const QString &systemPrompt);
+    void setToolControls(const QString &allowedJson, const QString &disallowedJson);
+    void setMcpServers(const QString &serversJson);
+    void setAgents(const QString &agentsJson);
+    void forkSession();
+    void rewindFiles(const QString &userMessageId, bool dryRun = false);
+    void requestAccountInfo();
 
 signals:
     void textReady(const QString &text);
@@ -54,6 +64,7 @@ signals:
                              const QString &inputJson, const QString &title,
                              const QString &description, const QString &displayName,
                              const QString &decisionReason, const QString &blockedPath);
+    void askUserQuestion(const QString &requestId, const QString &questionsJson);
     void turnComplete();
     void sessionReady(const QString &sessionId);
     void errorOccurred(const QString &msg);
@@ -72,6 +83,11 @@ signals:
     void fastModeStateChanged(const QString &state);
     void promptSuggestion(const QString &suggestion);
     void compactBoundary(const QString &json);
+    void modelsListed(const QString &json);
+    void sessionForked(const QString &newSessionId);
+    void agentNotification(const QString &message, const QString &notificationType);
+    void rewindResult(const QString &changedJson, const QString &restoredJson, const QString &failedJson);
+    void accountInfoReceived(const QString &json);
 
 private:
     BridgeDaemon    *m_daemon;
