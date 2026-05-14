@@ -7,7 +7,7 @@ import { buildUserMessage } from "./message-input.js";
 import { listSessions, loadSessionHistory, renameSession } from "./session-history.js";
 import { unlink } from "fs/promises";
 import { join } from "path";
-import type { DaemonCommand, DaemonEvent, OutboundAttachment } from "./protocol.js";
+import type { DaemonCommand, DaemonEvent, OutboundAttachment, AskUserQuestionItem } from "./protocol.js";
 
 function emit(event: DaemonEvent): void {
   process.stdout.write(JSON.stringify(event) + "\n");
@@ -26,7 +26,11 @@ const state = {
 let currentAbort: AbortController | null = null;
 
 // Pending permission promises keyed by requestId
-const pendingPermissions = new Map<string, { resolve: (result: PermissionResult) => void; toolName: string }>();
+const pendingPermissions = new Map<string, {
+  resolve: (result: PermissionResult) => void;
+  toolName: string;
+  originalInput?: Record<string, unknown>;
+}>();
 
 // Build a canUseTool callback for a given send invocation.
 // Must always be provided so the SDK adds --permission-prompt-tool stdio to the CLI;
@@ -39,6 +43,29 @@ function makeCanUseTool(yoloMode: boolean): CanUseTool {
         resolve({ behavior: "deny", message: "Request aborted." });
         return;
       }
+
+      // AskUserQuestion: Claude is asking the user clarifying questions.
+      if (toolName === "AskUserQuestion") {
+        const requestId = `ask_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const typedInput = input as Record<string, unknown>;
+        pendingPermissions.set(requestId, {
+          resolve,
+          toolName,
+          originalInput: typedInput,
+        });
+        options.signal.addEventListener("abort", () => {
+          if (pendingPermissions.delete(requestId)) {
+            resolve({ behavior: "deny", message: "Request aborted." });
+          }
+        }, { once: true });
+        emit({
+          type: "ask_user_question",
+          requestId,
+          questions: (typedInput.questions ?? []) as AskUserQuestionItem[],
+        });
+        return;
+      }
+
       if (yoloMode) {
         resolve({ behavior: "allow", updatedInput: {} });
         return;
@@ -344,6 +371,21 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
         } else {
           pending.resolve({ behavior: "deny", message: "Permission denied by user." });
         }
+      }
+      break;
+    }
+
+    case "ask_user_response": {
+      const pending = pendingPermissions.get(cmd.requestId);
+      if (pending) {
+        pendingPermissions.delete(cmd.requestId);
+        pending.resolve({
+          behavior: "allow",
+          updatedInput: {
+            questions: pending.originalInput?.questions ?? [],
+            answers: cmd.answers,
+          },
+        });
       }
       break;
     }

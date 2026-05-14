@@ -1448,6 +1448,84 @@ function wireEvents() {
   });
 }
 
+function onAskUserQuestion(requestId, questions) {
+  const card = document.createElement('div');
+  card.className = 'ask-question-card';
+  card.dataset.requestId = requestId;
+
+  const answers = {};
+
+  questions.forEach(q => {
+    const section = document.createElement('div');
+    section.className = 'ask-question-section';
+
+    const header = document.createElement('div');
+    header.className = 'ask-question-header';
+    header.textContent = q.header ? `${q.header}: ${q.question}` : q.question;
+    section.appendChild(header);
+
+    const chips = document.createElement('div');
+    chips.className = 'ask-chips';
+    let otherInput;
+
+    q.options.forEach(opt => {
+      const chip = document.createElement('button');
+      chip.className = 'ask-chip';
+      chip.textContent = opt.label;
+      chip.title = opt.description || '';
+      chip.addEventListener('click', () => {
+        if (q.multiSelect) {
+          chip.classList.toggle('ask-chip--selected');
+          answers[q.question] = Array.from(chips.querySelectorAll('.ask-chip--selected'))
+            .map(c => c.textContent);
+        } else {
+          chips.querySelectorAll('.ask-chip').forEach(c => c.classList.remove('ask-chip--selected'));
+          chip.classList.add('ask-chip--selected');
+          answers[q.question] = opt.label;
+          if (otherInput) otherInput.value = '';
+        }
+      });
+      chips.appendChild(chip);
+    });
+
+    otherInput = document.createElement('input');
+    otherInput.type = 'text';
+    otherInput.className = 'ask-other-input';
+    otherInput.placeholder = 'Or type your own answer…';
+    otherInput.addEventListener('input', () => {
+      if (otherInput.value.trim()) {
+        chips.querySelectorAll('.ask-chip').forEach(c => c.classList.remove('ask-chip--selected'));
+        answers[q.question] = otherInput.value.trim();
+      } else {
+        delete answers[q.question];
+      }
+    });
+
+    section.appendChild(chips);
+    section.appendChild(otherInput);
+    card.appendChild(section);
+  });
+
+  const submitBtn = document.createElement('button');
+  submitBtn.className = 'ask-submit-btn';
+  submitBtn.textContent = 'Send answers';
+  submitBtn.addEventListener('click', () => {
+    questions.forEach(q => {
+      if (answers[q.question] === undefined && q.options.length > 0) {
+        answers[q.question] = q.options[0].label;
+      }
+    });
+    bridge.respondToAskUser(requestId, JSON.stringify(answers));
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sent ✓';
+    card.classList.add('ask-question-card--done');
+  });
+
+  card.appendChild(submitBtn);
+  DOM.messages.appendChild(card);
+  DOM.messages.scrollTop = DOM.messages.scrollHeight;
+}
+
 function wireBridgeSignals() {
   bridge.textReady.connect(text => appendToken(text));
   bridge.thinkingChunk.connect(text => appendThinkingChunk(text));
@@ -1504,6 +1582,9 @@ function wireBridgeSignals() {
   bridge.subAgentMessage.connect((parentToolUseId, text) => appendSubAgentMessage(parentToolUseId, text));
   bridge.permissionRequested.connect((requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath) => {
     showPermissionDialog(requestId, toolName, inputJson, title, description, displayName, decisionReason, blockedPath);
+  });
+  bridge.askUserQuestion.connect((requestId, questionsJson) => {
+    onAskUserQuestion(requestId, JSON.parse(questionsJson));
   });
   bridge.turnComplete.connect(() => {
     dismissPermissionDialog();

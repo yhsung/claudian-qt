@@ -25,6 +25,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::thinkingChunkReceived,   this, &ClaudeBridge::thinkingChunk);
     connect(m_daemon, &BridgeDaemon::subAgentMessageReceived, this, &ClaudeBridge::subAgentMessage);
     connect(m_daemon, &BridgeDaemon::permissionRequested,     this, &ClaudeBridge::permissionRequested);
+    connect(m_daemon, &BridgeDaemon::askUserQuestion,         this, &ClaudeBridge::askUserQuestion);
     connect(m_daemon, &BridgeDaemon::turnFinished,         this, &ClaudeBridge::turnComplete);
     connect(m_daemon, &BridgeDaemon::errorOccurred,        this, &ClaudeBridge::errorOccurred);
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
@@ -220,6 +221,20 @@ void ClaudeBridge::respondToPermission(const QString &requestId, bool allow, boo
         {"requestId",   requestId},
         {"allow",       allow},
         {"alwaysAllow", alwaysAllow}
+    });
+}
+
+void ClaudeBridge::respondToAskUser(const QString &requestId, const QString &answersJson) {
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(answersJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        emit errorOccurred("Invalid answers payload.");
+        return;
+    }
+    m_daemon->sendCommand(QJsonObject{
+        {"type",      "ask_user_response"},
+        {"requestId", requestId},
+        {"answers",   doc.object()}
     });
 }
 

@@ -28,6 +28,7 @@ signals:
                              const QString &inputJson, const QString &title,
                              const QString &description, const QString &displayName,
                              const QString &decisionReason, const QString &blockedPath);
+    void askUserQuestion(const QString &requestId, const QString &questionsJson);
     void turnFinished();
     void errorOccurred(const QString &msg);
     void sessionsListed(const QString &json);

@@ -152,6 +152,9 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
                                                     event["displayName"].toString(),
                                                     event["decisionReason"].toString(),
                                                     event["blockedPath"].toString());
+    else if (type == "ask_user_question")       emit askUserQuestion(
+                                                    event["requestId"].toString(),
+                                                    QString::fromUtf8(QJsonDocument(event["questions"].toArray()).toJson(QJsonDocument::Compact)));
     else if (type == "turn_complete")           emit turnFinished();
     else if (type == "session_ready")           emit sessionInitialized(event["sessionId"].toString());
     else if (type == "error")                   emit errorOccurred(event["msg"].toString());

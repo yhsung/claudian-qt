@@ -39,6 +39,7 @@ public slots:
     void newSession();
     void writeTextFile(const QString &suggestedName, const QString &content);
     void respondToPermission(const QString &requestId, bool allow, bool alwaysAllow);
+    void respondToAskUser(const QString &requestId, const QString &answersJson);
     void deleteSession(const QString &sessionId);
     void renameSession(const QString &sessionId, const QString &name);
     void setPermissionMode(const QString &mode);
@@ -54,6 +55,7 @@ signals:
                              const QString &inputJson, const QString &title,
                              const QString &description, const QString &displayName,
                              const QString &decisionReason, const QString &blockedPath);
+    void askUserQuestion(const QString &requestId, const QString &questionsJson);
     void turnComplete();
     void sessionReady(const QString &sessionId);
     void errorOccurred(const QString &msg);
