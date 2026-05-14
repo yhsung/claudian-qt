@@ -108,4 +108,4 @@ export type DaemonEvent =
   | { type: "models_listed"; models: Array<{ id: string; displayName?: string }> }
   | { type: "account_info"; email?: string; plan?: string }
   | { type: "notification"; message: string; notificationType: string }
-  | { type: "rewind_result"; changedFiles: string[]; restoredFiles: string[]; failedFiles: string[] };
+  | ({ type: "rewind_result" } & RewindResult);
