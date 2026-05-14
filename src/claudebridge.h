@@ -44,6 +44,7 @@ public slots:
     void renameSession(const QString &sessionId, const QString &name);
     void setPermissionMode(const QString &mode);
     void copyToClipboard(const QString &text);
+    void requestModels();
 
 signals:
     void textReady(const QString &text);
@@ -74,6 +75,7 @@ signals:
     void fastModeStateChanged(const QString &state);
     void promptSuggestion(const QString &suggestion);
     void compactBoundary(const QString &json);
+    void modelsListed(const QString &json);
 
 private:
     BridgeDaemon    *m_daemon;

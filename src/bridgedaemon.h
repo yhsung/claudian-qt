@@ -39,6 +39,7 @@ signals:
     void fastModeStateChanged(const QString &state);
     void promptSuggestion(const QString &suggestion);
     void compactBoundary(const QString &json);
+    void modelsListed(const QString &json);
 
 private slots:
     void onReadyRead();

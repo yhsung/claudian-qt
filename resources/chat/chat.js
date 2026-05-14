@@ -1134,6 +1134,16 @@ function buildModelDropdown() {
   });
 }
 
+function populateModelPicker(models) {
+  if (!models || !models.length) return;
+  // Keep the 'Default' entry and replace the rest with SDK-provided models
+  MODELS.length = 1; // keep index 0 (Default)
+  models.forEach(m => {
+    if (m.id) MODELS.push({ value: m.id, label: m.displayName || m.id });
+  });
+  buildModelDropdown();
+}
+
 function syncModel(val) {
   state.model = val;
   const found = MODELS.find(m => m.value === val || (m.value && val && val.toLowerCase().includes(m.value)));
@@ -1629,6 +1639,9 @@ function wireBridgeSignals() {
       pending.reject(e);
     }
   });
+  bridge.modelsListed.connect(json => {
+    try { populateModelPicker(JSON.parse(json)); } catch {}
+  });
   bridge.usageUpdated.connect(json => onUsageUpdated(json));
   bridge.compactBoundary.connect(json => {
     const data = JSON.parse(json);
@@ -1647,6 +1660,7 @@ function wireBridgeSignals() {
   syncYolo(bridge.yolo);
   syncPermMode(state.permissionMode);
   bridge.requestSessions();
+  bridge.requestModels();
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import * as readline from "readline";
 import * as os from "os";
-import { query, AbortError } from "@anthropic-ai/claude-agent-sdk";
-import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
+import { query, startup, AbortError } from "@anthropic-ai/claude-agent-sdk";
+import type { CanUseTool, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
 import { listSessions, loadSessionHistory, renameSession } from "./session-history.js";
@@ -24,6 +24,8 @@ const state = {
 };
 
 let currentAbort: AbortController | null = null;
+let warmQueryPromise: Promise<WarmQuery | null> | null = null;
+let activeQuery: ReturnType<typeof query> | null = null;
 
 // Pending permission promises keyed by requestId
 const pendingPermissions = new Map<string, {
@@ -31,6 +33,14 @@ const pendingPermissions = new Map<string, {
   toolName: string;
   originalInput?: Record<string, unknown>;
 }>();
+
+function scheduleWarmup(): void {
+  warmQueryPromise = startup({
+    options: { cwd: state.cwd },
+    initializeTimeoutMs: 12000,
+  }).catch(() => null);
+}
+scheduleWarmup();
 
 // Build a canUseTool callback for a given send invocation.
 // Must always be provided so the SDK adds --permission-prompt-tool stdio to the CLI;
@@ -113,20 +123,36 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
 
   try {
     const userMessage = await buildUserMessage(prompt, attachments);
-    const queryResult = query({
-      prompt: (async function* () { yield userMessage; })(),
-      options: {
-        abortController,
-        cwd:                             state.cwd,
-        resume:                          state.sessionId || undefined,
-        model:                           (model ?? state.model) || undefined,
-        allowDangerouslySkipPermissions: effectiveYolo,
-        permissionMode:                  effectiveYolo ? "bypassPermissions" : (state.permissionMode as any) || "default",
-        includePartialMessages:          true,
-        forwardSubagentText:             true,
-        canUseTool:                      makeCanUseTool(effectiveYolo),
-      },
-    });
+
+    // Check if we have a pre-warmed query and this is a fresh session
+    const warm = (warmQueryPromise && !state.sessionId) ? await warmQueryPromise : null;
+    warmQueryPromise = null;
+
+    let queryResult: ReturnType<typeof query>;
+
+    if (warm && !state.sessionId) {
+      queryResult = warm.query(
+        (async function* () { yield userMessage; })()
+      );
+      scheduleWarmup();
+    } else {
+      if (warm) warm.close();
+      queryResult = query({
+        prompt: (async function* () { yield userMessage; })(),
+        options: {
+          abortController,
+          cwd:                             state.cwd,
+          resume:                          state.sessionId || undefined,
+          model:                           (model ?? state.model) || undefined,
+          allowDangerouslySkipPermissions: effectiveYolo,
+          permissionMode:                  effectiveYolo ? "bypassPermissions" : (state.permissionMode as any) || "default",
+          includePartialMessages:          true,
+          forwardSubagentText:             true,
+          canUseTool:                      makeCanUseTool(effectiveYolo),
+        },
+      });
+    }
+    activeQuery = queryResult;
 
     for await (const message of queryResult) {
       if (abortController.signal.aborted) break;
@@ -358,6 +384,30 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
     case "set_permission_mode":
       state.permissionMode = cmd.mode;
       break;
+
+    case "request_models": {
+      try {
+        const tempQuery = query({
+          prompt: (async function* () { /* empty */ })(),
+          options: {
+            cwd: state.cwd,
+            maxTurns: 0,
+            allowDangerouslySkipPermissions: true,
+          },
+        });
+        const models = await tempQuery.supportedModels();
+        emit({
+          type: "models_listed",
+          models: models.map((m: Record<string, unknown>) => ({
+            id: String(m.id ?? m.modelId ?? ""),
+            displayName: m.displayName ? String(m.displayName) : undefined,
+          })),
+        });
+      } catch (err) {
+        emit({ type: "models_listed", models: [] });
+      }
+      break;
+    }
 
     case "permission_response": {
       const pending = pendingPermissions.get(cmd.requestId);

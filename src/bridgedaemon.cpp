@@ -166,6 +166,7 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     else if (type == "rate_limit")              emit rateLimit(QString::fromUtf8(QJsonDocument(event).toJson(QJsonDocument::Compact)));
     else if (type == "fast_mode_state")         emit fastModeStateChanged(event["state"].toString());
     else if (type == "prompt_suggestion")       emit promptSuggestion(event["suggestion"].toString());
+    else if (type == "models_listed")           emit modelsListed(QString::fromUtf8(QJsonDocument(event["models"].toArray()).toJson(QJsonDocument::Compact)));
     else if (type == "compact_boundary")        emit compactBoundary(QString::fromUtf8(QJsonDocument(QJsonObject{
                                                     {"preTokens",  event["preTokens"]},
                                                     {"postTokens", event["postTokens"]},

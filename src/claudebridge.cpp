@@ -35,6 +35,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::fastModeStateChanged, this, &ClaudeBridge::fastModeStateChanged);
     connect(m_daemon, &BridgeDaemon::promptSuggestion,     this, &ClaudeBridge::promptSuggestion);
     connect(m_daemon, &BridgeDaemon::compactBoundary,      this, &ClaudeBridge::compactBoundary);
+    connect(m_daemon, &BridgeDaemon::modelsListed,         this, &ClaudeBridge::modelsListed);
 
     connect(m_daemon, &BridgeDaemon::resultReceived, this, [this](const QJsonObject &result) {
         if (result["is_error"].toBool()) return;
@@ -264,4 +265,8 @@ void ClaudeBridge::copyToClipboard(const QString &text) {
     QClipboard *clipboard = QApplication::clipboard();
     clipboard->setText(text);
     emit clipboardCopyRequested(text);
+}
+
+void ClaudeBridge::requestModels() {
+    m_daemon->sendCommand(QJsonObject{{"type", "request_models"}});
 }
