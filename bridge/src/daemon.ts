@@ -448,6 +448,13 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       if (cmd.budgetTokens !== undefined) state.thinkingBudget = cmd.budgetTokens;
       break;
 
+    case "set_run_options":
+      if (cmd.maxTurns !== undefined)     state.maxTurns     = cmd.maxTurns > 0 ? cmd.maxTurns : undefined;
+      if (cmd.maxBudgetUsd !== undefined) state.maxBudgetUsd = cmd.maxBudgetUsd > 0 ? cmd.maxBudgetUsd : undefined;
+      if (cmd.effort !== undefined)       state.effort       = cmd.effort || undefined;
+      if (cmd.systemPrompt !== undefined) state.systemPrompt = cmd.systemPrompt.trim() || undefined;
+      break;
+
     case "request_models": {
       try {
         const tempQuery = query({

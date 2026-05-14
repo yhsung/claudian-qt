@@ -46,6 +46,7 @@ public slots:
     void copyToClipboard(const QString &text);
     void requestModels();
     void setThinking(const QString &thinkingType, int budgetTokens = 8000);
+    void setRunOptions(int maxTurns, double maxBudgetUsd, const QString &effort, const QString &systemPrompt);
 
 signals:
     void textReady(const QString &text);

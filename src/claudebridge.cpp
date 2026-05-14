@@ -276,3 +276,13 @@ void ClaudeBridge::setThinking(const QString &thinkingType, int budgetTokens) {
     if (budgetTokens > 0) cmd["budgetTokens"] = budgetTokens;
     m_daemon->sendCommand(cmd);
 }
+
+void ClaudeBridge::setRunOptions(int maxTurns, double maxBudgetUsd,
+                                  const QString &effort, const QString &systemPrompt) {
+    QJsonObject cmd{{"type", "set_run_options"}};
+    if (maxTurns > 0)            cmd["maxTurns"]     = maxTurns;
+    if (maxBudgetUsd > 0.0)      cmd["maxBudgetUsd"] = maxBudgetUsd;
+    if (!effort.isEmpty())       cmd["effort"]        = effort;
+    cmd["systemPrompt"] = systemPrompt;
+    m_daemon->sendCommand(cmd);
+}

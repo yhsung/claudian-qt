@@ -221,6 +221,14 @@ function initDOM() {
     rateLimitBanner:      document.getElementById('rate-limit-banner'),
     rateLimitText:        document.getElementById('rate-limit-text'),
     thinkingSelect:       document.getElementById('thinking-select'),
+    runOptsToggle:        document.getElementById('run-opts-toggle'),
+    runOptionsRow:        document.getElementById('run-options-row'),
+    systemPromptRow:      document.getElementById('system-prompt-row'),
+    maxTurnsInput:        document.getElementById('max-turns-input'),
+    maxBudgetInput:       document.getElementById('max-budget-input'),
+    effortSelect:         document.getElementById('effort-select'),
+    systemPromptInput:    document.getElementById('system-prompt-input'),
+    applyRunOptsBtn:      document.getElementById('apply-run-options-btn'),
   };
 }
 
@@ -1340,6 +1348,24 @@ function wireEvents() {
   if (DOM.thinkingSelect) {
     DOM.thinkingSelect.addEventListener('change', () => {
       if (bridge) bridge.setThinking(DOM.thinkingSelect.value, 8000);
+    });
+  }
+  if (DOM.runOptsToggle) {
+    DOM.runOptsToggle.addEventListener('click', () => {
+      const visible = DOM.runOptionsRow.style.display !== 'none';
+      DOM.runOptionsRow.style.display = visible ? 'none' : '';
+      DOM.systemPromptRow.style.display = visible ? 'none' : '';
+      DOM.runOptsToggle.classList.toggle('run-opts-active', !visible);
+    });
+  }
+  if (DOM.applyRunOptsBtn) {
+    DOM.applyRunOptsBtn.addEventListener('click', () => {
+      if (!bridge) return;
+      const maxTurns   = parseInt(DOM.maxTurnsInput?.value || '0', 10) || 0;
+      const maxBudget  = parseFloat(DOM.maxBudgetInput?.value || '0') || 0;
+      const effort     = DOM.effortSelect?.value || '';
+      const sysPrompt  = DOM.systemPromptInput?.value?.trim() || '';
+      bridge.setRunOptions(maxTurns, maxBudget, effort, sysPrompt);
     });
   }
   DOM.permModeBtn.addEventListener('click', () => {
