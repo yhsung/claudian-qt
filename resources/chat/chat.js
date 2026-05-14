@@ -1713,6 +1713,10 @@ function wireBridgeSignals() {
     bridge.requestSessions();
     showToast('Session forked — continuing from here in a new session.');
   });
+  bridge.agentNotification.connect((message, notificationType) => {
+    if (!message || notificationType === 'subagent_stop') return;
+    showToast(`Claude: ${message}`);
+  });
   syncCwd(bridge.cwd);
   syncModel(bridge.model);
   syncStatuslineModel(bridge.model);

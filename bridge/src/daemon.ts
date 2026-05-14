@@ -1,7 +1,7 @@
 import * as readline from "readline";
 import * as os from "os";
 import { query, startup, AbortError } from "@anthropic-ai/claude-agent-sdk";
-import type { CanUseTool, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
+import type { CanUseTool, HookCallback, HookCallbackMatcher, HookEvent, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
 import { listSessions, loadSessionHistory, renameSession } from "./session-history.js";
@@ -182,6 +182,34 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
     const wasForking = state.forkNext;
     state.forkNext = false;
 
+    const hooks: Partial<Record<HookEvent, HookCallbackMatcher[]>> = {
+      Notification: [{
+        hooks: [async (input) => {
+          const inp = input as Record<string, unknown>;
+          emit({
+            type: "notification",
+            message: String(inp["message"] ?? ""),
+            notificationType: String(inp["notification_type"] ?? ""),
+          });
+          return {};
+        }] as HookCallback[],
+      }],
+      SubagentStop: [{
+        hooks: [async (input) => {
+          const inp = input as Record<string, unknown>;
+          const agentId = String(inp["agent_id"] ?? "");
+          if (agentId) {
+            emit({
+              type: "notification",
+              message: `Subagent finished: ${agentId}`,
+              notificationType: "subagent_stop",
+            });
+          }
+          return {};
+        }] as HookCallback[],
+      }],
+    };
+
     let queryResult: ReturnType<typeof query>;
 
     if (warm && !state.sessionId) {
@@ -204,6 +232,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
           includePartialMessages:          true,
           forwardSubagentText:             true,
           canUseTool:                      makeCanUseTool(effectiveYolo),
+          hooks,
           ...buildRunOptions(),
         },
       });

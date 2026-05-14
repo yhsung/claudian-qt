@@ -37,6 +37,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::compactBoundary,      this, &ClaudeBridge::compactBoundary);
     connect(m_daemon, &BridgeDaemon::modelsListed,         this, &ClaudeBridge::modelsListed);
     connect(m_daemon, &BridgeDaemon::sessionForked,        this, &ClaudeBridge::sessionForked);
+    connect(m_daemon, &BridgeDaemon::agentNotification,   this, &ClaudeBridge::agentNotification);
 
     connect(m_daemon, &BridgeDaemon::resultReceived, this, [this](const QJsonObject &result) {
         if (result["is_error"].toBool()) return;

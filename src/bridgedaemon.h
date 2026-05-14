@@ -41,6 +41,7 @@ signals:
     void compactBoundary(const QString &json);
     void modelsListed(const QString &json);
     void sessionForked(const QString &newSessionId);
+    void agentNotification(const QString &message, const QString &notificationType);
 
 private slots:
     void onReadyRead();

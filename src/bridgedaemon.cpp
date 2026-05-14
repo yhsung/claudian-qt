@@ -174,6 +174,7 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
                                                     {"trigger",    event["trigger"]}
                                                 }).toJson(QJsonDocument::Compact)));
     else if (type == "session_forked")          emit sessionForked(event["newSessionId"].toString());
+    else if (type == "notification")            emit agentNotification(event["message"].toString(), event["notificationType"].toString());
 }
 
 void BridgeDaemon::onDaemonFinished(int exitCode, QProcess::ExitStatus) {
