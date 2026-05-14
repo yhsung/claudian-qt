@@ -1142,6 +1142,7 @@ function populateModelPicker(models) {
     if (m.id) MODELS.push({ value: m.id, label: m.displayName || m.id });
   });
   buildModelDropdown();
+  syncModel(state.model);
 }
 
 function syncModel(val) {

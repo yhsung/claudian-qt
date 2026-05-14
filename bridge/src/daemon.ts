@@ -125,8 +125,18 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
     const userMessage = await buildUserMessage(prompt, attachments);
 
     // Check if we have a pre-warmed query and this is a fresh session
-    const warm = (warmQueryPromise && !state.sessionId) ? await warmQueryPromise : null;
-    warmQueryPromise = null;
+    // If a warm query is available but we can't use it (resuming a session),
+    // close it to avoid leaking the pre-warmed subprocess.
+    let warm: WarmQuery | null = null;
+    if (warmQueryPromise) {
+      if (!state.sessionId) {
+        warm = await warmQueryPromise;
+      } else {
+        // Session is active — discard the warm query and close its subprocess
+        warmQueryPromise.then(w => w?.close()).catch(() => {});
+      }
+      warmQueryPromise = null;
+    }
 
     let queryResult: ReturnType<typeof query>;
 
