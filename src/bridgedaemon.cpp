@@ -175,6 +175,10 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
                                                 }).toJson(QJsonDocument::Compact)));
     else if (type == "session_forked")          emit sessionForked(event["newSessionId"].toString());
     else if (type == "notification")            emit agentNotification(event["message"].toString(), event["notificationType"].toString());
+    else if (type == "rewind_result")           emit rewindResult(
+                                                    QString::fromUtf8(QJsonDocument(event["changedFiles"].toArray()).toJson(QJsonDocument::Compact)),
+                                                    QString::fromUtf8(QJsonDocument(event["restoredFiles"].toArray()).toJson(QJsonDocument::Compact)),
+                                                    QString::fromUtf8(QJsonDocument(event["failedFiles"].toArray()).toJson(QJsonDocument::Compact)));
 }
 
 void BridgeDaemon::onDaemonFinished(int exitCode, QProcess::ExitStatus) {

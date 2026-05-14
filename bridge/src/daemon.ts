@@ -229,6 +229,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
           model:                           (model ?? state.model) || undefined,
           allowDangerouslySkipPermissions: effectiveYolo,
           permissionMode:                  effectiveYolo ? "bypassPermissions" : (state.permissionMode as any) || "default",
+          enableFileCheckpointing:         true,
           includePartialMessages:          true,
           forwardSubagentText:             true,
           canUseTool:                      makeCanUseTool(effectiveYolo),
@@ -552,6 +553,32 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
             answers: cmd.answers,
           },
         });
+      }
+      break;
+    }
+
+    case "rewind_files": {
+      if (!activeQuery) {
+        emit({ type: "error", msg: "No active session to rewind." });
+        break;
+      }
+      try {
+        const qWithRewind = activeQuery as unknown as {
+          rewindFiles: (userMessageId: string, opts?: { dryRun?: boolean }) => Promise<{
+            changedFiles?: string[];
+            restoredFiles?: string[];
+            failedFiles?: string[];
+          }>;
+        };
+        const result = await qWithRewind.rewindFiles(cmd.userMessageId, { dryRun: cmd.dryRun ?? false });
+        emit({
+          type: "rewind_result",
+          changedFiles:  result.changedFiles  ?? [],
+          restoredFiles: result.restoredFiles ?? [],
+          failedFiles:   result.failedFiles   ?? [],
+        });
+      } catch (err) {
+        emit({ type: "error", msg: `Rewind failed: ${err instanceof Error ? err.message : String(err)}` });
       }
       break;
     }

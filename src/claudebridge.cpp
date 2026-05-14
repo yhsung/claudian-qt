@@ -38,6 +38,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::modelsListed,         this, &ClaudeBridge::modelsListed);
     connect(m_daemon, &BridgeDaemon::sessionForked,        this, &ClaudeBridge::sessionForked);
     connect(m_daemon, &BridgeDaemon::agentNotification,   this, &ClaudeBridge::agentNotification);
+    connect(m_daemon, &BridgeDaemon::rewindResult,        this, &ClaudeBridge::rewindResult);
 
     connect(m_daemon, &BridgeDaemon::resultReceived, this, [this](const QJsonObject &result) {
         if (result["is_error"].toBool()) return;
@@ -324,4 +325,12 @@ void ClaudeBridge::setAgents(const QString &agentsJson) {
         return;
     }
     m_daemon->sendCommand(QJsonObject{{"type", "set_agents"}, {"agents", doc.object()}});
+}
+
+void ClaudeBridge::rewindFiles(const QString &userMessageId, bool dryRun) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",          "rewind_files"},
+        {"userMessageId", userMessageId},
+        {"dryRun",        dryRun},
+    });
 }

@@ -1812,6 +1812,16 @@ function wireBridgeSignals() {
     if (!message || notificationType === 'subagent_stop') return;
     showToast(`Claude: ${message}`);
   });
+  bridge.rewindResult.connect((changedJson, restoredJson, failedJson) => {
+    try {
+      const restored = JSON.parse(restoredJson);
+      const failed   = JSON.parse(failedJson);
+      const msg = failed.length
+        ? `Rewound ${restored.length} file(s). Failed: ${failed.join(', ')}`
+        : `Rewound ${restored.length} file(s) successfully.`;
+      showToast(msg);
+    } catch {}
+  });
   syncCwd(bridge.cwd);
   syncModel(bridge.model);
   syncStatuslineModel(bridge.model);

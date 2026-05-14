@@ -51,6 +51,7 @@ public slots:
     void setMcpServers(const QString &serversJson);
     void setAgents(const QString &agentsJson);
     void forkSession();
+    void rewindFiles(const QString &userMessageId, bool dryRun = false);
 
 signals:
     void textReady(const QString &text);
@@ -84,6 +85,7 @@ signals:
     void modelsListed(const QString &json);
     void sessionForked(const QString &newSessionId);
     void agentNotification(const QString &message, const QString &notificationType);
+    void rewindResult(const QString &changedJson, const QString &restoredJson, const QString &failedJson);
 
 private:
     BridgeDaemon    *m_daemon;
