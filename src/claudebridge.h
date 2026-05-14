@@ -47,6 +47,7 @@ public slots:
     void requestModels();
     void setThinking(const QString &thinkingType, int budgetTokens = 8000);
     void setRunOptions(int maxTurns, double maxBudgetUsd, const QString &effort, const QString &systemPrompt);
+    void setToolControls(const QString &allowedJson, const QString &disallowedJson);
 
 signals:
     void textReady(const QString &text);

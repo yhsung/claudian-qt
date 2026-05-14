@@ -286,3 +286,16 @@ void ClaudeBridge::setRunOptions(int maxTurns, double maxBudgetUsd,
     cmd["systemPrompt"] = systemPrompt;
     m_daemon->sendCommand(cmd);
 }
+
+void ClaudeBridge::setToolControls(const QString &allowedJson, const QString &disallowedJson) {
+    auto parseList = [](const QString &json) -> QJsonArray {
+        QJsonParseError err;
+        const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+        return (err.error == QJsonParseError::NoError && doc.isArray()) ? doc.array() : QJsonArray{};
+    };
+    m_daemon->sendCommand(QJsonObject{
+        {"type",            "set_tool_controls"},
+        {"allowedTools",    parseList(allowedJson)},
+        {"disallowedTools", parseList(disallowedJson)},
+    });
+}

@@ -135,6 +135,17 @@
         <textarea id="system-prompt-input" placeholder="System prompt…" rows="2" style="width:100%;resize:vertical"></textarea>
         <button id="apply-run-options-btn">Apply</button>
       </div>
+      <div class="tool-controls-row" id="tool-controls-row" style="display:none">
+        <label class="run-opt-label">
+          Allowed tools (comma-separated, empty = all):
+          <input type="text" id="allowed-tools-input" placeholder="Read,Glob,Grep">
+        </label>
+        <label class="run-opt-label">
+          Blocked tools:
+          <input type="text" id="disallowed-tools-input" placeholder="Bash,Write">
+        </label>
+        <button id="apply-tool-controls-btn">Apply</button>
+      </div>
       <div id="input-toolbar">
         <button id="attach-btn" title="Attach images (or paste/drag)">📎</button>
         <button id="cwd-btn" title="Change working directory">~/</button>

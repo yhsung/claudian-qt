@@ -455,6 +455,11 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       if (cmd.systemPrompt !== undefined) state.systemPrompt = cmd.systemPrompt.trim() || undefined;
       break;
 
+    case "set_tool_controls":
+      state.allowedTools   = cmd.allowedTools?.length   ? cmd.allowedTools   : undefined;
+      state.disallowedTools = cmd.disallowedTools?.length ? cmd.disallowedTools : undefined;
+      break;
+
     case "request_models": {
       try {
         const tempQuery = query({

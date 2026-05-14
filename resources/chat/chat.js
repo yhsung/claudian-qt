@@ -229,6 +229,10 @@ function initDOM() {
     effortSelect:         document.getElementById('effort-select'),
     systemPromptInput:    document.getElementById('system-prompt-input'),
     applyRunOptsBtn:      document.getElementById('apply-run-options-btn'),
+    toolControlsRow:      document.getElementById('tool-controls-row'),
+    allowedToolsInput:    document.getElementById('allowed-tools-input'),
+    disallowedToolsInput: document.getElementById('disallowed-tools-input'),
+    applyToolControlsBtn: document.getElementById('apply-tool-controls-btn'),
   };
 }
 
@@ -1355,6 +1359,9 @@ function wireEvents() {
       const visible = DOM.runOptionsRow.style.display !== 'none';
       DOM.runOptionsRow.style.display = visible ? 'none' : '';
       DOM.systemPromptRow.style.display = visible ? 'none' : '';
+      if (DOM.toolControlsRow) {
+        DOM.toolControlsRow.style.display = visible ? 'none' : '';
+      }
       DOM.runOptsToggle.classList.toggle('run-opts-active', !visible);
     });
   }
@@ -1366,6 +1373,18 @@ function wireEvents() {
       const effort     = DOM.effortSelect?.value || '';
       const sysPrompt  = DOM.systemPromptInput?.value?.trim() || '';
       bridge.setRunOptions(maxTurns, maxBudget, effort, sysPrompt);
+    });
+  }
+  if (DOM.applyToolControlsBtn) {
+    DOM.applyToolControlsBtn.addEventListener('click', () => {
+      if (!bridge) return;
+      const parseTools = (s) => JSON.stringify(
+        (s || '').split(',').map(t => t.trim()).filter(Boolean)
+      );
+      bridge.setToolControls(
+        parseTools(DOM.allowedToolsInput?.value),
+        parseTools(DOM.disallowedToolsInput?.value)
+      );
     });
   }
   DOM.permModeBtn.addEventListener('click', () => {
