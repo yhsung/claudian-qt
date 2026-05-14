@@ -21,6 +21,18 @@ const state = {
   sessionId:          "",
   turnIndex:          -1,
   sessionPermissions: {} as Record<string, boolean>,
+  // New fields for Task 4+:
+  thinking:           "disabled" as "disabled" | "adaptive" | "enabled",
+  thinkingBudget:     8000,
+  effort:             undefined as "low" | "medium" | "high" | "xhigh" | "max" | undefined,
+  maxTurns:           undefined as number | undefined,
+  maxBudgetUsd:       undefined as number | undefined,
+  systemPrompt:       undefined as string | undefined,
+  allowedTools:       undefined as string[] | undefined,
+  disallowedTools:    undefined as string[] | undefined,
+  mcpServers:         {} as Record<string, unknown>,
+  agents:             {} as Record<string, unknown>,
+  forkNext:           false,
 };
 
 let currentAbort: AbortController | null = null;
@@ -108,6 +120,35 @@ function makeCanUseTool(yoloMode: boolean): CanUseTool {
   };
 }
 
+function buildRunOptions(): Record<string, unknown> {
+  const opts: Record<string, unknown> = {};
+
+  if (state.thinking === "enabled") {
+    opts.thinking = { type: "enabled", budget_tokens: state.thinkingBudget };
+  } else if (state.thinking === "adaptive") {
+    opts.thinking = { type: "adaptive" };
+  } else {
+    opts.thinking = { type: "disabled" };
+  }
+
+  if (state.effort !== undefined) opts.effort = state.effort;
+  if (state.maxTurns !== undefined) opts.maxTurns = state.maxTurns;
+  if (state.maxBudgetUsd !== undefined) opts.maxBudgetUsd = state.maxBudgetUsd;
+  if (state.systemPrompt) opts.systemPrompt = state.systemPrompt;
+  if (state.allowedTools) opts.allowedTools = state.allowedTools;
+  if (state.disallowedTools) opts.disallowedTools = state.disallowedTools;
+  if (Object.keys(state.mcpServers).length) opts.mcpServers = state.mcpServers;
+  if (Object.keys(state.agents).length) {
+    opts.agents = state.agents;
+    // Agent tool must be allowed for subagents to be callable
+    if (state.allowedTools && !state.allowedTools.includes("Agent")) {
+      opts.allowedTools = [...state.allowedTools, "Agent"];
+    }
+  }
+
+  return opts;
+}
+
 async function handleSend(prompt: string, attachments: OutboundAttachment[], model?: string, yolo?: boolean): Promise<void> {
   if (currentAbort) currentAbort.abort();
 
@@ -138,6 +179,9 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
       warmQueryPromise = null;
     }
 
+    const wasForking = state.forkNext;
+    state.forkNext = false;
+
     let queryResult: ReturnType<typeof query>;
 
     if (warm && !state.sessionId) {
@@ -152,13 +196,15 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
         options: {
           abortController,
           cwd:                             state.cwd,
-          resume:                          state.sessionId || undefined,
+          resume:                          wasForking ? undefined : (state.sessionId || undefined),
+          forkSession:                     wasForking || undefined,
           model:                           (model ?? state.model) || undefined,
           allowDangerouslySkipPermissions: effectiveYolo,
           permissionMode:                  effectiveYolo ? "bypassPermissions" : (state.permissionMode as any) || "default",
           includePartialMessages:          true,
           forwardSubagentText:             true,
           canUseTool:                      makeCanUseTool(effectiveYolo),
+          ...buildRunOptions(),
         },
       });
     }
@@ -169,8 +215,10 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
       const m = message as Record<string, unknown>;
 
       if (m.type === "system" && m.subtype === "init") {
-        state.sessionId = m.session_id as string;
-        emit({ type: "session_ready", sessionId: state.sessionId });
+        const newSessionId = m.session_id as string;
+        state.sessionId = newSessionId;
+        emit({ type: "session_ready", sessionId: newSessionId });
+        if (wasForking) emit({ type: "session_forked", newSessionId });
         const fastModeState = (m as Record<string, unknown>).fast_mode_state as string | undefined;
         if (fastModeState) {
           emit({ type: "fast_mode_state", state: fastModeState as "off" | "cooldown" | "on" });
@@ -393,6 +441,11 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
 
     case "set_permission_mode":
       state.permissionMode = cmd.mode;
+      break;
+
+    case "set_thinking":
+      state.thinking = cmd.thinkingType;
+      if (cmd.budgetTokens !== undefined) state.thinkingBudget = cmd.budgetTokens;
       break;
 
     case "request_models": {

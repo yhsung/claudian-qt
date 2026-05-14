@@ -45,6 +45,7 @@ public slots:
     void setPermissionMode(const QString &mode);
     void copyToClipboard(const QString &text);
     void requestModels();
+    void setThinking(const QString &thinkingType, int budgetTokens = 8000);
 
 signals:
     void textReady(const QString &text);

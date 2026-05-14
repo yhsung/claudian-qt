@@ -220,6 +220,7 @@ function initDOM() {
     scrollToBottomBtn:    document.getElementById('scroll-to-bottom'),
     rateLimitBanner:      document.getElementById('rate-limit-banner'),
     rateLimitText:        document.getElementById('rate-limit-text'),
+    thinkingSelect:       document.getElementById('thinking-select'),
   };
 }
 
@@ -1336,6 +1337,11 @@ function wireEvents() {
   document.addEventListener('click', () => DOM.modelDropdown.classList.remove('open'));
   DOM.modelDropdown.addEventListener('click', e => e.stopPropagation());
   DOM.yoloBtn.addEventListener('click', () => { const v = !state.yolo; if (bridge) bridge.setYolo(v); syncYolo(v); });
+  if (DOM.thinkingSelect) {
+    DOM.thinkingSelect.addEventListener('change', () => {
+      if (bridge) bridge.setThinking(DOM.thinkingSelect.value, 8000);
+    });
+  }
   DOM.permModeBtn.addEventListener('click', () => {
     const idx = PERM_MODES.findIndex(m => m.value === state.permissionMode);
     syncPermMode(PERM_MODES[(idx + 1) % PERM_MODES.length].value);

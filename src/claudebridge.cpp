@@ -270,3 +270,9 @@ void ClaudeBridge::copyToClipboard(const QString &text) {
 void ClaudeBridge::requestModels() {
     m_daemon->sendCommand(QJsonObject{{"type", "request_models"}});
 }
+
+void ClaudeBridge::setThinking(const QString &thinkingType, int budgetTokens) {
+    QJsonObject cmd{{"type", "set_thinking"}, {"thinkingType", thinkingType}};
+    if (budgetTokens > 0) cmd["budgetTokens"] = budgetTokens;
+    m_daemon->sendCommand(cmd);
+}
