@@ -3,10 +3,7 @@ import * as fs from "fs";
 import { readdir, readFile, writeFile, mkdir } from "fs/promises";
 import { join, dirname } from "path";
 import * as os from "os";
-import {
-  listSessions as sdkListSessions,
-  renameSession as sdkRenameSession,
-} from "@anthropic-ai/claude-agent-sdk";
+import { renameSession as sdkRenameSession } from "@anthropic-ai/claude-agent-sdk";
 import { attachmentRoot, loadAttachmentManifest, rehydrateAttachment } from "./attachment-store.js";
 import type { HistoryAttachment, HistoryTurn } from "./protocol.js";
 
@@ -114,37 +111,6 @@ export async function listSessions(
   cwd: string,
   home = os.homedir()
 ): Promise<SessionEntry[]> {
-  // When home is overridden (e.g. in tests), use manual JSONL reading directly.
-  // Otherwise, try the SDK first (it has richer metadata) and fall back to JSONL.
-  if (home !== os.homedir()) {
-    return listSessionsFromFiles(cwd, home);
-  }
-
-  try {
-    const allSessions = await sdkListSessions({});
-    // SDK returns all sessions across all projects; filter to the requested cwd
-    const filtered = allSessions.filter((s) => s.cwd === cwd);
-    // If the filter produced results, use the SDK's richer metadata
-    if (filtered.length > 0) {
-      return filtered.map((s) => {
-        const timestamp = s.lastModified
-          ? new Date(s.lastModified).toISOString()
-          : s.createdAt
-          ? new Date(s.createdAt).toISOString()
-          : "";
-        const entry: SessionEntry = {
-          id: s.sessionId,
-          preview: (s.firstPrompt ?? s.summary ?? "(no preview)").slice(0, 120),
-          timestamp,
-        };
-        if (s.customTitle) entry.name = s.customTitle;
-        return entry;
-      }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-    }
-    // SDK returned nothing or cwd mismatch — fall through to file-based reading
-  } catch {
-    // SDK unavailable or errored — fall back to manual JSONL parsing
-  }
   return listSessionsFromFiles(cwd, home);
 }
 

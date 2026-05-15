@@ -165,9 +165,14 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
   try {
     const userMessage = await buildUserMessage(prompt, attachments);
 
-    // Always use cold-start path — close warm query if present
+    // Always use cold-start path — await warm query close before starting new query.
+    // Fire-and-forget close caused a race where the SDK's internal session state
+    // from the warmup bled into the new query, preventing fresh session creation.
     if (warmQueryPromise) {
-      warmQueryPromise.then(w => w?.close()).catch(() => {});
+      try {
+        const warm = await warmQueryPromise;
+        await warm?.close();
+      } catch { /* warm query close failures are non-fatal */ }
       warmQueryPromise = null;
     }
     scheduleWarmup();

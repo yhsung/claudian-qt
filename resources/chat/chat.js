@@ -1755,6 +1755,7 @@ function wireBridgeSignals() {
   bridge.turnComplete.connect(() => {
     dismissPermissionDialog();
     if (state.streaming) endStreaming();
+    bridge.requestSessions();
   });
   bridge.fileWritten.connect((success, path) => {
     if (!success) return;

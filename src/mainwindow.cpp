@@ -11,11 +11,12 @@ MainWindow::MainWindow(QWidget *parent)
     m_channel = new QWebChannel(this);
     m_channel->registerObject("claude", m_bridge);
 
+    // Remote debugging on port 9222 — connect via chrome://inspect or DevTools
+    // Must be set before QWebEngineView is created
+    qputenv("QTWEBENGINE_REMOTE_DEBUGGING", "9222");
+
     m_webView = new QWebEngineView(this);
     m_webView->page()->setWebChannel(m_channel);
-
-    // Remote debugging on port 9222 — connect via chrome://inspect or DevTools
-    qputenv("QTWEBENGINE_REMOTE_DEBUGGING", "9222");
 
     m_webView->settings()->setAttribute(
         QWebEngineSettings::LocalContentCanAccessFileUrls,
