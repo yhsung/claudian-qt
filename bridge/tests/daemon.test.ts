@@ -217,6 +217,98 @@ describe("daemon protocol — no API key required", () => {
   });
 });
 
+describe("daemon — set_run_options guard logic", () => {
+  it("discards maxTurns <= 0 (daemon stays responsive)", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_run_options", maxTurns: 0 });
+    handle.send({ type: "set_run_options", maxTurns: -1 });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+
+  it("discards maxBudgetUsd <= 0 (daemon stays responsive)", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_run_options", maxBudgetUsd: 0 });
+    handle.send({ type: "set_run_options", maxBudgetUsd: -0.5 });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+
+  it("discards empty-string effort (daemon stays responsive)", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_run_options", effort: "" as any });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+
+  it("discards whitespace-only systemPrompt (daemon stays responsive)", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_run_options", systemPrompt: "   " });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+});
+
+describe("daemon — set_thinking edge cases", () => {
+  it("set_thinking adaptive then new_session still works", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_thinking", thinkingType: "adaptive" });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+
+  it("set_thinking disabled with budgetTokens does not crash", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_thinking", thinkingType: "disabled", budgetTokens: 16000 });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+});
+
+describe("daemon — permission_response survives unknown requestId without changing state", async () => {
+  it("survives permission_response for unknown requestId without crashing", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "permission_response", requestId: "nonexistent-req", allow: true, alwaysAllow: true });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+});
+
 const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 describe.skipIf(!HAS_API_KEY)("daemon integration (requires ANTHROPIC_API_KEY)", () => {

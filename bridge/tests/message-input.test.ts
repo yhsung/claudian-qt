@@ -103,4 +103,35 @@ describe("buildUserMessage", () => {
       ])
     ).rejects.toThrow(/ENOENT/);
   });
+
+  it("builds a message with empty prompt text and valid attachments", async () => {
+    await mkdir(TMP, { recursive: true });
+    const stagedPath = join(TMP, "attachment-only.png");
+    const pngBytes = Buffer.from("datadata");
+    await writeFile(stagedPath, pngBytes);
+
+    const message = await buildUserMessage("", [
+      {
+        id: "att-empty-prompt",
+        originalName: "attachment-only.png",
+        mimeType: "image/png",
+        stagedPath,
+        fileUrl: "file://" + stagedPath,
+        sizeBytes: pngBytes.length,
+      },
+    ]);
+
+    expect(message.message.content).toHaveLength(2);
+    const content = message.message.content as Array<Record<string, unknown>>;
+    expect(content[0]).toEqual({ type: "text", text: "" });
+    expect(content[1].type).toBe("image");
+  });
+
+  it("includes whitespace-only prompt text in the text block", async () => {
+    const message = await buildUserMessage("   ", []);
+
+    const content = message.message.content as Array<Record<string, unknown>>;
+    expect(content).toHaveLength(1);
+    expect(content[0]).toEqual({ type: "text", text: "   " });
+  });
 });

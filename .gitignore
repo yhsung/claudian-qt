@@ -81,6 +81,8 @@ vite.config.ts.timestamp-*
 
 # Local worktrees
 .worktrees/
+_temp/
+tmp/
 
 # macOS
 .DS_Store

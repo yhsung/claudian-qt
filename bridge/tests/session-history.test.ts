@@ -189,6 +189,82 @@ describe("listSessions — name sidecar", () => {
 // countUserTurns
 // ---------------------------------------------------------------------------
 
+describe("listSessions — corrupt .name sidecar", () => {
+  it("does not crash on corrupt (non-JSON) .name sidecar; returns session without name", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-corrupt-name-"));
+    const cwd = "/corrupt/name/test";
+    const dir = join(home, ".claude", "projects", "-corrupt-name-test");
+    await mkdir(dir, { recursive: true });
+    const sessionId = "sess-corrupt";
+    // Write a valid JSONL with a user turn
+    await writeFile(
+      join(dir, `${sessionId}.jsonl`),
+      JSON.stringify({ type: "user", timestamp: "2026-05-01T00:00:00.000Z", message: { role: "user", content: [{ type: "text", text: "hello" }] } })
+    );
+    // Write a corrupt .name file
+    await writeFile(join(dir, `${sessionId}.name`), "not json {{{");
+
+    const sessions = await listSessions(cwd, home);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].id).toBe(sessionId);
+    // Name should be undefined because .name file was corrupt
+    expect(sessions[0].name).toBeUndefined();
+  });
+});
+
+describe("loadSessionHistory — corrupt JSON lines", () => {
+  it("skips unparseable JSON lines and continues reading", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-corrupt-jsonl-"));
+    const cwd = "/corrupt/jsonl/test";
+    const dir = join(home, ".claude", "projects", "-corrupt-jsonl-test");
+    await mkdir(dir, { recursive: true });
+    const sessionId = "sess-corrupt-lines";
+    await writeFile(join(dir, `${sessionId}.jsonl`), [
+      JSON.stringify({ type: "user", timestamp: "2026-05-01T00:00:00.000Z", message: { role: "user", content: [{ type: "text", text: "turn one" }] } }),
+      "this is not valid json {{{",
+      "",
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "answer one" }] } }),
+    ].join("\n"));
+
+    const turns = await loadSessionHistory(cwd, sessionId, home);
+    expect(turns).toHaveLength(2);
+    expect(turns[0]).toEqual({ role: "user", text: "turn one", attachments: [] });
+    expect(turns[1]).toEqual({ role: "assistant", text: "answer one", attachments: [] });
+  });
+});
+
+describe("renameSession — creates missing project directory", () => {
+  it("creates the project directory tree when it does not exist yet", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-rename-mkdir-"));
+    const cwd = "/deeply/nested/new/project";
+    const sessionId = "fresh-session";
+    // No project directory exists yet
+
+    await renameSession(cwd, sessionId, "New Name", home);
+
+    const expectedDir = join(home, ".claude", "projects", "-deeply-nested-new-project");
+    const raw = await readFile(join(expectedDir, `${sessionId}.name`), "utf8");
+    const meta = JSON.parse(raw);
+    expect(meta.name).toBe("New Name");
+  });
+});
+
+describe("loadSessionHistory — stream error", () => {
+  it("returns empty array when the session file is a directory (cannot be read as stream)", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-stream-err-"));
+    const cwd = "/stream/err/test";
+    const dir = join(home, ".claude", "projects", "-stream-err-test");
+    await mkdir(dir, { recursive: true });
+    const sessionId = "dir-instead-of-file";
+    // Create a directory where the .jsonl file should be — cannot be read as stream
+    const filePath = join(dir, `${sessionId}.jsonl`);
+    await mkdir(filePath, { recursive: true });
+
+    const turns = await loadSessionHistory(cwd, sessionId, home);
+    expect(turns).toEqual([]);
+  });
+});
+
 describe("countUserTurns", () => {
   it("returns the number of user turns in a session", async () => {
     // The beforeAll fixture wrote abc123.jsonl with one user turn and one assistant turn
