@@ -85,6 +85,34 @@ describe("finalizeAttachmentsForTurn", () => {
     expect(finalized[0].relativePath).toContain("turn-0012");
   });
 
+  it("uses \".img\" fallback extension when originalName has no extension", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "claudian-attachment-noext-"));
+    const stagingDir = join(rootDir, "staging");
+    await mkdir(stagingDir, { recursive: true });
+    const stagedPath = join(stagingDir, "README"); // no extension
+    await writeFile(stagedPath, Buffer.from("readme-contents"));
+
+    const finalized = await finalizeAttachmentsForTurn({
+      rootDir,
+      sessionId: "noext-session",
+      turnIndex: 0,
+      attachments: [{
+        id: "att-noext",
+        originalName: "README",
+        mimeType: "image/png",
+        stagedPath,
+        fileUrl: "file://" + stagedPath,
+        sizeBytes: 15,
+      }],
+    });
+
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0].relativePath).toMatch(/\.img$/);
+    // Verify file was moved to the correct path
+    const destFile = join(rootDir, finalized[0].relativePath);
+    expect(await readFile(destFile)).toEqual(Buffer.from("readme-contents"));
+  });
+
   it("rolls back destDir on rename failure mid-batch", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "claudian-attachment-rollback-"));
     const stagingDir = join(rootDir, "staging");

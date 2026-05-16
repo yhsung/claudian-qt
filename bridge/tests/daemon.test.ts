@@ -309,6 +309,36 @@ describe("daemon — permission_response survives unknown requestId without chan
   });
 });
 
+describe("daemon — send with bad attachment (buildUserMessage throws)", () => {
+  it("emits error event + turn_complete when attachment stagedPath does not exist", async () => {
+    const { handle } = startDaemon();
+    handle.send({
+      type: "send",
+      prompt: "describe this",
+      attachments: [{
+        id: "bad-att",
+        originalName: "nonexistent.png",
+        mimeType: "image/png",
+        stagedPath: "/tmp/__no_such_file__for_daemon_test__.png",
+        fileUrl: "file:///tmp/__no_such_file__for_daemon_test__.png",
+        sizeBytes: 0,
+      }],
+    });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "turn_complete"),
+      3000
+    );
+    handle.close();
+
+    const err = evts.find((e) => e.type === "error");
+    expect(err).toBeDefined();
+    expect(typeof err!.msg).toBe("string");
+    // Should mention ENOENT or "no such file"
+    expect((err!.msg as string).toLowerCase()).toMatch(/enoent|no such file/i);
+    expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+  });
+});
+
 const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 describe.skipIf(!HAS_API_KEY)("daemon integration (requires ANTHROPIC_API_KEY)", () => {
@@ -326,4 +356,50 @@ describe.skipIf(!HAS_API_KEY)("daemon integration (requires ANTHROPIC_API_KEY)",
     expect(evts.find((e) => e.type === "text_ready")).toBeDefined();
     expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
   }, 65_000);
+
+  it("send with per-command yolo:true override completes successfully", async () => {
+    const { handle, proc } = startDaemon();
+    handle.send({ type: "send", prompt: "Reply with only the word: pong", yolo: true });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "turn_complete"),
+      60_000
+    );
+    handle.close();
+    await new Promise((r) => proc.on("close", r));
+
+    expect(evts.find((e) => e.type === "session_ready")).toBeDefined();
+    expect(evts.find((e) => e.type === "text_ready")).toBeDefined();
+    expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+  }, 65_000);
+
+  it("send with per-command model override completes successfully", async () => {
+    const { handle, proc } = startDaemon();
+    handle.send({ type: "send", prompt: "Reply with only the word: ok", model: "claude-haiku-4-5-20251001" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "turn_complete"),
+      60_000
+    );
+    handle.close();
+    await new Promise((r) => proc.on("close", r));
+
+    expect(evts.find((e) => e.type === "session_ready")).toBeDefined();
+    expect(evts.find((e) => e.type === "text_ready")).toBeDefined();
+    expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+  }, 65_000);
+
+  it("send + abort mid-flight emits turn_complete without error", async () => {
+    const { handle, proc } = startDaemon();
+    handle.send({ type: "send", prompt: "Write a 300-word essay about the history of computing" });
+    // Wait briefly then abort
+    await new Promise((r) => setTimeout(r, 1000));
+    handle.send({ type: "abort" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "turn_complete"),
+      15_000
+    );
+    handle.close();
+    await new Promise((r) => proc.on("close", r));
+
+    expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+  }, 20_000);
 });

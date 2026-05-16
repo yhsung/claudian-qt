@@ -189,6 +189,35 @@ describe("listSessions — name sidecar", () => {
 // countUserTurns
 // ---------------------------------------------------------------------------
 
+describe("listSessions — corrupt orphan .name sidecar", () => {
+  it("survives corrupt orphan .name file (readFile fails or JSON parse fails)", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-orphan-corrupt-"));
+    const cwd = "/orphan/corrupt/test";
+    const dir = join(home, ".claude", "projects", "-orphan-corrupt-test");
+    await mkdir(dir, { recursive: true });
+    // Write a .name file WITHOUT a matching .jsonl (orphan)
+    const orphanId = "orphan-session-1";
+    await writeFile(join(dir, `${orphanId}.name`), "not json {{{");
+
+    // Also write a valid orphan to ensure the corrupt one doesn't break the valid one
+    const validOrphanId = "orphan-session-2";
+    await writeFile(join(dir, `${validOrphanId}.name`), JSON.stringify({
+      name: "Valid Orphan",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    }));
+
+    const sessions = await listSessions(cwd, home);
+    // The valid orphan should appear; corrupt one should be skipped silently
+    const valid = sessions.find(s => s.id === validOrphanId);
+    expect(valid).toBeDefined();
+    expect(valid!.name).toBe("Valid Orphan");
+    expect(valid!.preview).toBe("(new session)");
+    // Corrupt orphan should not appear (catch block silently skips)
+    const corrupt = sessions.find(s => s.id === orphanId);
+    expect(corrupt).toBeUndefined();
+  });
+});
+
 describe("listSessions — corrupt .name sidecar", () => {
   it("does not crash on corrupt (non-JSON) .name sidecar; returns session without name", async () => {
     const home = await mkdtemp(join(tmpdir(), "claudian-corrupt-name-"));
@@ -209,6 +238,27 @@ describe("listSessions — corrupt .name sidecar", () => {
     expect(sessions[0].id).toBe(sessionId);
     // Name should be undefined because .name file was corrupt
     expect(sessions[0].name).toBeUndefined();
+  });
+});
+
+describe("loadSessionHistory — null content on assistant", () => {
+  it("handles assistant message with null/undefined content gracefully", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-null-content-"));
+    const cwd = "/null/content/test";
+    const dir = join(home, ".claude", "projects", "-null-content-test");
+    await mkdir(dir, { recursive: true });
+    const sessionId = "null-content-sess";
+    await writeFile(join(dir, `${sessionId}.jsonl`), [
+      JSON.stringify({ type: "user", timestamp: "2026-05-01T00:00:00.000Z", message: { role: "user", content: [{ type: "text", text: "hello" }] } }),
+      // Assistant with null content — exercises `content ?? []`
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: null } }),
+      // Assistant with no content field at all
+      JSON.stringify({ type: "assistant", message: { role: "assistant" } }),
+    ].join("\n"));
+
+    const turns = await loadSessionHistory(cwd, sessionId, home);
+    expect(turns).toHaveLength(1); // only the user turn; both assistant entries produce empty text
+    expect(turns[0]).toEqual({ role: "user", text: "hello", attachments: [] });
   });
 });
 
