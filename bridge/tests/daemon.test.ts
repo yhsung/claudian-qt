@@ -160,6 +160,44 @@ describe("daemon protocol — no API key required", () => {
     expect(ready).toBeDefined();
     expect(ready!.sessionId).toBe("");
   });
+
+  it("set_model leaves daemon responsive", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_model", model: "claude-haiku-4-5-20251001" });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+
+  it("set_yolo leaves daemon responsive", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_yolo", yolo: true });
+    handle.send({ type: "new_session" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "session_ready"),
+      2000
+    );
+    handle.close();
+    expect(evts.find((ev) => ev.type === "session_ready")).toBeDefined();
+  });
+
+  it("delete_session emits sessions_listed (empty) for nonexistent session", async () => {
+    const { handle } = startDaemon();
+    handle.send({ type: "set_cwd", cwd: "/tmp/__claudian_delete_test__" });
+    handle.send({ type: "delete_session", sessionId: "nonexistent-session-xyz" });
+    const evts = await handle.collectUntil(
+      (e) => e.some((ev) => ev.type === "sessions_listed"),
+      2000
+    );
+    handle.close();
+    const listed = evts.find((ev) => ev.type === "sessions_listed");
+    expect(listed).toBeDefined();
+    expect(JSON.parse(listed!.json as string)).toEqual([]);
+  });
 });
 
 const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY);

@@ -35,6 +35,25 @@ cmake --build . --parallel $(sysctl -n hw.ncpu)
 QT_PLUGIN_PATH=/opt/homebrew/Cellar/qtbase/6.11.0/share/qt/plugins ./ClaudianQt
 ```
 
+## Test
+
+All tests are TypeScript (Vitest) in `bridge/tests/`. There are no C++ tests.
+
+**Run all tests:**
+```bash
+cd bridge && npm test
+```
+
+**Run one file:**
+```bash
+cd bridge && npx vitest run tests/session-history.test.ts
+```
+
+**Via CTest** (from `build/`):
+```bash
+ctest -R BridgeTests --output-on-failure
+```
+
 ## Architecture
 
 ### C++ layer (`src/`)

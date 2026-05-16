@@ -1,0 +1,44 @@
+{
+  "date": "2026-05-15",
+  "window": "7d",
+  "metrics": {
+    "commits": 154,
+    "contributors": 1,
+    "prs_merged": 5,
+    "insertions": 25633,
+    "deletions": 88112,
+    "net_loc": -62479,
+    "test_loc": 2046,
+    "test_ratio": 0.08,
+    "active_days": 7,
+    "sessions": 13,
+    "deep_sessions": 7,
+    "avg_session_minutes": 70,
+    "loc_per_session_hour": 1670,
+    "feat_pct": 0.45,
+    "fix_pct": 0.24,
+    "docs_pct": 0.12,
+    "chore_pct": 0.09,
+    "test_pct": 0.03,
+    "peak_hour": 21,
+    "ai_assisted_commits": 94,
+    "ai_assisted_pct": 0.61
+  },
+  "authors": {
+    "Yuehhsin Sung": {
+      "commits": 154,
+      "insertions": 25633,
+      "deletions": 88112,
+      "test_ratio": 0.08,
+      "top_area": "resources/"
+    }
+  },
+  "streak_days": 7,
+  "tweetable": "Week of May 9: 154 commits, 5 PRs, 25.6k LOC, 7d streak | 13 sessions (7 deep, 15h22m) | 61% AI-assisted",
+  "test_health": {
+    "total_test_files": 12,
+    "tests_added_this_period": 10,
+    "regression_test_commits": 0,
+    "test_files_changed": 10
+  }
+}

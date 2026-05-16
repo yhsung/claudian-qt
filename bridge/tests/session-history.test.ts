@@ -2,7 +2,7 @@ import { describe, expect, it, beforeAll } from "vitest";
 import { mkdtemp, mkdir, writeFile, readFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { listSessions, loadSessionHistory, renameSession } from "../src/session-history.js";
+import { listSessions, loadSessionHistory, renameSession, countUserTurns } from "../src/session-history.js";
 
 const TMP = join(tmpdir(), "claudian-test-" + process.pid);
 const CWD = "/test/project";
@@ -182,5 +182,62 @@ describe("listSessions — name sidecar", () => {
     const session = sessions.find(s => s.id === "abc123");
     expect(session).toBeDefined();
     expect(session!.name).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// countUserTurns
+// ---------------------------------------------------------------------------
+
+describe("countUserTurns", () => {
+  it("returns the number of user turns in a session", async () => {
+    // The beforeAll fixture wrote abc123.jsonl with one user turn and one assistant turn
+    const count = await countUserTurns(CWD, "abc123", TMP);
+    expect(count).toBe(1);
+  });
+
+  it("returns 0 for a nonexistent session", async () => {
+    const count = await countUserTurns(CWD, "no-such-session", TMP);
+    expect(count).toBe(0);
+  });
+
+  it("counts multiple user turns correctly", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-count-turns-"));
+    const cwd = "/count/project";
+    const dir = join(home, ".claude", "projects", "-count-project");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, "multi.jsonl"),
+      [
+        JSON.stringify({ type: "user", timestamp: "2026-05-01T10:00:00.000Z", message: { role: "user", content: [{ type: "text", text: "Turn one" }] } }),
+        JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Answer one" }] } }),
+        JSON.stringify({ type: "user", timestamp: "2026-05-01T10:01:00.000Z", message: { role: "user", content: [{ type: "text", text: "Turn two" }] } }),
+        JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Answer two" }] } }),
+        JSON.stringify({ type: "user", timestamp: "2026-05-01T10:02:00.000Z", message: { role: "user", content: [{ type: "text", text: "Turn three" }] } }),
+        JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Answer three" }] } }),
+      ].join("\n")
+    );
+
+    const count = await countUserTurns(cwd, "multi", home);
+    expect(count).toBe(3);
+  });
+
+  it("does not count tool_result entries as user turns", async () => {
+    const home = await mkdtemp(join(tmpdir(), "claudian-count-tool-"));
+    const cwd = "/tool/project";
+    const dir = join(home, ".claude", "projects", "-tool-project");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, "toolsess.jsonl"),
+      [
+        JSON.stringify({ type: "user", timestamp: "2026-05-01T10:00:00.000Z", message: { role: "user", content: [{ type: "text", text: "Real turn" }] } }),
+        JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "reply" }] } }),
+        // tool_result entry — should be skipped
+        JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "x", content: "ignored" }] } }),
+      ].join("\n")
+    );
+
+    const count = await countUserTurns(cwd, "toolsess", home);
+    expect(count).toBe(1);
   });
 });
