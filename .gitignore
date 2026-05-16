@@ -20,7 +20,30 @@ CMakeTmp/
 *.cmake.user
 *.cmake.user.*
 
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+*.lcov
+.nyc_output
+
 # TypeScript / Node generated files
+node_modules/
+jspm_packages/
 bridge/node_modules/
 bridge/dist/
 bridge/coverage/
@@ -29,8 +52,41 @@ bridge/ClaudianQt_autogen/
 bridge/qt.conf
 *.tsbuildinfo
 
+# npm / package managers
+.npm
+*.tgz
+.yarn-integrity
+.pnpm-store
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Cache
+.cache
+.parcel-cache
+.eslintcache
+.stylelintcache
+
+# REPL
+.node_repl_history
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+.vite/
+
 # Local worktrees
 .worktrees/
 
 # macOS
 .DS_Store
+
+# Environment
+.env
+.env.*
+!.env.example
+.gstack/

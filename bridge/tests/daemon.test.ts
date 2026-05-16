@@ -2,9 +2,26 @@ import { describe, it, expect } from "vitest";
 import { spawn, ChildProcess } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { existsSync } from "fs";
+import dotenv from "dotenv";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const _hasApiEnv = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+if (!_hasApiEnv) {
+  for (const envPath of [
+    join(__dirname, "..", "..", ".env"),
+    join(__dirname, "..", ".env"),
+    join(__dirname, "..", ".env.local"),
+  ]) {
+    if (existsSync(envPath)) {
+      dotenv.config({ path: envPath, override: false });
+    }
+  }
+}
+
 const DAEMON = join(__dirname, "../dist/daemon.js");
+const DAEMON_ENV = { ...process.env };
 
 interface DaemonHandle {
   send(cmd: object): void;
@@ -13,7 +30,7 @@ interface DaemonHandle {
 }
 
 function startDaemon(): { handle: DaemonHandle; proc: ChildProcess } {
-  const proc: ChildProcess = spawn("node", [DAEMON], { stdio: ["pipe", "pipe", "pipe"] });
+  const proc: ChildProcess = spawn("node", [DAEMON], { stdio: ["pipe", "pipe", "pipe"], env: DAEMON_ENV });
   const events: Array<Record<string, unknown>> = [];
   let buffer = "";
 
@@ -101,7 +118,7 @@ describe("daemon protocol — no API key required", () => {
   });
 
   it("emits error event on malformed command JSON", async () => {
-    const proc: ChildProcess = spawn("node", [DAEMON], { stdio: ["pipe", "pipe", "pipe"] });
+    const proc: ChildProcess = spawn("node", [DAEMON], { stdio: ["pipe", "pipe", "pipe"], env: DAEMON_ENV });
     let stdout = "";
     proc.stdout!.on("data", (c: Buffer) => { stdout += c.toString(); });
     proc.stdin!.write("not json\n");
@@ -200,7 +217,7 @@ describe("daemon protocol — no API key required", () => {
   });
 });
 
-const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY);
+const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 describe.skipIf(!HAS_API_KEY)("daemon integration (requires ANTHROPIC_API_KEY)", () => {
   it("send → session_ready + text_ready + turn_complete", async () => {

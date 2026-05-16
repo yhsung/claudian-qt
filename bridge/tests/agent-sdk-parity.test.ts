@@ -13,6 +13,8 @@ import { describe, it, expect } from "vitest";
 import { spawn, ChildProcess } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { existsSync } from "fs";
+import dotenv from "dotenv";
 import type {
   DaemonCommand,
   DaemonEvent,
@@ -23,7 +25,24 @@ import type {
 } from "../src/protocol.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Inherit env from the current process (e.g. Claude Code) first.
+// Only load dotenv files as a fallback when API credentials aren't already set.
+const _hasApiEnv = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+if (!_hasApiEnv) {
+  for (const envPath of [
+    join(__dirname, "..", "..", ".env"),
+    join(__dirname, "..", ".env"),
+    join(__dirname, "..", ".env.local"),
+  ]) {
+    if (existsSync(envPath)) {
+      dotenv.config({ path: envPath, override: false });
+    }
+  }
+}
+
 const DAEMON = join(__dirname, "../dist/daemon.js");
+const DAEMON_ENV = { ...process.env };
 
 // ---------------------------------------------------------------------------
 // Daemon harness (same shape as daemon.test.ts)
@@ -39,7 +58,7 @@ interface DaemonHandle {
 }
 
 function startDaemon(): { handle: DaemonHandle; proc: ChildProcess } {
-  const proc: ChildProcess = spawn("node", [DAEMON], { stdio: ["pipe", "pipe", "pipe"] });
+  const proc: ChildProcess = spawn("node", [DAEMON], { stdio: ["pipe", "pipe", "pipe"], env: DAEMON_ENV });
   const events: Array<Record<string, unknown>> = [];
   let buffer = "";
 
@@ -400,7 +419,7 @@ describe("daemon — rewind_files without active session emits error", () => {
 // 4. SDK integration tests (require ANTHROPIC_API_KEY)
 // ---------------------------------------------------------------------------
 
-const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY);
+const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 describe.skipIf(!HAS_API_KEY)("daemon SDK integration — thinking mode", () => {
   it("set_thinking enabled → thinking_chunk events arrive before turn_complete", async () => {
@@ -473,7 +492,7 @@ describe.skipIf(!HAS_API_KEY)("daemon SDK integration — models_listed with rea
 });
 
 describe.skipIf(!HAS_API_KEY)("daemon SDK integration — account_info with real credentials", () => {
-  it("account_info carries email or plan when authenticated", async () => {
+  it("account_info carries email, plan, subscriptionType, or apiProvider when authenticated", async () => {
     const { handle, proc } = startDaemon();
     handle.send({ type: "request_account_info" });
     const evts = await handle.collectUntil(
@@ -484,8 +503,11 @@ describe.skipIf(!HAS_API_KEY)("daemon SDK integration — account_info with real
     await new Promise((r) => proc.on("close", r));
     const ev = evts.find((e) => e.type === "account_info");
     expect(ev).toBeDefined();
-    // At least one of these should be populated with real creds
-    const hasInfo = ev!.email !== undefined || ev!.plan !== undefined;
+    // At least one identifying field should be populated with real creds
+    const hasInfo = ev!.email !== undefined
+      || ev!.plan !== undefined
+      || ev!.subscriptionType !== undefined
+      || ev!.apiProvider !== undefined;
     expect(hasInfo).toBe(true);
   }, 25_000);
 });

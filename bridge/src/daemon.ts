@@ -589,10 +589,13 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
           },
         });
         const info = await tempQuery.accountInfo();
+        const raw = info as Record<string, unknown>;
         emit({
           type: "account_info",
-          email: (info as Record<string, unknown>)?.email ? String((info as Record<string, unknown>).email) : undefined,
-          plan:  (info as Record<string, unknown>)?.planName ? String((info as Record<string, unknown>).planName) : undefined,
+          email: raw?.email ? String(raw.email) : undefined,
+          plan: raw?.subscriptionType ? String(raw.subscriptionType) : undefined,
+          subscriptionType: raw?.subscriptionType ? String(raw.subscriptionType) : undefined,
+          apiProvider: raw?.apiProvider ? String(raw.apiProvider) : undefined,
         });
       } catch {
         emit({ type: "account_info" });

@@ -2,9 +2,26 @@ import { describe, it, expect } from "vitest";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { existsSync } from "fs";
+import dotenv from "dotenv";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const _hasApiEnv = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+if (!_hasApiEnv) {
+  for (const envPath of [
+    join(__dirname, "..", "..", ".env"),
+    join(__dirname, "..", ".env"),
+    join(__dirname, "..", ".env.local"),
+  ]) {
+    if (existsSync(envPath)) {
+      dotenv.config({ path: envPath, override: false });
+    }
+  }
+}
+
 const BRIDGE = join(__dirname, "../dist/index.js");
+const BRIDGE_ENV = { ...process.env };
 
 interface BridgeResult {
   stdout: string;
@@ -14,7 +31,7 @@ interface BridgeResult {
 
 function runBridge(input: string, timeoutMs = 30_000): Promise<BridgeResult> {
   return new Promise((resolve, reject) => {
-    const proc = spawn("node", [BRIDGE], { stdio: ["pipe", "pipe", "pipe"] });
+    const proc = spawn("node", [BRIDGE], { stdio: ["pipe", "pipe", "pipe"], env: BRIDGE_ENV });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
@@ -52,7 +69,7 @@ describe("bridge error handling", () => {
   });
 });
 
-const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY);
+const HAS_API_KEY = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 describe.skipIf(!HAS_API_KEY)("bridge integration (requires ANTHROPIC_API_KEY)", () => {
   it("emits system/init and result events for a minimal prompt", async () => {

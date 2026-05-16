@@ -106,6 +106,6 @@ export type DaemonEvent =
   | { type: "prompt_suggestion"; suggestion: string }
   | { type: "compact_boundary"; preTokens: number; postTokens: number; durationMs: number; trigger: "manual" | "auto" }
   | { type: "models_listed"; models: Array<{ id: string; displayName?: string }> }
-  | { type: "account_info"; email?: string; plan?: string }
+  | { type: "account_info"; email?: string; plan?: string; subscriptionType?: string; apiProvider?: string }
   | { type: "notification"; message: string; notificationType: string }
   | ({ type: "rewind_result" } & RewindResult);
