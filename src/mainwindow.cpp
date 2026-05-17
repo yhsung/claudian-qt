@@ -1,4 +1,7 @@
 #include "mainwindow.h"
+#include <QDir>
+#include <QStandardPaths>
+#include <QWebEnginePage>
 #include <QWebEngineSettings>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -15,7 +18,18 @@ MainWindow::MainWindow(QWidget *parent)
     // Must be set before QWebEngineView is created
     qputenv("QTWEBENGINE_REMOTE_DEBUGGING", "9222");
 
+    // Persistent profile: without this, Qt6 WebEngine treats the default profile
+    // as off-the-record and localStorage is wiped on every restart.
+    const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(dataDir);
+    m_profile = new QWebEngineProfile(QStringLiteral("claudian-qt"), this);
+    m_profile->setPersistentStoragePath(dataDir + QStringLiteral("/webstorage"));
+    m_profile->setCachePath(dataDir + QStringLiteral("/webcache"));
+    m_profile->setPersistentCookiesPolicy(QWebEngineProfile::ForcePersistentCookies);
+
     m_webView = new QWebEngineView(this);
+    auto *page = new QWebEnginePage(m_profile, m_webView);
+    m_webView->setPage(page);
     m_webView->page()->setWebChannel(m_channel);
 
     m_webView->settings()->setAttribute(

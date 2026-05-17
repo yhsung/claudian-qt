@@ -25,7 +25,7 @@ public slots:
     void setCwd(const QString &path);
     void setModel(const QString &model);
     void setYolo(bool enabled);
-    void pickFolder();
+    void pickFolder(const QString &purpose = "cwd");
     void pickImages();
     void importImageData(
         const QString &requestId,
@@ -42,7 +42,14 @@ public slots:
     void respondToAskUser(const QString &requestId, const QString &answersJson);
     void deleteSession(const QString &sessionId);
     void renameSession(const QString &sessionId, const QString &name);
-    void exportSession(const QString &sessionId, const QString &preset, const QString &obsidianFolder, const QString &suggestedName);
+    void exportSession(
+        const QString &sessionId,
+        const QString &preset,
+        const QString &obsidianFolder,
+        const QString &suggestedName,
+        const QString &templatePath = QString(),
+        bool autoExport = false
+    );
     Q_INVOKABLE void summarizeSession(const QString &sessionId);
     Q_INVOKABLE void generatePrNotes(const QString &sessionId);
     Q_INVOKABLE void generateAdr(const QString &sessionId);
@@ -81,6 +88,7 @@ signals:
     void sessionsListed(const QString &json);
     void sessionHistoryLoaded(const QString &json);
     void exportResult(const QString &sessionId, const QString &preset, const QString &path);
+    void exportWarning(const QString &sessionId, const QString &warning);
     void sessionSummarized(const QString &sessionId, const QString &summary, bool isError);
     void prNotesReady(const QString &sessionId, const QString &text);
     void adrReady(const QString &sessionId, const QString &text);
@@ -102,6 +110,7 @@ signals:
     void agentNotification(const QString &message, const QString &notificationType);
     void rewindResult(const QString &changedJson, const QString &restoredJson, const QString &failedJson);
     void accountInfoReceived(const QString &json);
+    void vaultFolderChosen(const QString &path);
 
 private:
     BridgeDaemon    *m_daemon;

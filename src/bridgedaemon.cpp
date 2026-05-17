@@ -163,6 +163,7 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     else if (type == "sessions_listed")         emit sessionsListed(event["json"].toString());
     else if (type == "session_history_loaded")  emit sessionHistoryLoaded(event["json"].toString());
     else if (type == "export_result")           emit exportResult(event["sessionId"].toString(), event["preset"].toString(), event["path"].toString());
+    else if (type == "export_warning")          emit exportWarning(event["sessionId"].toString(), event["warning"].toString());
     else if (type == "session_summarized")      emit sessionSummarized(event["sessionId"].toString(), event["summary"].toString(), event["isError"].toBool());
     else if (type == "pr_notes_ready")          emit prNotesReady(event["sessionId"].toString(), event["text"].toString());
     else if (type == "adr_ready")               emit adrReady(event["sessionId"].toString(), event["text"].toString());

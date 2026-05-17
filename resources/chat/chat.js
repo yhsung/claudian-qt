@@ -36,7 +36,9 @@ const state = {
   pendingExportCopy: null,
   pendingSearch: null,
   autoSummaryEnabled: localStorage.getItem('autoSummaryEnabled') === 'true',
+  autoExportEnabled: localStorage.getItem('autoExportEnabled') === 'true',
   pendingLlmExport: null,
+  pendingAutoExport: null,
   latestSearchId: 0,
   showArchived: false,
 };
@@ -215,6 +217,7 @@ function initDOM() {
     rateLimitText:        document.getElementById('rate-limit-text'),
     thinkingSelect:       document.getElementById('thinking-select'),
     autoSummaryToggle:    document.getElementById('auto-summary-toggle'),
+    autoExportToggle:     document.getElementById('auto-export-toggle'),
     runOptsToggle:        document.getElementById('run-opts-toggle'),
     runOptionsRow:        document.getElementById('run-options-row'),
     systemPromptRow:      document.getElementById('system-prompt-row'),
@@ -821,8 +824,15 @@ function makeSessionItem(s) {
   });
 
   item.addEventListener('click', () => {
+    const prevId = state.activeSessionId;
     if (state.autoSummaryEnabled && state.activeSessionId && state.activeSessionId !== s.id) {
       bridge.summarizeSession(state.activeSessionId);
+    }
+    if (state.autoExportEnabled && prevId && prevId !== s.id) {
+      const prevSession = state.sessions?.find(s => s.id === prevId);
+      if (prevSession && !prevSession.exportedAt) {
+        triggerAutoExport(prevId);
+      }
     }
     state.activeSessionId = s.id;
     DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.sid === s.id));
@@ -859,10 +869,45 @@ function buildExportMarkdownForLoadedSession(sessionId, preset) {
   return md;
 }
 
+function buildAutoExportPayload(sessionId) {
+  const sessionData = state.sessions?.find(s => s.id === sessionId);
+  const nameBase = (sessionData?.name || sessionId.slice(0, 16)).replace(/[/\\:*?"<>|]/g, '-');
+  const suggestedName = `${new Date().toISOString().slice(0,10)}-${nameBase}-clean-summary.md`;
+  return {
+    obsidianPath: localStorage.getItem('obsidianExportPath') || '',
+    templatePath: localStorage.getItem('exportTemplatePath') || '',
+    suggestedName,
+  };
+}
+
+function fireAutoExport(sessionId) {
+  const { obsidianPath, templatePath, suggestedName } = buildAutoExportPayload(sessionId);
+  bridge.exportSession(sessionId, 'clean_summary', obsidianPath, suggestedName, templatePath, true);
+}
+
+function triggerAutoExport(sessionId) {
+  const sessionData = state.sessions?.find(s => s.id === sessionId);
+  if (!sessionData || sessionData.exportedAt) return;
+  if (state.autoSummaryEnabled && !sessionData.summary) {
+    if (state.pendingAutoExport?.sessionId === sessionId) return;
+    // pendingAutoExport is keyed by sessionId so the 10s fallback cannot export a newer session after a late summary signal.
+    state.pendingAutoExport = { sessionId, timeout: null };
+    state.pendingAutoExport.timeout = setTimeout(() => {
+      if (state.pendingAutoExport?.sessionId === sessionId) {
+        state.pendingAutoExport = null;
+        fireAutoExport(sessionId);
+      }
+    }, 10000);
+  } else {
+    fireAutoExport(sessionId);
+  }
+}
+
 function openExportPicker(sessionId) {
   const storedPreset = localStorage.getItem('lastExportPreset') || 'clean_summary';
   const lastPreset = storedPreset === 'pr_notes' ? 'pr_notes_llm' : storedPreset;
-  const obsidianPath = localStorage.getItem('obsidianExportPath') || '';
+  const getObsidianPath = () => localStorage.getItem('obsidianExportPath') || '';
+  const obsidianPath = getObsidianPath();
 
   const overlay = document.createElement('div');
   overlay.className = 'export-overlay';
@@ -899,7 +944,10 @@ function openExportPicker(sessionId) {
         <span class="preset-soon">Soon</span>
       </div>
     </div>
-    ${obsidianPath ? `<div class="export-obsidian-path">${obsidianPath}</div>` : ''}
+    <div class="export-obsidian-row">
+      <span class="export-obsidian-path">${obsidianPath || '(no vault configured)'}</span>
+      <button class="export-vault-picker-btn" title="Choose vault folder">📁 Vault</button>
+    </div>
     <div class="export-actions">
       <button class="export-btn-secondary export-copy-btn">Copy to Clipboard</button>
       <button class="export-btn-primary export-save-btn">Save to File</button>
@@ -919,6 +967,9 @@ function openExportPicker(sessionId) {
 
   const closeSheet = () => overlay.remove();
   sheet.querySelector('.export-close').addEventListener('click', closeSheet);
+  sheet.querySelector('.export-vault-picker-btn').addEventListener('click', () => {
+    bridge.pickFolder('vault');
+  });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeSheet(); });
   document.addEventListener('keydown', function escHandler(e) {
     if (e.key === 'Escape') { closeSheet(); document.removeEventListener('keydown', escHandler); }
@@ -969,7 +1020,7 @@ function openExportPicker(sessionId) {
       saveBtn.textContent = 'Saving…';
     }
 
-    bridge.exportSession(sessionId, preset, obsidianPath, suggestedName);
+    bridge.exportSession(sessionId, preset, getObsidianPath(), suggestedName, localStorage.getItem('exportTemplatePath') || '', false);
     closeSheet();
   });
 
@@ -1581,11 +1632,18 @@ function wireEvents() {
       DOM.scrollToBottomBtn.classList.remove('visible');
     });
   }
-  DOM.cwdBtn.addEventListener('click', () => { if (bridge) bridge.pickFolder(); });
+  DOM.cwdBtn.addEventListener('click', () => { if (bridge) bridge.pickFolder('cwd'); });
   DOM.newSessionBtn.addEventListener('click', () => {
     if (!bridge) return;
     if (state.autoSummaryEnabled && state.activeSessionId) {
       bridge.summarizeSession(state.activeSessionId);
+    }
+    if (state.autoExportEnabled && state.activeSessionId) {
+      const prevId = state.activeSessionId;
+      const prevSession = state.sessions?.find(s => s.id === prevId);
+      if (prevSession && !prevSession.exportedAt) {
+        triggerAutoExport(prevId);
+      }
     }
     Object.assign(state, { messages: [], activeSessionId: '', tokenCount: 0, toolCallCount: 0, summaryData: null });
     DOM.messages.innerHTML = '';
@@ -1620,6 +1678,13 @@ function wireEvents() {
     DOM.autoSummaryToggle.addEventListener('change', () => {
       state.autoSummaryEnabled = DOM.autoSummaryToggle.checked;
       localStorage.setItem('autoSummaryEnabled', String(state.autoSummaryEnabled));
+    });
+  }
+  if (DOM.autoExportToggle) {
+    DOM.autoExportToggle.checked = state.autoExportEnabled;
+    DOM.autoExportToggle.addEventListener('change', () => {
+      state.autoExportEnabled = DOM.autoExportToggle.checked;
+      localStorage.setItem('autoExportEnabled', String(state.autoExportEnabled));
     });
   }
   if (DOM.runOptsToggle) {
@@ -2041,6 +2106,9 @@ function wireBridgeSignals() {
       }
     }
   });
+  if (bridge.exportWarning) {
+    bridge.exportWarning.connect((sessionId, warning) => showToast(warning));
+  }
   bridge.sessionSummarized.connect((sessionId, summary, isError) => {
     if (isError) {
       showToast('Auto-summary failed');
@@ -2057,6 +2125,11 @@ function wireBridgeSignals() {
           previewEl.classList.toggle('has-summary', !!summary && !s.name);
         }
       }
+    }
+    if (state.pendingAutoExport?.sessionId === sessionId) {
+      clearTimeout(state.pendingAutoExport.timeout);
+      state.pendingAutoExport = null;
+      fireAutoExport(sessionId);
     }
   });
   bridge.prNotesReady.connect((sessionId, text) => {
@@ -2133,6 +2206,12 @@ function wireBridgeSignals() {
     } catch {}
   });
   bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; resetStatusline(); clearDraft(); DOM.textarea.value = ''; DOM.textarea.style.height = ''; bridge.requestSessions(); });
+  bridge.vaultFolderChosen.connect((path) => {
+    localStorage.setItem('obsidianExportPath', path);
+    showToast(`Vault set to ${path}`);
+    const pathEl = document.querySelector('.export-obsidian-path');
+    if (pathEl) pathEl.textContent = path;
+  });
   bridge.modelChanged.connect(model => { syncModel(model); syncStatuslineModel(model); });
   bridge.fastModeStateChanged.connect(state => syncFastMode(state));
   bridge.yoloChanged.connect(enabled => syncYolo(enabled));

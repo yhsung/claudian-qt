@@ -15,6 +15,7 @@ export interface SessionEntry {
   tags?: string[];
   archived?: boolean;
   exportedAt?: string;
+  exportedStem?: string;
   summary?: string;
 }
 
@@ -22,6 +23,7 @@ interface SessionMeta {
   tags?: string[];
   archived?: boolean;
   exportedAt?: string;
+  exportedStem?: string;
   summary?: string;
 }
 
@@ -36,15 +38,21 @@ interface SearchResult {
 type TurnEntry = HistoryTurn;
 
 export function buildFrontmatter(fields: Record<string, string | string[] | undefined>): string {
+  function yamlQuote(val: string): string {
+    const needsQuoting = /[:#\[\]{}|>*&!'"%]|^\s|\s$/.test(val) || val === "";
+    if (!needsQuoting) return val;
+    return `"${val.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  }
+
   const lines = ["---"];
   for (const [key, val] of Object.entries(fields)) {
     if (val === undefined || val === null) continue;
     if (Array.isArray(val)) {
       if (val.length === 0) continue;
       lines.push(`${key}:`);
-      val.forEach(v => lines.push(`  - ${v}`));
+      val.forEach(v => lines.push(`  - ${yamlQuote(v)}`));
     } else {
-      lines.push(`${key}: ${val}`);
+      lines.push(`${key}: ${yamlQuote(val)}`);
     }
   }
   lines.push("---", "");
@@ -67,6 +75,7 @@ async function readSessionMeta(cwd: string, sessionId: string, home: string): Pr
     if (Array.isArray(meta.tags)) sessionMeta.tags = meta.tags as string[];
     if (typeof meta.archived === "boolean") sessionMeta.archived = meta.archived;
     if (typeof meta.exportedAt === "string") sessionMeta.exportedAt = meta.exportedAt;
+    if (typeof meta.exportedStem === "string") sessionMeta.exportedStem = meta.exportedStem;
     if (typeof meta.summary === "string") sessionMeta.summary = meta.summary;
   } catch {
     // no .meta file — session has no ClaudianQt private metadata
@@ -78,13 +87,14 @@ function applySessionMeta(entry: SessionEntry, sessionMeta: SessionMeta): void {
   if (sessionMeta.tags !== undefined) entry.tags = sessionMeta.tags;
   if (sessionMeta.archived !== undefined) entry.archived = sessionMeta.archived;
   if (sessionMeta.exportedAt !== undefined) entry.exportedAt = sessionMeta.exportedAt;
+  if (sessionMeta.exportedStem !== undefined) entry.exportedStem = sessionMeta.exportedStem;
   if (sessionMeta.summary !== undefined) entry.summary = sessionMeta.summary;
 }
 
 export async function updateSessionMeta(
   cwd: string,
   sessionId: string,
-  updates: Partial<{ tags: string[]; archived: boolean; exportedAt: string; summary: string }>,
+  updates: Partial<{ tags: string[]; archived: boolean; exportedAt: string; exportedStem: string; summary: string }>,
   home: string,
 ): Promise<void> {
   const mp = metaPath(cwd, sessionId, home);
@@ -191,6 +201,19 @@ export async function listSessions(
   home = os.homedir()
 ): Promise<SessionEntry[]> {
   return listSessionsFromFiles(cwd, home);
+}
+
+export async function getExportedSiblingStems(
+  cwd: string,
+  excludeSessionId: string,
+  home = os.homedir(),
+): Promise<string[]> {
+  const sessions = await listSessions(cwd, home);
+  return sessions
+    .filter((s) => s.exportedAt != null && s.id !== excludeSessionId && s.exportedStem != null)
+    .sort((a, b) => (b.exportedAt ?? "").localeCompare(a.exportedAt ?? ""))
+    .slice(0, 50)
+    .map((s) => s.exportedStem as string);
 }
 
 export async function loadSessionHistory(
@@ -329,6 +352,8 @@ export async function exportSession(
   targetPath: string,
   home = os.homedir(),
   llmContent?: string,
+  relatedStems?: string[],
+  templateContent?: string,
 ): Promise<string> {
   const turns = await loadSessionHistory(cwd, sessionId, home);
   if (turns.length === 0) throw new Error("Session has no content to export");
@@ -341,6 +366,7 @@ export async function exportSession(
     cwd,
     session_id: sessionId,
     tags: meta.tags,
+    related: relatedStems && relatedStems.length > 0 ? relatedStems : undefined,
     summary: meta.summary,
   });
   const cleanSummaryBody = turns.map((turn) => (
@@ -357,7 +383,33 @@ export async function exportSession(
   };
   let md = "";
 
-  if (preset === "clean_summary") {
+  if (templateContent?.trim()) {
+    const userPrompts = turns.filter((t) => t.role === "user").map((t) => `- ${t.text}`).join("\n");
+    const assistantResponses = turns.filter((t) => t.role === "assistant").map((t) => t.text).join("\n\n");
+    const substitutions: Array<[string, string]> = [
+      ["{{title}}", sessionName],
+      ["{{date}}", new Date().toISOString()],
+      ["{{cwd}}", cwd],
+      ["{{prompts}}", userPrompts],
+      ["{{responses}}", assistantResponses],
+      // TODO: tools
+      ["{{tools}}", ""],
+    ];
+    let chunks = [{ text: templateContent, resolved: false }];
+    for (const [token, resolvedValue] of substitutions) {
+      chunks = chunks.flatMap((chunk) => {
+        if (chunk.resolved) return [chunk];
+        const parts = chunk.text.split(token);
+        return parts.flatMap((part, index) => (
+          index === parts.length - 1
+            ? [{ text: part, resolved: false }]
+            : [{ text: part, resolved: false }, { text: resolvedValue, resolved: true }]
+        ));
+      });
+    }
+    const body = chunks.map((chunk) => chunk.text).join("");
+    md = frontmatter(sessionName) + body;
+  } else if (preset === "clean_summary") {
     md = frontmatter(sessionName) + cleanSummaryBody;
   } else if (preset === "pr_notes") {
     md = frontmatter(`PR Notes — ${sessionName}`) + prNotesTemplateBody();
@@ -390,7 +442,10 @@ export async function exportSession(
       }
     }
   }
-  await updateSessionMeta(cwd, sessionId, { exportedAt: new Date().toISOString() }, home);
+  await updateSessionMeta(cwd, sessionId, {
+    exportedAt: new Date().toISOString(),
+    exportedStem: basename(finalPath, ".md"),
+  }, home);
   return finalPath;
 }
 

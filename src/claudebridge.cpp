@@ -31,6 +31,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
     connect(m_daemon, &BridgeDaemon::sessionHistoryLoaded, this, &ClaudeBridge::sessionHistoryLoaded);
     connect(m_daemon, &BridgeDaemon::exportResult,         this, &ClaudeBridge::exportResult);
+    connect(m_daemon, &BridgeDaemon::exportWarning,        this, &ClaudeBridge::exportWarning);
     connect(m_daemon, &BridgeDaemon::sessionSummarized,    this, &ClaudeBridge::sessionSummarized);
     connect(m_daemon, &BridgeDaemon::prNotesReady,         this, &ClaudeBridge::prNotesReady);
     connect(m_daemon, &BridgeDaemon::adrReady,             this, &ClaudeBridge::adrReady);
@@ -138,14 +139,17 @@ void ClaudeBridge::setYolo(bool enabled) {
     emit yoloChanged(enabled);
 }
 
-void ClaudeBridge::pickFolder() {
+void ClaudeBridge::pickFolder(const QString &purpose) {
     const QString dir = QFileDialog::getExistingDirectory(
         nullptr,
-        "Select Working Directory",
+        purpose == "vault" ? "Select Obsidian Vault" : "Select Working Directory",
         m_cwd,
         QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
     );
-    if (!dir.isEmpty())
+    if (dir.isEmpty()) return;
+    if (purpose == "vault")
+        emit vaultFolderChosen(dir);
+    else
         setCwd(dir);
 }
 
@@ -223,13 +227,22 @@ void ClaudeBridge::renameSession(const QString &sessionId, const QString &name) 
     });
 }
 
-void ClaudeBridge::exportSession(const QString &sessionId, const QString &preset, const QString &obsidianFolder, const QString &suggestedName) {
+void ClaudeBridge::exportSession(
+    const QString &sessionId,
+    const QString &preset,
+    const QString &obsidianFolder,
+    const QString &suggestedName,
+    const QString &templatePath,
+    bool autoExport
+) {
     m_daemon->sendCommand(QJsonObject{
         {"type",           "export_session"},
         {"sessionId",      sessionId},
         {"preset",         preset},
         {"obsidianFolder", obsidianFolder},
-        {"suggestedName",  suggestedName}
+        {"suggestedName",  suggestedName},
+        {"templatePath",   templatePath},
+        {"auto",           autoExport}
     });
 }
 

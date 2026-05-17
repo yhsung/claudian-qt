@@ -1,10 +1,11 @@
 import * as readline from "readline";
 import * as os from "os";
+import { readFile } from "fs/promises";
 import { query, startup, AbortError } from "@anthropic-ai/claude-agent-sdk";
 import type { CanUseTool, HookCallback, HookCallbackMatcher, HookEvent, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
-import { archiveSession, deleteSession, exportSession, listSessions, loadSessionHistory, renameSession, searchSessions, tagSession, truncateForPrompt, updateSessionMeta } from "./session-history.js";
+import { archiveSession, deleteSession, exportSession, getExportedSiblingStems, listSessions, loadSessionHistory, renameSession, searchSessions, tagSession, truncateForPrompt, updateSessionMeta } from "./session-history.js";
 import { join } from "path";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment, AskUserQuestionItem } from "./protocol.js";
 
@@ -596,19 +597,39 @@ ${sessionText}</session>`;
       if (!targetDir) {
         targetDir = join(home, "Downloads");
       }
+      if (cmd.auto === true) {
+        const sessions = await listSessions(state.cwd);
+        const session = sessions.find((s) => s.id === cmd.sessionId);
+        if (session?.exportedAt) {
+          emit({ type: "error", msg: "Session already exported — manually re-export to overwrite" });
+          break;
+        }
+      }
       const targetPath = join(targetDir, cmd.suggestedName);
       try {
+        const relatedStems = await getExportedSiblingStems(state.cwd, cmd.sessionId);
+        let templateContent: string | undefined;
+        let preset = cmd.preset;
+        if (cmd.templatePath?.trim()) {
+          try {
+            templateContent = await readFile(cmd.templatePath, "utf8");
+          } catch {
+            emit({ type: "export_warning", sessionId: cmd.sessionId, warning: "Template file unreadable; using clean_summary" });
+            templateContent = undefined;
+            preset = "clean_summary";
+          }
+        }
         let llmContent: string | undefined;
-        if (cmd.preset === "pr_notes_llm" || cmd.preset === "adr") {
+        if (preset === "pr_notes_llm" || preset === "adr") {
           const turns = await loadSessionHistory(state.cwd, cmd.sessionId);
           const sessionText = truncateForPrompt(turns);
           llmContent = await runNonInteractiveQuery(
-            cmd.preset === "pr_notes_llm" ? buildPrNotesPrompt(sessionText) : buildAdrPrompt(sessionText),
+            preset === "pr_notes_llm" ? buildPrNotesPrompt(sessionText) : buildAdrPrompt(sessionText),
             state.cwd,
           );
         }
-        const finalPath = await exportSession(state.cwd, cmd.sessionId, cmd.preset, targetPath, os.homedir(), llmContent);
-        emit({ type: "export_result", sessionId: cmd.sessionId, preset: cmd.preset, path: finalPath });
+        const finalPath = await exportSession(state.cwd, cmd.sessionId, preset, targetPath, os.homedir(), llmContent, relatedStems, templateContent);
+        emit({ type: "export_result", sessionId: cmd.sessionId, preset, path: finalPath });
         const sessions = await listSessions(state.cwd);
         emit({ type: "sessions_listed", json: JSON.stringify(sessions) });
       } catch (err) {
