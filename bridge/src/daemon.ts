@@ -474,6 +474,8 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       try {
         const finalPath = await exportSession(state.cwd, cmd.sessionId, cmd.preset, targetPath);
         emit({ type: "export_result", sessionId: cmd.sessionId, preset: cmd.preset, path: finalPath });
+        const sessions = await listSessions(state.cwd);
+        emit({ type: "sessions_listed", json: JSON.stringify(sessions) });
       } catch (err) {
         emit({ type: "error", msg: err instanceof Error ? err.message : String(err) });
       }
