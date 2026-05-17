@@ -30,6 +30,7 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::errorOccurred,        this, &ClaudeBridge::errorOccurred);
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
     connect(m_daemon, &BridgeDaemon::sessionHistoryLoaded, this, &ClaudeBridge::sessionHistoryLoaded);
+    connect(m_daemon, &BridgeDaemon::exportResult,         this, &ClaudeBridge::exportResult);
     connect(m_daemon, &BridgeDaemon::toolProgress,         this, &ClaudeBridge::toolProgress);
     connect(m_daemon, &BridgeDaemon::rateLimit,            this, &ClaudeBridge::rateLimit);
     connect(m_daemon, &BridgeDaemon::fastModeStateChanged, this, &ClaudeBridge::fastModeStateChanged);
@@ -213,6 +214,16 @@ void ClaudeBridge::renameSession(const QString &sessionId, const QString &name) 
         {"type",      "rename_session"},
         {"sessionId", sessionId},
         {"name",      name}
+    });
+}
+
+void ClaudeBridge::exportSession(const QString &sessionId, const QString &preset, const QString &obsidianFolder, const QString &suggestedName) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",           "export_session"},
+        {"sessionId",      sessionId},
+        {"preset",         preset},
+        {"obsidianFolder", obsidianFolder},
+        {"suggestedName",  suggestedName}
     });
 }
 

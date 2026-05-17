@@ -162,6 +162,7 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     else if (type == "error")                   emit errorOccurred(event["msg"].toString());
     else if (type == "sessions_listed")         emit sessionsListed(event["json"].toString());
     else if (type == "session_history_loaded")  emit sessionHistoryLoaded(event["json"].toString());
+    else if (type == "export_result")           emit exportResult(event["sessionId"].toString(), event["preset"].toString(), event["path"].toString());
     else if (type == "session_renamed")         { /* sessions_listed is also emitted after rename — sidebar updates via sessionsListed signal */ }
     else if (type == "result")                  emit resultReceived(event["data"].toObject());
     else if (type == "tool_progress")           emit toolProgress(event["id"].toString(), event["name"].toString(), event["elapsedSeconds"].toDouble());

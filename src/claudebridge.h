@@ -42,6 +42,7 @@ public slots:
     void respondToAskUser(const QString &requestId, const QString &answersJson);
     void deleteSession(const QString &sessionId);
     void renameSession(const QString &sessionId, const QString &name);
+    void exportSession(const QString &sessionId, const QString &preset, const QString &obsidianFolder, const QString &suggestedName);
     void setPermissionMode(const QString &mode);
     void copyToClipboard(const QString &text);
     void requestModels();
@@ -73,6 +74,7 @@ signals:
     void yoloChanged(bool enabled);
     void sessionsListed(const QString &json);
     void sessionHistoryLoaded(const QString &json);
+    void exportResult(const QString &sessionId, const QString &preset, const QString &path);
     void imagesPicked(const QString &json);
     void imageImported(const QString &requestId, const QString &json);
     void usageUpdated(const QString &json);

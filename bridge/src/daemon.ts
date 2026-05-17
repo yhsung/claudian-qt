@@ -4,8 +4,7 @@ import { query, startup, AbortError } from "@anthropic-ai/claude-agent-sdk";
 import type { CanUseTool, HookCallback, HookCallbackMatcher, HookEvent, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
-import { listSessions, loadSessionHistory, renameSession } from "./session-history.js";
-import { unlink } from "fs/promises";
+import { deleteSession, exportSession, listSessions, loadSessionHistory, renameSession } from "./session-history.js";
 import { join } from "path";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment, AskUserQuestionItem } from "./protocol.js";
 
@@ -447,12 +446,7 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
     }
 
     case "delete_session": {
-      const sessionFile = join(
-        os.homedir(), ".claude", "projects",
-        state.cwd.replace(/\//g, "-"),
-        cmd.sessionId + ".jsonl"
-      );
-      try { await unlink(sessionFile); } catch { /* already gone */ }
+      await deleteSession(state.cwd, cmd.sessionId);
       const sessions = await listSessions(state.cwd);
       emit({ type: "sessions_listed", json: JSON.stringify(sessions) });
       break;
@@ -463,6 +457,26 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       emit({ type: "session_renamed", sessionId: cmd.sessionId, name: cmd.name });
       const sessions = await listSessions(state.cwd);
       emit({ type: "sessions_listed", json: JSON.stringify(sessions) });
+      break;
+    }
+
+    case "export_session": {
+      const home = os.homedir();
+      let targetDir = cmd.obsidianFolder?.trim() || "";
+      if (targetDir && !targetDir.startsWith(home)) {
+        emit({ type: "error", msg: "Obsidian folder not found — check path in Settings. Saving to Downloads." });
+        targetDir = "";
+      }
+      if (!targetDir) {
+        targetDir = join(home, "Downloads");
+      }
+      const targetPath = join(targetDir, cmd.suggestedName);
+      try {
+        const finalPath = await exportSession(state.cwd, cmd.sessionId, cmd.preset, targetPath);
+        emit({ type: "export_result", sessionId: cmd.sessionId, preset: cmd.preset, path: finalPath });
+      } catch (err) {
+        emit({ type: "error", msg: err instanceof Error ? err.message : String(err) });
+      }
       break;
     }
 

@@ -33,6 +33,7 @@ const state = {
   _focusedMsgIdx: -1,
   pendingAttachments: [],
   previewAttachment: null,
+  pendingExportCopy: null,
 };
 
 let bridge = null;
@@ -765,8 +766,18 @@ function makeSessionItem(s) {
     showToast('Session deleted');
   });
 
+  const exportBtn = document.createElement('button');
+  exportBtn.className = 'session-export-btn';
+  exportBtn.title = 'Export session';
+  exportBtn.textContent = '↑';
+  exportBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openExportPicker(s.id);
+  });
+
   item.appendChild(preview);
   item.appendChild(time);
+  item.appendChild(exportBtn);
   item.appendChild(delBtn);
 
   // Double-click preview to rename
@@ -783,6 +794,126 @@ function makeSessionItem(s) {
   });
 
   return item;
+}
+
+function buildExportMarkdownForLoadedSession(sessionId, preset) {
+  if (sessionId !== state.activeSessionId) return '';
+  const turns = state.messages
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({ role: m.role, text: m.content || '' }))
+    .filter(t => t.text.trim());
+  if (!turns.length) return '';
+
+  const sessionName = sessionId.slice(0, 8);
+  if (preset === 'pr_notes') {
+    const userPrompts = turns.filter(t => t.role === 'user').map(t => t.text);
+    const lastAssistant = turns.filter(t => t.role === 'assistant').pop()?.text || '';
+    return `---\ntitle: PR Notes — ${sessionName}\ndate: ${new Date().toISOString()}\nsession_id: ${sessionId}\n---\n\n## What\n\n` +
+      userPrompts.map(p => `- ${p.slice(0, 120)}`).join('\n') +
+      `\n\n## How\n\n${lastAssistant.slice(0, 800)}\n\n## Testing\n\n- [ ] Verify the changes work as expected\n`;
+  }
+
+  let md = `---\ntitle: ${sessionName}\ndate: ${new Date().toISOString()}\nsession_id: ${sessionId}\n---\n\n`;
+  turns.forEach(turn => {
+    md += turn.role === 'user'
+      ? `## User\n\n${turn.text}\n\n`
+      : `## Claude\n\n${turn.text}\n\n`;
+  });
+  return md;
+}
+
+function openExportPicker(sessionId) {
+  const lastPreset = localStorage.getItem('lastExportPreset') || 'clean_summary';
+  const obsidianPath = localStorage.getItem('obsidianExportPath') || '';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'export-overlay';
+
+  const sheet = document.createElement('div');
+  sheet.className = 'export-sheet';
+
+  sheet.innerHTML = `
+    <div class="export-header">
+      <span class="export-title">Export Session</span>
+      <button class="export-close" title="Close">×</button>
+    </div>
+    <div class="export-presets">
+      <div class="export-preset ${lastPreset === 'clean_summary' ? 'selected' : ''}" data-preset="clean_summary">
+        <span class="preset-name">Clean Summary</span>
+        <span class="preset-desc">Prompts + assistant responses</span>
+      </div>
+      <div class="export-preset ${lastPreset === 'pr_notes' ? 'selected' : ''}" data-preset="pr_notes">
+        <span class="preset-name">PR Notes (template)</span>
+        <span class="preset-desc">Formatted for PR descriptions</span>
+      </div>
+      <div class="export-preset export-preset--disabled" data-preset="full_transcript" aria-disabled="true" title="Coming in a future update">
+        <span class="preset-name">Full Transcript</span>
+        <span class="preset-desc">Everything verbatim</span>
+        <span class="preset-soon">Soon</span>
+      </div>
+      <div class="export-preset export-preset--disabled" data-preset="debug_log" aria-disabled="true" title="Coming in a future update">
+        <span class="preset-name">Debug Log</span>
+        <span class="preset-desc">Tool calls + outputs</span>
+        <span class="preset-soon">Soon</span>
+      </div>
+    </div>
+    ${obsidianPath ? `<div class="export-obsidian-path">${obsidianPath}</div>` : ''}
+    <div class="export-actions">
+      <button class="export-btn-secondary export-copy-btn">Copy to Clipboard</button>
+      <button class="export-btn-primary export-save-btn">Save to File</button>
+    </div>
+  `;
+
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+
+  sheet.querySelectorAll('.export-preset:not(.export-preset--disabled)').forEach(el => {
+    el.addEventListener('click', () => {
+      sheet.querySelectorAll('.export-preset').forEach(p => p.classList.remove('selected'));
+      el.classList.add('selected');
+      localStorage.setItem('lastExportPreset', el.dataset.preset);
+    });
+  });
+
+  const closeSheet = () => overlay.remove();
+  sheet.querySelector('.export-close').addEventListener('click', closeSheet);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeSheet(); });
+  document.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape') { closeSheet(); document.removeEventListener('keydown', escHandler); }
+  });
+
+  const getPreset = () => sheet.querySelector('.export-preset.selected')?.dataset.preset || 'clean_summary';
+
+  sheet.querySelector('.export-save-btn').addEventListener('click', () => {
+    const preset = getPreset();
+    const saveBtn = sheet.querySelector('.export-save-btn');
+    saveBtn.textContent = 'Saving…';
+    saveBtn.disabled = true;
+
+    const sessionData = state.sessions?.find(s => s.id === sessionId);
+    const nameBase = (sessionData?.name || sessionId.slice(0, 16)).replace(/[/\\:*?"<>|]/g, '-');
+    const suggestedName = `${new Date().toISOString().slice(0,10)}-${nameBase}.md`;
+
+    bridge.exportSession(sessionId, preset, obsidianPath, suggestedName);
+    closeSheet();
+  });
+
+  sheet.querySelector('.export-copy-btn').addEventListener('click', () => {
+    const preset = getPreset();
+    const md = buildExportMarkdownForLoadedSession(sessionId, preset);
+    localStorage.setItem('lastExportPreset', preset);
+    if (md) {
+      copyToClipboard(md);
+      showToast('Copied!');
+    } else {
+      state.pendingExportCopy = { sessionId, preset };
+      state.activeSessionId = sessionId;
+      DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.sid === sessionId));
+      bridge.loadSession(sessionId);
+      showToast('Preparing clipboard export…');
+    }
+    closeSheet();
+  });
 }
 
 function startSessionRename(sessionId, previewEl) {
@@ -1742,6 +1873,18 @@ function wireBridgeSignals() {
     const name = path.split('/').pop() || 'transcript.md';
     showToast(`Saved: ${name}`);
   });
+  bridge.exportResult.connect((sessionId, preset, path) => {
+    const filename = path.split('/').pop();
+    showToast(`Saved — ${filename}`);
+    const item = DOM.sessionList.querySelector(`[data-sid="${sessionId}"]`);
+    if (item) {
+      const timeEl = item.querySelector('.session-time');
+      if (timeEl && !timeEl.textContent.includes('exported')) {
+        timeEl.textContent = timeEl.textContent + ' · exported';
+        timeEl.style.color = 'var(--green)';
+      }
+    }
+  });
   bridge.errorOccurred.connect(msg => {
     if (state.streaming) endStreaming();
     const errMsg = { id: mkId(), role: 'assistant', content: `**Error:** ${escHtml(msg)}`, toolCalls: [], timestamp: new Date().toISOString() };
@@ -1754,7 +1897,21 @@ function wireBridgeSignals() {
     restoreDraft();
   });
   bridge.sessionsListed.connect(json => { try { renderSessions(JSON.parse(json)); } catch {} });
-  bridge.sessionHistoryLoaded.connect(json => { try { loadSessionHistory(JSON.parse(json)); restoreDraft(); } catch {} });
+  bridge.sessionHistoryLoaded.connect(json => {
+    try {
+      loadSessionHistory(JSON.parse(json));
+      restoreDraft();
+      if (state.pendingExportCopy?.sessionId === state.activeSessionId) {
+        const { sessionId, preset } = state.pendingExportCopy;
+        state.pendingExportCopy = null;
+        const md = buildExportMarkdownForLoadedSession(sessionId, preset);
+        if (md) {
+          copyToClipboard(md);
+          showToast('Copied!');
+        }
+      }
+    } catch {}
+  });
   bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; resetStatusline(); clearDraft(); DOM.textarea.value = ''; DOM.textarea.style.height = ''; bridge.requestSessions(); });
   bridge.modelChanged.connect(model => { syncModel(model); syncStatuslineModel(model); });
   bridge.fastModeStateChanged.connect(state => syncFastMode(state));

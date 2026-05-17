@@ -33,6 +33,7 @@ signals:
     void errorOccurred(const QString &msg);
     void sessionsListed(const QString &json);
     void sessionHistoryLoaded(const QString &json);
+    void exportResult(const QString &sessionId, const QString &preset, const QString &path);
     void resultReceived(const QJsonObject &result);
     void toolProgress(const QString &id, const QString &name, double elapsedSeconds);
     void rateLimit(const QString &json);

@@ -1,7 +1,7 @@
 import * as readline from "readline";
 import * as fs from "fs";
-import { readdir, readFile, writeFile, mkdir } from "fs/promises";
-import { join, dirname } from "path";
+import { readdir, readFile, writeFile, mkdir, unlink } from "fs/promises";
+import { join, dirname, basename } from "path";
 import * as os from "os";
 import { renameSession as sdkRenameSession } from "@anthropic-ai/claude-agent-sdk";
 import { attachmentRoot, loadAttachmentManifest, rehydrateAttachment } from "./attachment-store.js";
@@ -215,7 +215,76 @@ async function renameSessionFile(
 ): Promise<void> {
   const metaPath = join(claudeProjectDir(cwd, home), `${sessionId}.name`);
   await mkdir(dirname(metaPath), { recursive: true });
-  await writeFile(metaPath, JSON.stringify({ name, updatedAt: new Date().toISOString() }), "utf8");
+  let existing: Record<string, unknown> = {};
+  try {
+    existing = JSON.parse(await readFile(metaPath, "utf8")) as Record<string, unknown>;
+  } catch {
+    existing = {};
+  }
+  await writeFile(metaPath, JSON.stringify({ ...existing, name, updatedAt: new Date().toISOString() }), "utf8");
+}
+
+export async function exportSession(
+  cwd: string,
+  sessionId: string,
+  preset: "clean_summary" | "pr_notes",
+  targetPath: string,
+  home = os.homedir(),
+): Promise<string> {
+  const turns = await loadSessionHistory(cwd, sessionId, home);
+  if (turns.length === 0) throw new Error("Session has no content to export");
+
+  const sessionName = sessionId.slice(0, 8);
+  let md = "";
+
+  if (preset === "clean_summary") {
+    md = `---\ntitle: ${sessionName}\ndate: ${new Date().toISOString()}\ncwd: ${cwd}\nsession_id: ${sessionId}\n---\n\n`;
+    for (const turn of turns) {
+      if (turn.role === "user") {
+        md += `## User\n\n${turn.text}\n\n`;
+      } else {
+        md += `## Claude\n\n${turn.text}\n\n`;
+      }
+    }
+  } else if (preset === "pr_notes") {
+    const userPrompts = turns.filter((t) => t.role === "user").map((t) => t.text);
+    const lastAssistant = turns.filter((t) => t.role === "assistant").pop()?.text ?? "";
+    md = `---\ntitle: PR Notes — ${sessionName}\ndate: ${new Date().toISOString()}\ncwd: ${cwd}\nsession_id: ${sessionId}\n---\n\n## What\n\n`;
+    md += userPrompts.map((p) => `- ${p.slice(0, 120)}`).join("\n") + "\n\n";
+    md += `## How\n\n${lastAssistant.slice(0, 800)}\n\n## Testing\n\n- [ ] Verify the changes work as expected\n`;
+  }
+
+  const dir = dirname(targetPath);
+  const base = basename(targetPath, ".md");
+  let finalPath = targetPath;
+  let n = 1;
+  while (true) {
+    let fd: fs.promises.FileHandle | undefined;
+    try {
+      fd = await fs.promises.open(finalPath, "wx");
+      await fd.writeFile(md, "utf8");
+      await fd.close();
+      break;
+    } catch (err: unknown) {
+      if (fd) await fd.close().catch(() => {});
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        finalPath = join(dir, `${base} (${n}).md`);
+        n++;
+      } else {
+        throw err;
+      }
+    }
+  }
+  return finalPath;
+}
+
+export async function deleteSession(cwd: string, sessionId: string, home = os.homedir()): Promise<void> {
+  const sessionFile = join(claudeProjectDir(cwd, home), sessionId + ".jsonl");
+  try {
+    await unlink(sessionFile);
+  } catch {
+    // Already gone.
+  }
 }
 
 export async function renameSession(
