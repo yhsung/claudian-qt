@@ -9,5 +9,6 @@
     <file alias="chat-scroll.js">chat/chat-scroll.js</file>
     <file alias="chat-nav.js">chat/chat-nav.js</file>
     <file alias="chat-copy.js">chat/chat-copy.js</file>
+    <file alias="chat-format.js">chat/chat-format.js</file>
   </qresource>
 </RCC>
