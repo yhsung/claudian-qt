@@ -163,6 +163,9 @@ void BridgeDaemon::handleEvent(const QJsonObject &event) {
     else if (type == "sessions_listed")         emit sessionsListed(event["json"].toString());
     else if (type == "session_history_loaded")  emit sessionHistoryLoaded(event["json"].toString());
     else if (type == "export_result")           emit exportResult(event["sessionId"].toString(), event["preset"].toString(), event["path"].toString());
+    else if (type == "session_summarized")      emit sessionSummarized(event["sessionId"].toString(), event["summary"].toString(), event["isError"].toBool());
+    else if (type == "pr_notes_ready")          emit prNotesReady(event["sessionId"].toString(), event["text"].toString());
+    else if (type == "adr_ready")               emit adrReady(event["sessionId"].toString(), event["text"].toString());
     else if (type == "session_renamed")         { /* sessions_listed is also emitted after rename — sidebar updates via sessionsListed signal */ }
     else if (type == "session_tagged")          emit sessionTagged(event["sessionId"].toString(), QString::fromUtf8(QJsonDocument(event["tags"].toArray()).toJson(QJsonDocument::Compact)));
     else if (type == "session_archived")        emit sessionArchived(event["sessionId"].toString(), event["archived"].toBool());

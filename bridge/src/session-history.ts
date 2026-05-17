@@ -15,12 +15,14 @@ export interface SessionEntry {
   tags?: string[];
   archived?: boolean;
   exportedAt?: string;
+  summary?: string;
 }
 
 interface SessionMeta {
   tags?: string[];
   archived?: boolean;
   exportedAt?: string;
+  summary?: string;
 }
 
 interface SearchResult {
@@ -32,6 +34,22 @@ interface SearchResult {
 
 // Legacy alias kept for backward compatibility within this file
 type TurnEntry = HistoryTurn;
+
+export function buildFrontmatter(fields: Record<string, string | string[] | undefined>): string {
+  const lines = ["---"];
+  for (const [key, val] of Object.entries(fields)) {
+    if (val === undefined || val === null) continue;
+    if (Array.isArray(val)) {
+      if (val.length === 0) continue;
+      lines.push(`${key}:`);
+      val.forEach(v => lines.push(`  - ${v}`));
+    } else {
+      lines.push(`${key}: ${val}`);
+    }
+  }
+  lines.push("---", "");
+  return lines.join("\n");
+}
 
 function claudeProjectDir(cwd: string, home = os.homedir()): string {
   return join(home, ".claude", "projects", cwd.replace(/\//g, "-"));
@@ -49,6 +67,7 @@ async function readSessionMeta(cwd: string, sessionId: string, home: string): Pr
     if (Array.isArray(meta.tags)) sessionMeta.tags = meta.tags as string[];
     if (typeof meta.archived === "boolean") sessionMeta.archived = meta.archived;
     if (typeof meta.exportedAt === "string") sessionMeta.exportedAt = meta.exportedAt;
+    if (typeof meta.summary === "string") sessionMeta.summary = meta.summary;
   } catch {
     // no .meta file — session has no ClaudianQt private metadata
   }
@@ -59,12 +78,13 @@ function applySessionMeta(entry: SessionEntry, sessionMeta: SessionMeta): void {
   if (sessionMeta.tags !== undefined) entry.tags = sessionMeta.tags;
   if (sessionMeta.archived !== undefined) entry.archived = sessionMeta.archived;
   if (sessionMeta.exportedAt !== undefined) entry.exportedAt = sessionMeta.exportedAt;
+  if (sessionMeta.summary !== undefined) entry.summary = sessionMeta.summary;
 }
 
 export async function updateSessionMeta(
   cwd: string,
   sessionId: string,
-  updates: Partial<{ tags: string[]; archived: boolean; exportedAt: string }>,
+  updates: Partial<{ tags: string[]; archived: boolean; exportedAt: string; summary: string }>,
   home: string,
 ): Promise<void> {
   const mp = metaPath(cwd, sessionId, home);
@@ -256,6 +276,25 @@ export async function loadSessionHistory(
   return turns;
 }
 
+export function truncateForPrompt(turns: HistoryTurn[], maxChars = 24000): string {
+  const blocks: string[] = [];
+  let total = 0;
+  let truncated = false;
+  for (const turn of [...turns].reverse()) {
+    const block = turn.role === "user"
+      ? `## User\n\n${turn.text}\n\n`
+      : `## Claude\n\n${turn.text}\n\n`;
+    if (total + block.length > maxChars) {
+      truncated = true;
+      break;
+    }
+    blocks.unshift(block);
+    total += block.length;
+  }
+  const prefix = truncated ? "[session truncated — showing most recent turns]\n\n" : "";
+  return prefix + blocks.join("");
+}
+
 export async function countUserTurns(
   cwd: string,
   sessionId: string,
@@ -286,31 +325,48 @@ async function renameSessionFile(
 export async function exportSession(
   cwd: string,
   sessionId: string,
-  preset: "clean_summary" | "pr_notes",
+  preset: "clean_summary" | "pr_notes" | "pr_notes_llm" | "adr",
   targetPath: string,
   home = os.homedir(),
+  llmContent?: string,
 ): Promise<string> {
   const turns = await loadSessionHistory(cwd, sessionId, home);
   if (turns.length === 0) throw new Error("Session has no content to export");
 
   const sessionName = sessionId.slice(0, 8);
+  const meta = await readSessionMeta(cwd, sessionId, home);
+  const frontmatter = (title: string) => buildFrontmatter({
+    title,
+    date: new Date().toISOString(),
+    cwd,
+    session_id: sessionId,
+    tags: meta.tags,
+    summary: meta.summary,
+  });
+  const cleanSummaryBody = turns.map((turn) => (
+    turn.role === "user"
+      ? `## User\n\n${turn.text}\n\n`
+      : `## Claude\n\n${turn.text}\n\n`
+  )).join("");
+  const prNotesTemplateBody = (): string => {
+    const userPrompts = turns.filter((t) => t.role === "user").map((t) => t.text);
+    const lastAssistant = turns.filter((t) => t.role === "assistant").pop()?.text ?? "";
+    return "## What\n\n" +
+      userPrompts.map((p) => `- ${p.slice(0, 120)}`).join("\n") + "\n\n" +
+      `## How\n\n${lastAssistant.slice(0, 800)}\n\n## Testing\n\n- [ ] Verify the changes work as expected\n`;
+  };
   let md = "";
 
   if (preset === "clean_summary") {
-    md = `---\ntitle: ${sessionName}\ndate: ${new Date().toISOString()}\ncwd: ${cwd}\nsession_id: ${sessionId}\n---\n\n`;
-    for (const turn of turns) {
-      if (turn.role === "user") {
-        md += `## User\n\n${turn.text}\n\n`;
-      } else {
-        md += `## Claude\n\n${turn.text}\n\n`;
-      }
-    }
+    md = frontmatter(sessionName) + cleanSummaryBody;
   } else if (preset === "pr_notes") {
-    const userPrompts = turns.filter((t) => t.role === "user").map((t) => t.text);
-    const lastAssistant = turns.filter((t) => t.role === "assistant").pop()?.text ?? "";
-    md = `---\ntitle: PR Notes — ${sessionName}\ndate: ${new Date().toISOString()}\ncwd: ${cwd}\nsession_id: ${sessionId}\n---\n\n## What\n\n`;
-    md += userPrompts.map((p) => `- ${p.slice(0, 120)}`).join("\n") + "\n\n";
-    md += `## How\n\n${lastAssistant.slice(0, 800)}\n\n## Testing\n\n- [ ] Verify the changes work as expected\n`;
+    md = frontmatter(`PR Notes — ${sessionName}`) + prNotesTemplateBody();
+  } else if (preset === "pr_notes_llm") {
+    md = frontmatter(`PR Notes — ${sessionName}`) + (llmContent?.trim() || prNotesTemplateBody());
+  } else if (preset === "adr") {
+    const adrText = llmContent?.trim();
+    md = frontmatter(sessionName) + cleanSummaryBody;
+    if (adrText) md += `\n\n## Architecture Decisions\n\n${adrText}\n`;
   }
 
   const dir = dirname(targetPath);

@@ -43,6 +43,9 @@ public slots:
     void deleteSession(const QString &sessionId);
     void renameSession(const QString &sessionId, const QString &name);
     void exportSession(const QString &sessionId, const QString &preset, const QString &obsidianFolder, const QString &suggestedName);
+    Q_INVOKABLE void summarizeSession(const QString &sessionId);
+    Q_INVOKABLE void generatePrNotes(const QString &sessionId);
+    Q_INVOKABLE void generateAdr(const QString &sessionId);
     Q_INVOKABLE void tagSession(const QString &sessionId, const QString &tagsJson);
     Q_INVOKABLE void archiveSession(const QString &sessionId, bool archived);
     Q_INVOKABLE void searchSessions(const QString &query, const QString &requestId);
@@ -78,6 +81,9 @@ signals:
     void sessionsListed(const QString &json);
     void sessionHistoryLoaded(const QString &json);
     void exportResult(const QString &sessionId, const QString &preset, const QString &path);
+    void sessionSummarized(const QString &sessionId, const QString &summary, bool isError);
+    void prNotesReady(const QString &sessionId, const QString &text);
+    void adrReady(const QString &sessionId, const QString &text);
     void sessionTagged(const QString &sessionId, const QString &tagsJson);
     void sessionArchived(const QString &sessionId, bool archived);
     void searchResults(const QString &requestId, const QString &json);

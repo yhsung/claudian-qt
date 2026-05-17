@@ -73,7 +73,10 @@ export type DaemonCommand =
   | { type: "ask_user_response"; requestId: string; answers: Record<string, string | string[]> }
   | { type: "delete_session"; sessionId: string }
   | { type: "rename_session"; sessionId: string; name: string }
-  | { type: "export_session"; sessionId: string; preset: "clean_summary" | "pr_notes"; obsidianFolder: string; suggestedName: string }
+  | { type: "export_session"; sessionId: string; preset: "clean_summary" | "pr_notes" | "pr_notes_llm" | "adr"; obsidianFolder: string; suggestedName: string }
+  | { type: "summarize_session"; sessionId: string }
+  | { type: "generate_pr_notes"; sessionId: string }
+  | { type: "generate_adr"; sessionId: string }
   | { type: "tag_session"; sessionId: string; tags: string[] }
   | { type: "archive_session"; sessionId: string; archived: boolean }
   | { type: "search_sessions"; query: string; requestId: string }
@@ -102,6 +105,9 @@ export type DaemonEvent =
   | { type: "sessions_listed"; json: string }
   | { type: "session_renamed"; sessionId: string; name: string }
   | { type: "export_result"; sessionId: string; preset: string; path: string }
+  | { type: "session_summarized"; sessionId: string; summary: string; isError: boolean }
+  | { type: "pr_notes_ready"; sessionId: string; text: string }
+  | { type: "adr_ready"; sessionId: string; text: string }
   | { type: "session_tagged"; sessionId: string; tags: string[] }
   | { type: "session_archived"; sessionId: string; archived: boolean }
   | { type: "search_results"; requestId: string; json: string }

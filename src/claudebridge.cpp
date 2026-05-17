@@ -31,6 +31,9 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
     connect(m_daemon, &BridgeDaemon::sessionHistoryLoaded, this, &ClaudeBridge::sessionHistoryLoaded);
     connect(m_daemon, &BridgeDaemon::exportResult,         this, &ClaudeBridge::exportResult);
+    connect(m_daemon, &BridgeDaemon::sessionSummarized,    this, &ClaudeBridge::sessionSummarized);
+    connect(m_daemon, &BridgeDaemon::prNotesReady,         this, &ClaudeBridge::prNotesReady);
+    connect(m_daemon, &BridgeDaemon::adrReady,             this, &ClaudeBridge::adrReady);
     connect(m_daemon, &BridgeDaemon::sessionTagged,        this, &ClaudeBridge::sessionTagged);
     connect(m_daemon, &BridgeDaemon::sessionArchived,      this, &ClaudeBridge::sessionArchived);
     connect(m_daemon, &BridgeDaemon::searchResults,        this, &ClaudeBridge::searchResults);
@@ -228,6 +231,18 @@ void ClaudeBridge::exportSession(const QString &sessionId, const QString &preset
         {"obsidianFolder", obsidianFolder},
         {"suggestedName",  suggestedName}
     });
+}
+
+void ClaudeBridge::summarizeSession(const QString &sessionId) {
+    m_daemon->sendCommand(QJsonObject{{"type", "summarize_session"}, {"sessionId", sessionId}});
+}
+
+void ClaudeBridge::generatePrNotes(const QString &sessionId) {
+    m_daemon->sendCommand(QJsonObject{{"type", "generate_pr_notes"}, {"sessionId", sessionId}});
+}
+
+void ClaudeBridge::generateAdr(const QString &sessionId) {
+    m_daemon->sendCommand(QJsonObject{{"type", "generate_adr"}, {"sessionId", sessionId}});
 }
 
 void ClaudeBridge::tagSession(const QString &sessionId, const QString &tagsJson) {

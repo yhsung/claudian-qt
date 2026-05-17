@@ -208,7 +208,14 @@ html, body {
   padding: 7px 14px; border-radius: var(--radius); font-size: 13px; cursor: pointer; font-weight: 500;
 }
 .export-btn-primary:hover { background: var(--accent-hover); }
-.export-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.export-btn-primary:disabled { opacity: 0.6; cursor: wait; }
+
+/* Auto-summary preview text in sidebar */
+.session-preview.has-summary {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 11px;
+}
 
 /* ── Session rename input ──────────────────────────────────────────────────── */
 .session-rename-input {
@@ -570,6 +577,17 @@ mark.search-highlight.current {
 #perm-mode-btn.perm-bypassed { opacity: 0.45; cursor: default; pointer-events: none; border-color: var(--orange); color: var(--orange); }
 #yolo-btn { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--radius-sm); padding: 4px 10px; font-size: 11px; cursor: pointer; }
 #yolo-btn.yolo-on { border-color: var(--orange); color: var(--orange); background: rgba(255,159,10,0.08); }
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.settings-row input {
+  margin: 0;
+}
 #send-btn { margin-left: auto; background: var(--accent); border: none; color: #fff; border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; display: flex; align-items: center; }
 #send-btn:hover { background: var(--accent-hover); }
 #stop-btn { display: none; margin-left: auto; background: transparent; border: 1px solid var(--red); color: var(--red); border-radius: var(--radius-sm); padding: 5px 12px; font-size: 11px; cursor: pointer; }

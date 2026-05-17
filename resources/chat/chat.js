@@ -35,6 +35,8 @@ const state = {
   previewAttachment: null,
   pendingExportCopy: null,
   pendingSearch: null,
+  autoSummaryEnabled: localStorage.getItem('autoSummaryEnabled') === 'true',
+  pendingLlmExport: null,
   latestSearchId: 0,
   showArchived: false,
 };
@@ -212,6 +214,7 @@ function initDOM() {
     rateLimitBanner:      document.getElementById('rate-limit-banner'),
     rateLimitText:        document.getElementById('rate-limit-text'),
     thinkingSelect:       document.getElementById('thinking-select'),
+    autoSummaryToggle:    document.getElementById('auto-summary-toggle'),
     runOptsToggle:        document.getElementById('run-opts-toggle'),
     runOptionsRow:        document.getElementById('run-options-row'),
     systemPromptRow:      document.getElementById('system-prompt-row'),
@@ -747,8 +750,8 @@ function makeSessionItem(s) {
   item.dataset.sid = s.id;
 
   const preview = document.createElement('div');
-  preview.className = 'session-preview';
-  preview.textContent = s.name || s.preview;
+  preview.className = 'session-preview' + (!s.name && s.summary ? ' has-summary' : '');
+  preview.textContent = s.name || (s.summary ? s.summary : s.preview);
 
   const time = document.createElement('div');
   time.className = 'session-time';
@@ -818,6 +821,9 @@ function makeSessionItem(s) {
   });
 
   item.addEventListener('click', () => {
+    if (state.autoSummaryEnabled && state.activeSessionId && state.activeSessionId !== s.id) {
+      bridge.summarizeSession(state.activeSessionId);
+    }
     state.activeSessionId = s.id;
     DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.toggle('active', el.dataset.sid === s.id));
     bridge.loadSession(s.id);
@@ -854,7 +860,8 @@ function buildExportMarkdownForLoadedSession(sessionId, preset) {
 }
 
 function openExportPicker(sessionId) {
-  const lastPreset = localStorage.getItem('lastExportPreset') || 'clean_summary';
+  const storedPreset = localStorage.getItem('lastExportPreset') || 'clean_summary';
+  const lastPreset = storedPreset === 'pr_notes' ? 'pr_notes_llm' : storedPreset;
   const obsidianPath = localStorage.getItem('obsidianExportPath') || '';
 
   const overlay = document.createElement('div');
@@ -873,9 +880,13 @@ function openExportPicker(sessionId) {
         <span class="preset-name">Clean Summary</span>
         <span class="preset-desc">Prompts + assistant responses</span>
       </div>
-      <div class="export-preset ${lastPreset === 'pr_notes' ? 'selected' : ''}" data-preset="pr_notes">
-        <span class="preset-name">PR Notes (template)</span>
-        <span class="preset-desc">Formatted for PR descriptions</span>
+      <div class="export-preset ${lastPreset === 'pr_notes_llm' ? 'selected' : ''}" data-preset="pr_notes_llm">
+        <span class="preset-name">PR Notes</span>
+        <span class="preset-desc">LLM-generated PR description</span>
+      </div>
+      <div class="export-preset ${lastPreset === 'adr' ? 'selected' : ''}" data-preset="adr">
+        <span class="preset-name">Architecture Decisions</span>
+        <span class="preset-desc">Key decisions as ADR</span>
       </div>
       <div class="export-preset export-preset--disabled" data-preset="full_transcript" aria-disabled="true" title="Coming in a future update">
         <span class="preset-name">Full Transcript</span>
@@ -915,15 +926,48 @@ function openExportPicker(sessionId) {
 
   const getPreset = () => sheet.querySelector('.export-preset.selected')?.dataset.preset || 'clean_summary';
 
-  sheet.querySelector('.export-save-btn').addEventListener('click', () => {
+  sheet.querySelector('.export-save-btn').addEventListener('click', async () => {
     const preset = getPreset();
     const saveBtn = sheet.querySelector('.export-save-btn');
-    saveBtn.textContent = 'Saving…';
     saveBtn.disabled = true;
 
     const sessionData = state.sessions?.find(s => s.id === sessionId);
     const nameBase = (sessionData?.name || sessionId.slice(0, 16)).replace(/[/\\:*?"<>|]/g, '-');
-    const suggestedName = `${new Date().toISOString().slice(0,10)}-${nameBase}.md`;
+    const presetSlug = {
+      clean_summary: 'clean-summary',
+      pr_notes: 'pr-notes',
+      pr_notes_llm: 'pr-notes',
+      adr: 'adr',
+    }[preset] || preset;
+    const suggestedName = `${new Date().toISOString().slice(0,10)}-${nameBase}-${presetSlug}.md`;
+
+    const isLlmPreset = preset === 'pr_notes_llm' || preset === 'adr';
+    if (isLlmPreset) {
+      saveBtn.textContent = 'Generating…';
+      try {
+        await new Promise((resolve, reject) => {
+          state.pendingLlmExport = { sessionId, preset, resolve };
+          const timeout = setTimeout(() => {
+            state.pendingLlmExport = null;
+            reject(new Error('LLM timed out'));
+          }, 60000);
+          const origResolve = resolve;
+          state.pendingLlmExport.resolve = (val) => {
+            clearTimeout(timeout);
+            origResolve(val);
+          };
+          if (preset === 'pr_notes_llm') bridge.generatePrNotes(sessionId);
+          else bridge.generateAdr(sessionId);
+        });
+      } catch (e) {
+        showToast('Generation failed: ' + e.message);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save to File';
+        return;
+      }
+    } else {
+      saveBtn.textContent = 'Saving…';
+    }
 
     bridge.exportSession(sessionId, preset, obsidianPath, suggestedName);
     closeSheet();
@@ -1540,6 +1584,9 @@ function wireEvents() {
   DOM.cwdBtn.addEventListener('click', () => { if (bridge) bridge.pickFolder(); });
   DOM.newSessionBtn.addEventListener('click', () => {
     if (!bridge) return;
+    if (state.autoSummaryEnabled && state.activeSessionId) {
+      bridge.summarizeSession(state.activeSessionId);
+    }
     Object.assign(state, { messages: [], activeSessionId: '', tokenCount: 0, toolCallCount: 0, summaryData: null });
     DOM.messages.innerHTML = '';
     hideSummaryView();
@@ -1566,6 +1613,13 @@ function wireEvents() {
   if (DOM.thinkingSelect) {
     DOM.thinkingSelect.addEventListener('change', () => {
       if (bridge) bridge.setThinking(DOM.thinkingSelect.value, 8000);
+    });
+  }
+  if (DOM.autoSummaryToggle) {
+    DOM.autoSummaryToggle.checked = state.autoSummaryEnabled;
+    DOM.autoSummaryToggle.addEventListener('change', () => {
+      state.autoSummaryEnabled = DOM.autoSummaryToggle.checked;
+      localStorage.setItem('autoSummaryEnabled', String(state.autoSummaryEnabled));
     });
   }
   if (DOM.runOptsToggle) {
@@ -1985,6 +2039,36 @@ function wireBridgeSignals() {
         timeEl.textContent = timeEl.textContent + ' · exported';
         timeEl.style.color = 'var(--green)';
       }
+    }
+  });
+  bridge.sessionSummarized.connect((sessionId, summary, isError) => {
+    if (isError) {
+      showToast('Auto-summary failed');
+      return;
+    }
+    const s = state.sessions.find(s => s.id === sessionId);
+    if (s) {
+      s.summary = summary;
+      const item = DOM.sessionList.querySelector(`[data-sid="${sessionId}"]`);
+      if (item) {
+        const previewEl = item.querySelector('.session-preview');
+        if (previewEl) {
+          previewEl.textContent = summary || s.name || s.preview;
+          previewEl.classList.toggle('has-summary', !!summary && !s.name);
+        }
+      }
+    }
+  });
+  bridge.prNotesReady.connect((sessionId, text) => {
+    if (state.pendingLlmExport?.sessionId === sessionId && state.pendingLlmExport?.preset === 'pr_notes_llm') {
+      state.pendingLlmExport.resolve(text);
+      state.pendingLlmExport = null;
+    }
+  });
+  bridge.adrReady.connect((sessionId, text) => {
+    if (state.pendingLlmExport?.sessionId === sessionId && state.pendingLlmExport?.preset === 'adr') {
+      state.pendingLlmExport.resolve(text);
+      state.pendingLlmExport = null;
     }
   });
   bridge.sessionTagged.connect((sessionId, tagsJson) => {

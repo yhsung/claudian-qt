@@ -34,6 +34,9 @@ signals:
     void sessionsListed(const QString &json);
     void sessionHistoryLoaded(const QString &json);
     void exportResult(const QString &sessionId, const QString &preset, const QString &path);
+    void sessionSummarized(const QString &sessionId, const QString &summary, bool isError);
+    void prNotesReady(const QString &sessionId, const QString &text);
+    void adrReady(const QString &sessionId, const QString &text);
     void sessionTagged(const QString &sessionId, const QString &tagsJson);
     void sessionArchived(const QString &sessionId, bool archived);
     void searchResults(const QString &requestId, const QString &json);

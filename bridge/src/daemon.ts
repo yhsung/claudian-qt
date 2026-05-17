@@ -4,7 +4,7 @@ import { query, startup, AbortError } from "@anthropic-ai/claude-agent-sdk";
 import type { CanUseTool, HookCallback, HookCallbackMatcher, HookEvent, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
-import { archiveSession, deleteSession, exportSession, listSessions, loadSessionHistory, renameSession, searchSessions, tagSession } from "./session-history.js";
+import { archiveSession, deleteSession, exportSession, listSessions, loadSessionHistory, renameSession, searchSessions, tagSession, truncateForPrompt, updateSessionMeta } from "./session-history.js";
 import { join } from "path";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment, AskUserQuestionItem } from "./protocol.js";
 
@@ -37,6 +37,7 @@ const state = {
 let currentAbort: AbortController | null = null;
 let warmQueryPromise: Promise<WarmQuery | null> | null = null;
 let activeQuery: ReturnType<typeof query> | null = null;
+const inFlightSummaries = new Set<string>();
 
 // Pending permission promises keyed by requestId
 const pendingPermissions = new Map<string, {
@@ -52,6 +53,79 @@ function scheduleWarmup(): void {
   }).catch(() => null);
 }
 scheduleWarmup();
+
+async function runNonInteractiveQuery(prompt: string, cwd: string): Promise<string> {
+  const userMessage = await buildUserMessage(prompt, []);
+  const q = query({
+    prompt: (async function* () { yield userMessage; })(),
+    options: {
+      cwd,
+      maxTurns: 0,
+      allowDangerouslySkipPermissions: true,
+    },
+  });
+  let result = "";
+  for await (const msg of q) {
+    if (msg.type === "assistant") {
+      const content = (msg.message as unknown as Record<string, unknown>).content;
+      if (typeof content === "string") result = content;
+      else if (Array.isArray(content)) {
+        for (const block of content as Record<string, unknown>[]) {
+          if (block.type === "text") {
+            result = String(block.text ?? "");
+            break;
+          }
+        }
+      }
+      break;
+    }
+  }
+  return result.trim();
+}
+
+function buildPrNotesPrompt(sessionText: string): string {
+  return `You are a senior engineer writing a pull request description. Based on this Claude Code session, write a PR description with these exact sections:
+
+## What
+(bullet list of changes made)
+
+## Why
+(motivation and context)
+
+## How
+(implementation approach)
+
+## Testing
+- [ ] (test checklist items)
+
+Session:
+<session>
+${sessionText}</session>
+
+Output only the PR description in Markdown, starting with ## What.`;
+}
+
+function buildAdrPrompt(sessionText: string): string {
+  return `You are a technical architect writing an Architecture Decision Record. Based on this Claude Code session, extract the key architectural decisions and write an ADR with these exact sections:
+
+## Status
+Accepted
+
+## Context
+(the problem and constraints)
+
+## Decision
+(what was decided)
+
+## Consequences
+(trade-offs and implications)
+
+Session:
+<session>
+${sessionText}</session>
+
+Output only the ADR in Markdown, starting with ## Status. If no architectural decisions were made, output: "No architectural decisions identified in this session."`;
+}
 
 // Build a canUseTool callback for a given send invocation.
 // Must always be provided so the SDK adds --permission-prompt-tool stdio to the CLI;
@@ -445,6 +519,58 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       break;
     }
 
+    case "summarize_session": {
+      const sessionId = cmd.sessionId;
+      if (inFlightSummaries.has(sessionId)) break;
+      inFlightSummaries.add(sessionId);
+      (async () => {
+        try {
+          const turns = await loadSessionHistory(state.cwd, sessionId);
+          if (turns.length === 0) {
+            inFlightSummaries.delete(sessionId);
+            return;
+          }
+          const sessionText = truncateForPrompt(turns);
+          const prompt = `Summarize this Claude Code session in exactly 3 sentences. Focus on what was accomplished, not what was discussed. Output only the 3 sentences, no preamble.
+
+<session>
+${sessionText}</session>`;
+          const summary = await runNonInteractiveQuery(prompt, state.cwd);
+          await updateSessionMeta(state.cwd, sessionId, { summary }, os.homedir());
+          emit({ type: "session_summarized", sessionId, summary, isError: false });
+        } catch {
+          emit({ type: "session_summarized", sessionId, summary: "", isError: true });
+        } finally {
+          inFlightSummaries.delete(sessionId);
+        }
+      })();
+      break;
+    }
+
+    case "generate_pr_notes": {
+      try {
+        const turns = await loadSessionHistory(state.cwd, cmd.sessionId);
+        const sessionText = truncateForPrompt(turns);
+        const text = await runNonInteractiveQuery(buildPrNotesPrompt(sessionText), state.cwd);
+        emit({ type: "pr_notes_ready", sessionId: cmd.sessionId, text });
+      } catch (err) {
+        emit({ type: "error", msg: err instanceof Error ? err.message : String(err) });
+      }
+      break;
+    }
+
+    case "generate_adr": {
+      try {
+        const turns = await loadSessionHistory(state.cwd, cmd.sessionId);
+        const sessionText = truncateForPrompt(turns);
+        const text = await runNonInteractiveQuery(buildAdrPrompt(sessionText), state.cwd);
+        emit({ type: "adr_ready", sessionId: cmd.sessionId, text });
+      } catch (err) {
+        emit({ type: "error", msg: err instanceof Error ? err.message : String(err) });
+      }
+      break;
+    }
+
     case "delete_session": {
       await deleteSession(state.cwd, cmd.sessionId);
       const sessions = await listSessions(state.cwd);
@@ -472,7 +598,16 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       }
       const targetPath = join(targetDir, cmd.suggestedName);
       try {
-        const finalPath = await exportSession(state.cwd, cmd.sessionId, cmd.preset, targetPath);
+        let llmContent: string | undefined;
+        if (cmd.preset === "pr_notes_llm" || cmd.preset === "adr") {
+          const turns = await loadSessionHistory(state.cwd, cmd.sessionId);
+          const sessionText = truncateForPrompt(turns);
+          llmContent = await runNonInteractiveQuery(
+            cmd.preset === "pr_notes_llm" ? buildPrNotesPrompt(sessionText) : buildAdrPrompt(sessionText),
+            state.cwd,
+          );
+        }
+        const finalPath = await exportSession(state.cwd, cmd.sessionId, cmd.preset, targetPath, os.homedir(), llmContent);
         emit({ type: "export_result", sessionId: cmd.sessionId, preset: cmd.preset, path: finalPath });
         const sessions = await listSessions(state.cwd);
         emit({ type: "sessions_listed", json: JSON.stringify(sessions) });
