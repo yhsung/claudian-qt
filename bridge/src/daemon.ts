@@ -228,6 +228,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
           ...buildRunOptions(),
         },
       });
+    activeQuery = queryResult;
 
     for await (const message of queryResult) {
       if (abortController.signal.aborted) break;
@@ -382,6 +383,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
     }
   } finally {
     if (currentAbort === abortController) currentAbort = null;
+    activeQuery = null;
     emit({ type: "turn_complete" });
   }
 }

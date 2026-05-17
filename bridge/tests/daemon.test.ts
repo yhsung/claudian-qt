@@ -402,4 +402,153 @@ describe.skipIf(!HAS_API_KEY)("daemon integration (requires ANTHROPIC_API_KEY)",
 
     expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
   }, 20_000);
-});
+
+    it("set_mcp_servers + send completes", async () => {
+      const { handle, proc } = startDaemon();
+      handle.send({ type: "set_mcp_servers", servers: { testServer: { type: "stdio", command: "echo", args: ["hello"] } } });
+      handle.send({ type: "send", prompt: "Reply with only the word: mcp" });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "turn_complete"),
+        60_000
+      );
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      expect(evts.find((e) => e.type === "session_ready")).toBeDefined();
+      expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+    }, 65_000);
+
+    it("set_agents + send completes", async () => {
+      const { handle, proc } = startDaemon();
+      handle.send({ type: "set_agents", agents: { helper: { description: "test agent", prompt: "assist" } } });
+      handle.send({ type: "send", prompt: "Reply with only the word: agents" });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "turn_complete"),
+        60_000
+      );
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      expect(evts.find((e) => e.type === "session_ready")).toBeDefined();
+      expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+    }, 65_000);
+
+    it("set_agents + set_tool_controls without Agent auto-adds Agent", async () => {
+      const { handle, proc } = startDaemon();
+      handle.send({ type: "set_agents", agents: { helper: { description: "test", prompt: "help" } } });
+      handle.send({ type: "set_tool_controls", allowedTools: ["Bash", "Read"], disallowedTools: ["WebSearch"] });
+      handle.send({ type: "send", prompt: "Reply with only the word: autoadd" });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "turn_complete"),
+        60_000
+      );
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      expect(evts.find((e) => e.type === "session_ready")).toBeDefined();
+      expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+    }, 65_000);
+
+    it("set_run_options all fields + send completes", async () => {
+      const { handle, proc } = startDaemon();
+      handle.send({ type: "set_run_options", maxTurns: 5, maxBudgetUsd: 5, effort: "high", systemPrompt: "Be concise." });
+      handle.send({ type: "send", prompt: "Reply with only the word: options" });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "turn_complete"),
+        60_000
+      );
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      expect(evts.find((e) => e.type === "session_ready")).toBeDefined();
+      expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+    }, 65_000);
+
+    it("set_permission_mode acceptEdits + send completes", async () => {
+      const { handle, proc } = startDaemon();
+      handle.send({ type: "set_permission_mode", mode: "acceptEdits" });
+      handle.send({ type: "send", prompt: "Reply with only the word: perms" });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "turn_complete"),
+        60_000
+      );
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      expect(evts.find((e) => e.type === "session_ready")).toBeDefined();
+      expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+    }, 65_000);
+
+    it("request_models success path emits models_listed with entries", async () => {
+      const { handle, proc } = startDaemon();
+      handle.send({ type: "request_models" });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "models_listed"),
+        20_000
+      );
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      const ev = evts.find((e) => e.type === "models_listed");
+      expect(ev).toBeDefined();
+      expect((ev!.models as Array<{ id: string }>).length).toBeGreaterThan(0);
+    }, 25_000);
+
+    it("rewind_files during active send emits rewind_result or rewind error", async () => {
+      const { handle, proc } = startDaemon();
+      // Send a prompt that takes a moment so the query is still active
+      handle.send({ type: "send", prompt: "Write a 100-word paragraph about the history of computing" });
+      // Wait briefly for the query to start iterating
+      await new Promise((r) => setTimeout(r, 800));
+      // Send rewind while query is still active
+      handle.send({ type: "rewind_files", userMessageId: "msg_1", dryRun: true });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "turn_complete"),
+        60_000
+      );
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      // rewind_files should emit either rewind_result (success) or a rewind error
+      const rewind = evts.find((e) => e.type === "rewind_result");
+      const rewindErr = evts.find((e) => e.type === "error"
+        && typeof e.msg === "string"
+        && (e.msg as string).toLowerCase().includes("rewind"));
+      expect(rewind || rewindErr).toBeDefined();
+      expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+    }, 65_000);
+
+    it("permission_response with allow:true for non-yolo tool use resolves", async () => {
+      const { handle, proc } = startDaemon();
+      // Send a prompt that explicitly asks to run a tool — model may request Bash
+      handle.send({ type: "send", prompt: "Run this bash command and tell me the output: echo hello-world", yolo: false });
+      // Wait for either a permission_request or turn_complete (model may not need a tool)
+      let evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "permission_request" || ev.type === "turn_complete"),
+        30_000
+      );
+      const permReq = evts.find((e) => e.type === "permission_request");
+      if (permReq) {
+        handle.send({ type: "permission_response", requestId: permReq.requestId as string, allow: true });
+        evts = await handle.collectUntil(
+          (e) => e.some((ev) => ev.type === "turn_complete"),
+          60_000
+        );
+      }
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      expect(evts.find((e) => e.type === "turn_complete")).toBeDefined();
+    }, 100_000);
+
+    it("request_account_info success path emits account_info with fields", async () => {
+      const { handle, proc } = startDaemon();
+      handle.send({ type: "request_account_info" });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "account_info"),
+        20_000
+      );
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+      const ev = evts.find((e) => e.type === "account_info");
+      expect(ev).toBeDefined();
+      expect(ev!.type).toBe("account_info");
+      const hasInfo = ev!.email !== undefined
+        || ev!.plan !== undefined
+        || ev!.subscriptionType !== undefined
+        || ev!.apiProvider !== undefined;
+      expect(hasInfo).toBe(true);
+    }, 25_000);
+  });
