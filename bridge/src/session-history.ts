@@ -12,6 +12,22 @@ export interface SessionEntry {
   preview: string;
   timestamp: string;
   name?: string;
+  tags?: string[];
+  archived?: boolean;
+  exportedAt?: string;
+}
+
+interface SessionMeta {
+  tags?: string[];
+  archived?: boolean;
+  exportedAt?: string;
+}
+
+interface SearchResult {
+  sessionId: string;
+  sessionName?: string;
+  hitCount: number;
+  excerpt: string;
 }
 
 // Legacy alias kept for backward compatibility within this file
@@ -19,6 +35,46 @@ type TurnEntry = HistoryTurn;
 
 function claudeProjectDir(cwd: string, home = os.homedir()): string {
   return join(home, ".claude", "projects", cwd.replace(/\//g, "-"));
+}
+
+function metaPath(cwd: string, sessionId: string, home: string): string {
+  return join(claudeProjectDir(cwd, home), `${sessionId}.meta`);
+}
+
+async function readSessionMeta(cwd: string, sessionId: string, home: string): Promise<SessionMeta> {
+  const sessionMeta: SessionMeta = {};
+  try {
+    const metaRaw = await readFile(metaPath(cwd, sessionId, home), "utf8");
+    const meta = JSON.parse(metaRaw) as Record<string, unknown>;
+    if (Array.isArray(meta.tags)) sessionMeta.tags = meta.tags as string[];
+    if (typeof meta.archived === "boolean") sessionMeta.archived = meta.archived;
+    if (typeof meta.exportedAt === "string") sessionMeta.exportedAt = meta.exportedAt;
+  } catch {
+    // no .meta file — session has no ClaudianQt private metadata
+  }
+  return sessionMeta;
+}
+
+function applySessionMeta(entry: SessionEntry, sessionMeta: SessionMeta): void {
+  if (sessionMeta.tags !== undefined) entry.tags = sessionMeta.tags;
+  if (sessionMeta.archived !== undefined) entry.archived = sessionMeta.archived;
+  if (sessionMeta.exportedAt !== undefined) entry.exportedAt = sessionMeta.exportedAt;
+}
+
+export async function updateSessionMeta(
+  cwd: string,
+  sessionId: string,
+  updates: Partial<{ tags: string[]; archived: boolean; exportedAt: string }>,
+  home: string,
+): Promise<void> {
+  const mp = metaPath(cwd, sessionId, home);
+  await mkdir(dirname(mp), { recursive: true });
+  let existing: Record<string, unknown> = {};
+  try { existing = JSON.parse(await readFile(mp, "utf8")) as Record<string, unknown>; } catch {}
+  const cleanUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([, value]) => value !== undefined)
+  );
+  await writeFile(mp, JSON.stringify({ ...existing, ...cleanUpdates }), "utf8");
 }
 
 /** List sessions from JSONL files directly (used as fallback or in test mode). */
@@ -83,6 +139,7 @@ async function listSessionsFromFiles(
       } catch {
         // no .name file — session has no custom name
       }
+      applySessionMeta(entry, await readSessionMeta(cwd, sessionId, home));
       sessions.push(entry);
     }
   }
@@ -93,12 +150,14 @@ async function listSessionsFromFiles(
       const metaRaw = await readFile(join(dir, `${sessionId}.name`), "utf8");
       const meta = JSON.parse(metaRaw);
       if (meta.name) {
-        sessions.push({
+        const entry: SessionEntry = {
           id: sessionId,
           preview: "(new session)",
           timestamp: new Date().toISOString(),
           name: meta.name,
-        });
+        };
+        applySessionMeta(entry, await readSessionMeta(cwd, sessionId, home));
+        sessions.push(entry);
       }
     } catch {
       // skip
@@ -275,16 +334,101 @@ export async function exportSession(
       }
     }
   }
+  await updateSessionMeta(cwd, sessionId, { exportedAt: new Date().toISOString() }, home);
   return finalPath;
 }
 
 export async function deleteSession(cwd: string, sessionId: string, home = os.homedir()): Promise<void> {
   const sessionFile = join(claudeProjectDir(cwd, home), sessionId + ".jsonl");
-  try {
-    await unlink(sessionFile);
-  } catch {
-    // Already gone.
+  const mp = metaPath(cwd, sessionId, home);
+  await Promise.allSettled([unlink(sessionFile), unlink(mp)]);
+}
+
+function extractTextFromContent(content: unknown): string[] {
+  if (typeof content === "string") return [content];
+  if (!Array.isArray(content)) return [];
+  return content
+    .filter((block): block is Record<string, unknown> => typeof block === "object" && block !== null)
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text as string);
+}
+
+function extractLineTexts(obj: Record<string, unknown>): string[] {
+  const message = obj.message as Record<string, unknown> | undefined;
+  if (!message || typeof message !== "object") return [];
+  if (obj.type === "user" || obj.type === "assistant") {
+    return extractTextFromContent(message.content);
   }
+  return [];
+}
+
+export async function searchSessions(
+  cwd: string,
+  query: string,
+  home = os.homedir(),
+): Promise<SearchResult[]> {
+  const q = query.toLowerCase();
+  if (!q) return [];
+
+  const dir = claudeProjectDir(cwd, home);
+  let files: string[];
+  try {
+    files = await readdir(dir);
+  } catch {
+    return [];
+  }
+
+  const results: SearchResult[] = [];
+  for (const filename of files.filter((f) => f.endsWith(".jsonl"))) {
+    const sessionId = filename.slice(0, -6);
+    let lines: string[] = [];
+    try {
+      const rl = readline.createInterface({
+        input: fs.createReadStream(join(dir, filename)),
+        crlfDelay: Infinity,
+      });
+      for await (const line of rl) lines.push(line);
+      rl.close();
+    } catch {
+      continue;
+    }
+
+    lines = lines.slice(-50000);
+    let hitCount = 0;
+    let excerpt = "";
+    for (const line of lines) {
+      if (!line.toLowerCase().includes(q)) continue;
+      let obj: Record<string, unknown>;
+      try { obj = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+      for (const text of extractLineTexts(obj)) {
+        if (!text.toLowerCase().includes(q)) continue;
+        hitCount++;
+        if (!excerpt) excerpt = text.slice(0, 100);
+      }
+    }
+
+    if (hitCount > 0) {
+      const result: SearchResult = { sessionId, hitCount, excerpt };
+      try {
+        const metaRaw = await readFile(join(dir, `${sessionId}.name`), "utf8");
+        const meta = JSON.parse(metaRaw) as Record<string, unknown>;
+        if (typeof meta.name === "string") result.sessionName = meta.name;
+      } catch {
+        // no .name file — session has no custom name
+      }
+      results.push(result);
+    }
+  }
+
+  return results.sort((a, b) => b.hitCount - a.hitCount);
+}
+
+export async function tagSession(cwd: string, sessionId: string, tags: string[], home = os.homedir()): Promise<void> {
+  await updateSessionMeta(cwd, sessionId, { tags }, home);
+}
+
+export async function archiveSession(cwd: string, sessionId: string, archived: boolean, home = os.homedir()): Promise<void> {
+  await updateSessionMeta(cwd, sessionId, { archived }, home);
 }
 
 export async function renameSession(
@@ -293,19 +437,18 @@ export async function renameSession(
   name: string,
   home = os.homedir()
 ): Promise<void> {
-  // When home is overridden (e.g. in tests), write the .name file directly.
-  // Otherwise, try the SDK first and fall back to file writing.
+  // Always write the local .name sidecar first so the daemon stays responsive.
   if (home !== os.homedir()) {
     return renameSessionFile(cwd, sessionId, name, home);
   }
 
+  await renameSessionFile(cwd, sessionId, name, home).catch(() => {});
   try {
-    // SDK signature: renameSession(sessionId, name, options?)
-    await sdkRenameSession(sessionId, name);
-    // Also write the .name sidecar for local preview metadata (customTitle not always in SDK)
-    await renameSessionFile(cwd, sessionId, name, home);
+    await Promise.race([
+      sdkRenameSession(sessionId, name),
+      new Promise<void>((resolve) => setTimeout(resolve, 500)),
+    ]);
   } catch {
-    // SDK unavailable or errored — fall back to writing .name file directly
-    await renameSessionFile(cwd, sessionId, name, home);
+    // SDK unavailable or errored — local .name sidecar is already updated.
   }
 }

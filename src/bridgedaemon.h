@@ -34,6 +34,9 @@ signals:
     void sessionsListed(const QString &json);
     void sessionHistoryLoaded(const QString &json);
     void exportResult(const QString &sessionId, const QString &preset, const QString &path);
+    void sessionTagged(const QString &sessionId, const QString &tagsJson);
+    void sessionArchived(const QString &sessionId, bool archived);
+    void searchResults(const QString &requestId, const QString &json);
     void resultReceived(const QJsonObject &result);
     void toolProgress(const QString &id, const QString &name, double elapsedSeconds);
     void rateLimit(const QString &json);

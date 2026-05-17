@@ -34,6 +34,9 @@ const state = {
   pendingAttachments: [],
   previewAttachment: null,
   pendingExportCopy: null,
+  pendingSearch: null,
+  latestSearchId: 0,
+  showArchived: false,
 };
 
 let bridge = null;
@@ -172,11 +175,14 @@ function initDOM() {
     sidebarToggle:      document.getElementById('sidebar-toggle'),
     searchBtn:          document.getElementById('search-btn'),
     searchBar:          document.getElementById('search-bar'),
-    searchInput:        document.getElementById('search-input'),
+    messageSearchInput: document.getElementById('conversation-search-input'),
     searchCount:        document.getElementById('search-count'),
     searchPrev:         document.getElementById('search-prev'),
     searchNext:         document.getElementById('search-next'),
     searchClose:        document.getElementById('search-close'),
+    searchInput:        document.getElementById('search-input'),
+    searchResults:      document.getElementById('search-results'),
+    archivedToggle:     document.getElementById('archived-toggle'),
     exportBtn:          document.getElementById('export-btn'),
     viewSelectorBtn:    document.getElementById('view-selector-btn'),
     viewSelectorLabel:  document.getElementById('view-selector-label'),
@@ -747,6 +753,10 @@ function makeSessionItem(s) {
   const time = document.createElement('div');
   time.className = 'session-time';
   time.textContent = relativeTime(s.timestamp);
+  if (s.exportedAt) {
+    time.textContent = relativeTime(s.timestamp) + ' · exported';
+    time.style.color = 'var(--green)';
+  }
 
   const delBtn = document.createElement('button');
   delBtn.className = 'session-delete-btn';
@@ -775,8 +785,29 @@ function makeSessionItem(s) {
     openExportPicker(s.id);
   });
 
+  const archiveBtn = document.createElement('button');
+  archiveBtn.className = 'session-archive-btn';
+  archiveBtn.title = s.archived ? 'Unarchive session' : 'Archive session';
+  archiveBtn.textContent = s.archived ? '↑' : '▽';
+  archiveBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    bridge.archiveSession(s.id, !s.archived);
+  });
+
   item.appendChild(preview);
   item.appendChild(time);
+  if (s.tags && s.tags.length > 0) {
+    const tagsRow = document.createElement('div');
+    tagsRow.className = 'session-tags';
+    s.tags.forEach(tag => {
+      const pill = document.createElement('span');
+      pill.className = 'session-tag';
+      pill.textContent = tag;
+      tagsRow.appendChild(pill);
+    });
+    item.appendChild(tagsRow);
+  }
+  item.appendChild(archiveBtn);
   item.appendChild(exportBtn);
   item.appendChild(delBtn);
 
@@ -957,13 +988,21 @@ function startSessionRename(sessionId, previewEl) {
 }
 
 function renderSessions(sessions) {
-  state.sessions = (sessions || []).sort((a, b) => b.timestamp - a.timestamp);
+  state.sessions = (sessions || []).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   DOM.sessionList.innerHTML = '';
-  if (!state.sessions.length) {
+  const archivedCount = state.sessions.filter(s => s.archived).length;
+  if (DOM.archivedToggle) {
+    DOM.archivedToggle.textContent = state.showArchived
+      ? 'Hide archived'
+      : `Show archived (${archivedCount})`;
+    DOM.archivedToggle.style.display = archivedCount > 0 ? '' : 'none';
+  }
+  const visible = state.sessions.filter(s => state.showArchived || !s.archived);
+  if (!visible.length) {
     DOM.sessionList.innerHTML = '<div class="session-empty">No conversations yet</div>';
     return;
   }
-  state.sessions.forEach(s => {
+  visible.forEach(s => {
     DOM.sessionList.appendChild(makeSessionItem(s));
   });
 }
@@ -1151,6 +1190,7 @@ function exportTranscript() {
 
 // ── Search ─────────────────────────────────────────────────────────────────
 const _search = { active: false, query: '', marks: [], currentIdx: -1 };
+let _searchDebounce = null;
 
 function highlightInElement(el, query) {
   if (!el || !query) return;
@@ -1204,8 +1244,8 @@ function navigateToMark(idx) {
 function openSearch() {
   _search.active = true;
   DOM.searchBar.classList.add('visible');
-  DOM.searchInput.focus();
-  DOM.searchInput.select();
+  DOM.messageSearchInput.focus();
+  DOM.messageSearchInput.select();
 }
 
 function closeSearch() {
@@ -1215,7 +1255,7 @@ function closeSearch() {
   _search.marks = [];
   _search.currentIdx = -1;
   DOM.searchBar.classList.remove('visible');
-  DOM.searchInput.value = '';
+  DOM.messageSearchInput.value = '';
   DOM.searchCount.textContent = '';
 }
 
@@ -1247,6 +1287,48 @@ function runSearch(query) {
   } else {
     DOM.searchCount.textContent = 'No matches';
   }
+}
+
+function clearSearchResults() {
+  if (!DOM.searchResults) return;
+  DOM.searchResults.innerHTML = '';
+  DOM.searchResults.style.display = 'none';
+}
+
+function renderSearchResults(results) {
+  if (!DOM.searchResults) return;
+  DOM.searchResults.innerHTML = '';
+  if (!results || !results.length) {
+    DOM.searchResults.style.display = 'none';
+    return;
+  }
+  results.forEach(r => {
+    const item = document.createElement('div');
+    item.className = 'search-result-item';
+    const name = document.createElement('div');
+    name.className = 'search-result-name';
+    name.textContent = r.sessionName || r.sessionId.slice(0, 8);
+    const hits = document.createElement('span');
+    hits.className = 'search-result-hits';
+    hits.textContent = String(r.hitCount);
+    name.appendChild(hits);
+    const excerpt = document.createElement('div');
+    excerpt.className = 'search-result-excerpt';
+    excerpt.textContent = r.excerpt;
+    item.append(name, excerpt);
+    item.addEventListener('click', () => {
+      const clipped = r.excerpt.slice(0, 100);
+      state.pendingSearch = { sessionId: r.sessionId, excerpt: clipped };
+      state.activeSessionId = r.sessionId;
+      DOM.sessionList.querySelectorAll('.session-item').forEach(el =>
+        el.classList.toggle('active', el.dataset.sid === r.sessionId));
+      bridge.loadSession(r.sessionId);
+      clearSearchResults();
+      DOM.searchInput.value = '';
+    });
+    DOM.searchResults.appendChild(item);
+  });
+  DOM.searchResults.style.display = '';
 }
 
 // ── Controls ───────────────────────────────────────────────────────────────
@@ -1620,8 +1702,8 @@ function wireEvents() {
 
   // Search
   DOM.searchBtn.addEventListener('click', () => _search.active ? closeSearch() : openSearch());
-  DOM.searchInput.addEventListener('input', () => runSearch(DOM.searchInput.value.trim()));
-  DOM.searchInput.addEventListener('keydown', e => {
+  DOM.messageSearchInput.addEventListener('input', () => runSearch(DOM.messageSearchInput.value.trim()));
+  DOM.messageSearchInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
       e.shiftKey ? navigateToMark(_search.currentIdx - 1) : navigateToMark(_search.currentIdx + 1);
@@ -1630,6 +1712,24 @@ function wireEvents() {
   DOM.searchPrev.addEventListener('click', () => navigateToMark(_search.currentIdx - 1));
   DOM.searchNext.addEventListener('click', () => navigateToMark(_search.currentIdx + 1));
   DOM.searchClose.addEventListener('click', closeSearch);
+  if (DOM.searchInput) {
+    DOM.searchInput.addEventListener('input', () => {
+      clearTimeout(_searchDebounce);
+      const q = DOM.searchInput.value.trim();
+      if (!q) { clearSearchResults(); return; }
+      _searchDebounce = setTimeout(() => {
+        const id = Date.now();
+        state.latestSearchId = id;
+        bridge.searchSessions(q, String(id));
+      }, 300);
+    });
+  }
+  if (DOM.archivedToggle) {
+    DOM.archivedToggle.addEventListener('click', () => {
+      state.showArchived = !state.showArchived;
+      renderSessions(state.sessions);
+    });
+  }
 
   // Export button
   DOM.exportBtn.addEventListener('click', exportTranscript);
@@ -1876,6 +1976,8 @@ function wireBridgeSignals() {
   bridge.exportResult.connect((sessionId, preset, path) => {
     const filename = path.split('/').pop();
     showToast(`Saved — ${filename}`);
+    const session = state.sessions.find(s => s.id === sessionId);
+    if (session) session.exportedAt = new Date().toISOString();
     const item = DOM.sessionList.querySelector(`[data-sid="${sessionId}"]`);
     if (item) {
       const timeEl = item.querySelector('.session-time');
@@ -1884,6 +1986,24 @@ function wireBridgeSignals() {
         timeEl.style.color = 'var(--green)';
       }
     }
+  });
+  bridge.sessionTagged.connect((sessionId, tagsJson) => {
+    try {
+      const tags = JSON.parse(tagsJson);
+      const s = state.sessions.find(s => s.id === sessionId);
+      if (s) { s.tags = tags; renderSessions(state.sessions); }
+    } catch {}
+  });
+  bridge.sessionArchived.connect((sessionId, archived) => {
+    const s = state.sessions.find(s => s.id === sessionId);
+    if (s) { s.archived = archived; renderSessions(state.sessions); }
+  });
+  bridge.searchResults.connect((requestId, json) => {
+    if (Number(requestId) !== state.latestSearchId) return;
+    try {
+      const results = JSON.parse(json);
+      renderSearchResults(results);
+    } catch {}
   });
   bridge.errorOccurred.connect(msg => {
     if (state.streaming) endStreaming();
@@ -1901,6 +2021,22 @@ function wireBridgeSignals() {
     try {
       loadSessionHistory(JSON.parse(json));
       restoreDraft();
+      if (state.pendingSearch?.sessionId === state.activeSessionId) {
+        const { excerpt } = state.pendingSearch;
+        state.pendingSearch = null;
+        requestAnimationFrame(() => {
+          const msgEls = DOM.messages.querySelectorAll('[data-msg-id]');
+          for (const el of msgEls) {
+            const cd = el.querySelector('.msg-content, .msg-bubble');
+            if (cd && cd.textContent.includes(excerpt)) {
+              el.classList.add('search-highlight');
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              setTimeout(() => el.classList.remove('search-highlight'), 3000);
+              break;
+            }
+          }
+        });
+      }
       if (state.pendingExportCopy?.sessionId === state.activeSessionId) {
         const { sessionId, preset } = state.pendingExportCopy;
         state.pendingExportCopy = null;

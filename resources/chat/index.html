@@ -20,7 +20,14 @@
       </button>
       <button id="fork-session-btn" title="Fork current session — start a new session from this conversation&#39;s history">&#x2387; Fork</button>
     </div>
+    <div id="sidebar-search">
+      <input id="search-input" class="sidebar-search-input" type="search" placeholder="Search sessions…" autocomplete="off">
+      <div id="search-results" class="search-results-panel" style="display:none"></div>
+    </div>
     <div id="session-list"></div>
+    <div id="sidebar-footer">
+      <button id="archived-toggle" class="archived-toggle-btn" style="display:none"></button>
+    </div>
   </div>
 
   <!-- Main -->
@@ -64,7 +71,7 @@
         <circle cx="11" cy="11" r="8"/>
         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input id="search-input" type="text" placeholder="Search conversation…" autocomplete="off">
+      <input id="conversation-search-input" type="text" placeholder="Search conversation…" autocomplete="off">
       <span id="search-count"></span>
       <button id="search-prev" title="Previous match (Shift+Enter)">↑</button>
       <button id="search-next" title="Next match (Enter)">↓</button>

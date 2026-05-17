@@ -31,6 +31,9 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
     connect(m_daemon, &BridgeDaemon::sessionsListed,       this, &ClaudeBridge::sessionsListed);
     connect(m_daemon, &BridgeDaemon::sessionHistoryLoaded, this, &ClaudeBridge::sessionHistoryLoaded);
     connect(m_daemon, &BridgeDaemon::exportResult,         this, &ClaudeBridge::exportResult);
+    connect(m_daemon, &BridgeDaemon::sessionTagged,        this, &ClaudeBridge::sessionTagged);
+    connect(m_daemon, &BridgeDaemon::sessionArchived,      this, &ClaudeBridge::sessionArchived);
+    connect(m_daemon, &BridgeDaemon::searchResults,        this, &ClaudeBridge::searchResults);
     connect(m_daemon, &BridgeDaemon::toolProgress,         this, &ClaudeBridge::toolProgress);
     connect(m_daemon, &BridgeDaemon::rateLimit,            this, &ClaudeBridge::rateLimit);
     connect(m_daemon, &BridgeDaemon::fastModeStateChanged, this, &ClaudeBridge::fastModeStateChanged);
@@ -224,6 +227,30 @@ void ClaudeBridge::exportSession(const QString &sessionId, const QString &preset
         {"preset",         preset},
         {"obsidianFolder", obsidianFolder},
         {"suggestedName",  suggestedName}
+    });
+}
+
+void ClaudeBridge::tagSession(const QString &sessionId, const QString &tagsJson) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",      "tag_session"},
+        {"sessionId", sessionId},
+        {"tags",      QJsonDocument::fromJson(tagsJson.toUtf8()).array()}
+    });
+}
+
+void ClaudeBridge::archiveSession(const QString &sessionId, bool archived) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",      "archive_session"},
+        {"sessionId", sessionId},
+        {"archived",  archived}
+    });
+}
+
+void ClaudeBridge::searchSessions(const QString &query, const QString &requestId) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",      "search_sessions"},
+        {"query",     query},
+        {"requestId", requestId}
     });
 }
 

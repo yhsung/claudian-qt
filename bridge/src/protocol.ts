@@ -74,6 +74,9 @@ export type DaemonCommand =
   | { type: "delete_session"; sessionId: string }
   | { type: "rename_session"; sessionId: string; name: string }
   | { type: "export_session"; sessionId: string; preset: "clean_summary" | "pr_notes"; obsidianFolder: string; suggestedName: string }
+  | { type: "tag_session"; sessionId: string; tags: string[] }
+  | { type: "archive_session"; sessionId: string; archived: boolean }
+  | { type: "search_sessions"; query: string; requestId: string }
   | { type: "set_permission_mode"; mode: string }
   | { type: "set_thinking"; thinkingType: "disabled" | "adaptive" | "enabled"; budgetTokens?: number }
   | { type: "set_run_options"; maxTurns?: number; maxBudgetUsd?: number; effort?: "low" | "medium" | "high" | "xhigh" | "max"; systemPrompt?: string }
@@ -99,6 +102,9 @@ export type DaemonEvent =
   | { type: "sessions_listed"; json: string }
   | { type: "session_renamed"; sessionId: string; name: string }
   | { type: "export_result"; sessionId: string; preset: string; path: string }
+  | { type: "session_tagged"; sessionId: string; tags: string[] }
+  | { type: "session_archived"; sessionId: string; archived: boolean }
+  | { type: "search_results"; requestId: string; json: string }
   | { type: "session_history_loaded"; json: string }
   | { type: "session_forked"; newSessionId: string }
   | { type: "result"; data: Record<string, unknown> }

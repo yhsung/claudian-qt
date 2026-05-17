@@ -4,7 +4,7 @@ import { query, startup, AbortError } from "@anthropic-ai/claude-agent-sdk";
 import type { CanUseTool, HookCallback, HookCallbackMatcher, HookEvent, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
-import { deleteSession, exportSession, listSessions, loadSessionHistory, renameSession } from "./session-history.js";
+import { archiveSession, deleteSession, exportSession, listSessions, loadSessionHistory, renameSession, searchSessions, tagSession } from "./session-history.js";
 import { join } from "path";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment, AskUserQuestionItem } from "./protocol.js";
 
@@ -477,6 +477,24 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       } catch (err) {
         emit({ type: "error", msg: err instanceof Error ? err.message : String(err) });
       }
+      break;
+    }
+
+    case "tag_session": {
+      await tagSession(state.cwd, cmd.sessionId, cmd.tags);
+      emit({ type: "session_tagged", sessionId: cmd.sessionId, tags: cmd.tags });
+      break;
+    }
+
+    case "archive_session": {
+      await archiveSession(state.cwd, cmd.sessionId, cmd.archived);
+      emit({ type: "session_archived", sessionId: cmd.sessionId, archived: cmd.archived });
+      break;
+    }
+
+    case "search_sessions": {
+      const results = await searchSessions(state.cwd, cmd.query);
+      emit({ type: "search_results", requestId: cmd.requestId, json: JSON.stringify(results) });
       break;
     }
 
