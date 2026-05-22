@@ -41,6 +41,12 @@ const state = {
   pendingAutoExport: null,
   latestSearchId: 0,
   showArchived: false,
+  activePreviewCode: null,
+  activePreviewLang: null,
+  activePreviewTab: 'interactive',
+  activePreviewMsgId: null,
+  activePreviewBlockIdx: -1,
+  mermaidLoaded: false,
 };
 
 let bridge = null;
@@ -242,6 +248,15 @@ function initDOM() {
     agentDescInput:       document.getElementById('agent-desc-input'),
     agentPromptInput:     document.getElementById('agent-prompt-input'),
     agentAddBtn:          document.getElementById('agent-add-btn'),
+    previewResizer:       document.getElementById('preview-resizer'),
+    previewPane:          document.getElementById('preview-pane'),
+    previewTabs:          document.getElementById('preview-tabs'),
+    previewIframe:        document.getElementById('preview-iframe'),
+    previewMermaidContainer: document.getElementById('preview-mermaid-container'),
+    previewCodeViewer:    document.getElementById('preview-code-viewer'),
+    previewCloseBtn:      document.getElementById('preview-close-btn'),
+    previewOpenExternal:  document.getElementById('preview-open-external'),
+    previewEmpty:         document.getElementById('preview-empty'),
   };
 }
 
@@ -495,25 +510,249 @@ function showToast(msg, duration = 2500) {
 }
 
 function postProcessCodeBlocks(el) {
+  const msgEl = el.closest('[data-msg-id]');
+  const msgId = msgEl ? msgEl.dataset.msgId : null;
+
   el.querySelectorAll('pre:not(.code-wrapped)').forEach(pre => {
     pre.classList.add('code-wrapped');
+    
+    // Find language class
+    const codeEl = pre.querySelector('code');
+    let lang = '';
+    if (codeEl) {
+      const match = codeEl.className.match(/language-(\w+)/);
+      if (match) lang = match[1].toLowerCase();
+    }
+
     const wrapper = document.createElement('div');
     wrapper.className = 'code-block-wrapper';
     pre.parentNode.insertBefore(wrapper, pre);
     wrapper.appendChild(pre);
-    const btn = document.createElement('button');
-    btn.className = 'code-copy-btn';
-    btn.textContent = 'Copy';
-    btn.addEventListener('click', () => {
+
+    // Copy Button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'code-copy-btn';
+    copyBtn.textContent = 'Copy';
+    copyBtn.addEventListener('click', () => {
       const text = pre.textContent || '';
       bridge.copyToClipboard(text);
       showToast(text ? 'Copied!' : 'Nothing to copy');
-      btn.textContent = 'Copied!';
-      btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+      copyBtn.textContent = 'Copied!';
+      copyBtn.classList.add('copied');
+      setTimeout(() => { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }, 1500);
     });
-    wrapper.appendChild(btn);
+    wrapper.appendChild(copyBtn);
+
+    // Preview Button (only for html, svg, mermaid)
+    if (['html', 'svg', 'mermaid'].includes(lang)) {
+      const previewBtn = document.createElement('button');
+      previewBtn.className = 'code-preview-btn';
+      previewBtn.textContent = 'Preview';
+      previewBtn.addEventListener('click', () => {
+        const text = codeEl ? codeEl.textContent : '';
+        // Find index of this pre block in the parent message
+        const blocks = msgEl ? Array.from(msgEl.querySelectorAll('pre')) : [];
+        const blockIdx = blocks.indexOf(pre);
+        
+        state.activePreviewMsgId = msgId;
+        state.activePreviewBlockIdx = blockIdx;
+        
+        openPreview(text, lang);
+      });
+      wrapper.appendChild(previewBtn);
+    }
   });
+}
+
+// ── Split-Pane Artifact Preview Helpers ─────────────────────────────────────
+function initPreviewPane() {
+  let isDragging = false;
+  
+  DOM.previewResizer.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    DOM.previewResizer.classList.add('active');
+    
+    // Temporarily disable panel transitions while dragging to eliminate lag
+    DOM.previewPane.style.transition = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const windowWidth = window.innerWidth;
+    const newWidth = windowWidth - e.clientX;
+    const minWidth = 250;
+    const maxWidth = windowWidth * 0.8;
+    
+    if (newWidth >= minWidth && newWidth <= maxWidth) {
+      DOM.previewPane.style.width = `${newWidth}px`;
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      DOM.previewResizer.classList.remove('active');
+      
+      // Restore CSS transition logic
+      DOM.previewPane.style.transition = '';
+    }
+  });
+
+  // Switch tabs when clicked
+  const tabs = DOM.previewTabs.querySelectorAll('.preview-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      switchPreviewTab(tab.dataset.tab);
+    });
+  });
+
+  // Close pane
+  DOM.previewCloseBtn.addEventListener('click', () => {
+    closePreviewPane();
+  });
+
+  // Open external preview
+  DOM.previewOpenExternal.addEventListener('click', () => {
+    if (!state.activePreviewCode) return;
+    try {
+      const newWin = window.open();
+      if (newWin) {
+        newWin.document.open();
+        if (state.activePreviewLang === 'svg') {
+          newWin.document.write(`<!DOCTYPE html><html><head><title>SVG Preview</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#1e1e2e;}</style></head><body>\${state.activePreviewCode}</body></html>`);
+        } else if (state.activePreviewLang === 'mermaid') {
+          newWin.document.write(`<!DOCTYPE html><html><head><title>Mermaid Diagram</title><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs'; mermaid.initialize({startOnLoad:true,theme:'dark'});</script><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#1e1e2e;color:#cdd6f4;font-family:sans-serif;}</style></head><body><pre class="mermaid">\${state.activePreviewCode}</pre></body></html>`);
+        } else {
+          newWin.document.write(state.activePreviewCode);
+        }
+        newWin.document.close();
+      } else {
+        showToast('Popup blocked. Please enable popups.');
+      }
+    } catch (err) {
+      console.error('Failed to open external window:', err);
+      showToast('Could not open external preview');
+    }
+  });
+}
+
+function switchPreviewTab(targetTab) {
+  state.activePreviewTab = targetTab;
+  
+  const tabs = DOM.previewTabs.querySelectorAll('.preview-tab');
+  tabs.forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === targetTab);
+  });
+  
+  const contents = DOM.previewPane.querySelectorAll('.preview-tab-content');
+  contents.forEach(content => {
+    const active = content.id === `preview-tab-content-\${targetTab}`;
+    content.classList.toggle('active', active);
+  });
+  
+  renderActivePreview();
+}
+
+function openPreview(content, lang) {
+  state.activePreviewCode = content;
+  state.activePreviewLang = lang;
+  
+  DOM.previewResizer.style.display = 'block';
+  DOM.previewPane.style.display = 'flex';
+  DOM.previewEmpty.style.display = 'none';
+
+  switchPreviewTab('interactive');
+}
+
+function closePreviewPane() {
+  DOM.previewPane.style.display = 'none';
+  DOM.previewResizer.style.display = 'none';
+  state.activePreviewMsgId = null;
+  state.activePreviewBlockIdx = -1;
+}
+
+function renderActivePreview() {
+  if (!state.activePreviewCode) {
+    DOM.previewEmpty.style.display = 'flex';
+    DOM.previewIframe.style.display = 'none';
+    DOM.previewMermaidContainer.style.display = 'none';
+    return;
+  }
+
+  if (state.activePreviewTab === 'code') {
+    DOM.previewCodeViewer.querySelector('code').textContent = state.activePreviewCode;
+    return;
+  }
+
+  if (state.activePreviewLang === 'html') {
+    DOM.previewIframe.style.display = 'block';
+    DOM.previewMermaidContainer.style.display = 'none';
+    DOM.previewIframe.srcdoc = state.activePreviewCode;
+  } else if (state.activePreviewLang === 'svg') {
+    DOM.previewIframe.style.display = 'block';
+    DOM.previewMermaidContainer.style.display = 'none';
+    
+    const svgHtml = `<!DOCTYPE html><html><head><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1e1e2e; overflow: auto; } svg { max-width: 95vw; max-height: 95vh; display: block; }</style></head><body>\${state.activePreviewCode}</body></html>`;
+    DOM.previewIframe.srcdoc = svgHtml;
+  } else if (state.activePreviewLang === 'mermaid') {
+    DOM.previewIframe.style.display = 'none';
+    DOM.previewMermaidContainer.style.display = 'flex';
+    renderMermaidDiagram(state.activePreviewCode);
+  }
+}
+
+async function renderMermaidDiagram(code) {
+  DOM.previewMermaidContainer.innerHTML = '<div style="color:var(--text-muted);font-size:12px;display:flex;align-items:center;gap:8px;">⏳ Rendering diagram...</div>';
+  try {
+    if (!state.mermaidLoaded) {
+      const module = await import('https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs');
+      window.mermaid = module.default;
+      window.mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        securityLevel: 'loose',
+        flowchart: { useMaxWidth: true, htmlLabels: true },
+        themeVariables: {
+          background: '#1e1e2e',
+          primaryColor: '#7c6af7',
+          primaryTextColor: '#cdd6f4',
+          lineColor: '#585b70',
+          textColor: '#cdd6f4',
+        }
+      });
+      state.mermaidLoaded = true;
+    }
+    const elementId = 'mermaid-' + mkId();
+    const { svg, bindFunctions } = await window.mermaid.render(elementId, code);
+    DOM.previewMermaidContainer.innerHTML = `<div class="mermaid" style="width:100%">${svg}</div>`;
+    if (bindFunctions) bindFunctions(DOM.previewMermaidContainer);
+  } catch (err) {
+    console.error('Mermaid render error:', err);
+    DOM.previewMermaidContainer.innerHTML = `<div style="color:var(--red); padding:16px; font-family:var(--font-mono); font-size:12px; white-space:pre-wrap;">⚠️ Mermaid rendering failed:<br>\${escHtml(err.message || String(err))}</div>`;
+  }
+}
+
+function syncActivePreviewIfStreaming(updatedMsgId) {
+  if (!state.activePreviewMsgId || state.activePreviewMsgId !== updatedMsgId) return;
+  const msgEl = DOM.messages.querySelector(`[data-msg-id="\${updatedMsgId}"]`);
+  if (!msgEl) return;
+  
+  const blocks = Array.from(msgEl.querySelectorAll('pre'));
+  const targetPre = blocks[state.activePreviewBlockIdx];
+  if (!targetPre) return;
+  
+  const codeEl = targetPre.querySelector('code');
+  if (!codeEl) return;
+  
+  const newContent = codeEl.textContent || '';
+  if (newContent !== state.activePreviewCode) {
+    state.activePreviewCode = newContent;
+    renderActivePreview();
+  }
 }
 
 // ── Streaming ──────────────────────────────────────────────────────────────
@@ -527,6 +766,7 @@ function flushStreamBuffer() {
     contentDiv.innerHTML = window.marked.parse(state._streamBuffer);
     postProcessCodeBlocks(contentDiv);
   }
+  syncActivePreviewIfStreaming(state.currentMsgId);
   // Smart auto-scroll: only scroll if user hasn't scrolled up
   const { scrollTop, scrollHeight, clientHeight } = DOM.messages;
   if (shouldAutoScroll(scrollTop, scrollHeight, clientHeight)) {
@@ -653,6 +893,7 @@ function endStreaming() {
       if (cd) { cd.innerHTML = window.marked.parse(state._streamBuffer); postProcessCodeBlocks(cd); }
     }
   }
+  syncActivePreviewIfStreaming(state.currentMsgId);
   const msg = state.messages.find(m => m.id === state.currentMsgId);
   if (msg) {
     msg.content = state._streamBuffer;
@@ -2289,6 +2530,7 @@ function wireBridgeSignals() {
   if (window.marked) window.marked.use({ gfm: true, breaks: true });
   initDOM();
   initSidebarState();
+  initPreviewPane();
   wireEvents();
   applyFontSize();
   new QWebChannel(qt.webChannelTransport, function(channel) {
