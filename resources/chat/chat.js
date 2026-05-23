@@ -226,6 +226,7 @@ function initDOM() {
     autoSummaryToggle:    document.getElementById('auto-summary-toggle'),
     autoExportToggle:     document.getElementById('auto-export-toggle'),
     runOptsToggle:        document.getElementById('run-opts-toggle'),
+    settingsScrollContainer: document.getElementById('settings-scroll-container'),
     runOptionsRow:        document.getElementById('run-options-row'),
     systemPromptRow:      document.getElementById('system-prompt-row'),
     maxTurnsInput:        document.getElementById('max-turns-input'),
@@ -361,13 +362,7 @@ function renderMessage(msg) {
     bubble.className = 'msg-bubble';
     bubble.textContent = msg.content;
     outer.appendChild(bubble);
-    // Copy button (user messages)
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'msg-copy-btn';
-    copyBtn.title = 'Copy message';
-    copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-    copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copyMsgContent(msg, copyBtn); });
-    outer.appendChild(copyBtn);
+    renderMsgActions(outer, msg);
     if (msg.timestamp) {
       const ts = document.createElement('div');
       ts.className = 'msg-timestamp';
@@ -386,13 +381,7 @@ function renderMessage(msg) {
       postProcessCodeBlocks(contentDiv);
     }
     outer.appendChild(contentDiv);
-    // Copy button (assistant messages)
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'msg-copy-btn';
-    copyBtn.title = 'Copy message';
-    copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-    copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copyMsgContent(msg, copyBtn); });
-    outer.appendChild(copyBtn);
+    renderMsgActions(outer, msg);
     if (msg.toolCalls && msg.toolCalls.length > 0 && state.viewMode !== 'summary') {
       const toolEl = renderToolCalls(msg.toolCalls);
       if (toolEl) outer.appendChild(toolEl);
@@ -403,8 +392,89 @@ function renderMessage(msg) {
       ts.textContent = relativeTime(msg.timestamp);
       outer.appendChild(ts);
     }
+    updateRewindBar(outer, msg);
   }
   return outer;
+}
+
+function renderMsgActions(outer, msg) {
+  const actionsGroup = document.createElement('div');
+  actionsGroup.className = 'msg-actions';
+
+  // 1. Copy button
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'msg-action-btn copy-btn';
+  copyBtn.title = 'Copy message';
+  copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copyMsgContent(msg, copyBtn); });
+  actionsGroup.appendChild(copyBtn);
+
+  // 2. Fork button
+  const forkTargetId = msg.role === 'user' ? msg.userMessageId : msg.precedingUserMessageId;
+  if (forkTargetId) {
+    const forkBtn = document.createElement('button');
+    forkBtn.className = 'msg-action-btn fork-btn';
+    forkBtn.title = 'Fork conversation from here';
+    forkBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 18h-6a4 4 0 0 1-4-4V4"/><circle cx="18" cy="18" r="3"/><circle cx="8" cy="4" r="3"/><path d="M8 12a4 4 0 0 0 8 4"/><circle cx="16" cy="16" r="3"/></svg>';
+    forkBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (bridge && state.activeSessionId) {
+        forkBtn.disabled = true;
+        showToast('Forking conversation...');
+        bridge.forkSession(forkTargetId);
+      }
+    });
+    actionsGroup.appendChild(forkBtn);
+  }
+
+  outer.appendChild(actionsGroup);
+}
+
+function updateRewindBar(msgEl, msg) {
+  if (msg.role !== 'assistant') return;
+  const hasEdits = msg.toolCalls && msg.toolCalls.some(tc => tc.name === 'write_file' || tc.name === 'replace_file_content');
+  if (!hasEdits) return;
+
+  let bar = msgEl.querySelector('.turn-rewind-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'turn-rewind-bar';
+    
+    const info = document.createElement('span');
+    info.className = 'turn-rewind-info';
+    info.innerHTML = '⏪ Files were changed in this turn';
+
+    const btn = document.createElement('button');
+    btn.className = 'turn-rewind-btn';
+    btn.textContent = 'Undo Changes';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!msg.precedingUserMessageId) {
+        showToast('No preceding turn ID found to rollback changes.');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Undoing...';
+      bridge.rewindFiles(msg.precedingUserMessageId, false);
+    });
+
+    bar.appendChild(info);
+    bar.appendChild(document.createTextNode(' · '));
+    bar.appendChild(btn);
+
+    const content = msgEl.querySelector('.msg-content');
+    if (content) {
+      content.after(bar);
+    } else {
+      msgEl.appendChild(bar);
+    }
+  } else {
+    const btn = bar.querySelector('.turn-rewind-btn');
+    if (btn && btn.textContent !== 'Undo Changes' && btn.textContent !== 'Undoing...') {
+      btn.disabled = false;
+      btn.textContent = 'Undo Changes';
+    }
+  }
 }
 
 function renderMessages() {
@@ -929,6 +999,7 @@ function appendToolResult(toolUseId, content, isError) {
   // Auto-expand the group when a result arrives so output is visible
   const group = itemEl.closest('.tool-group');
   if (group) group.classList.add('expanded');
+  updateRewindBar(msgEl, msg);
 }
 
 function appendSubAgentMessage(parentToolUseId, text) {
@@ -1441,9 +1512,21 @@ function loadSessionHistory(turns) {
     role: turn.role,
     content: turn.text,
     attachments: turn.attachments || [],
-    toolCalls: [],
+    toolCalls: turn.toolCalls || [],
     timestamp: new Date().toISOString(),
+    userMessageId: turn.uuid,
   }));
+
+  // Link precedingUserMessageId for assistant messages
+  let lastUserMessageId = null;
+  state.messages.forEach(msg => {
+    if (msg.role === 'user') {
+      lastUserMessageId = msg.userMessageId;
+    } else if (msg.role === 'assistant') {
+      msg.precedingUserMessageId = lastUserMessageId;
+    }
+  });
+
   renderMessages();
 }
 
@@ -1867,7 +1950,22 @@ function onUsageUpdated(jsonStr) {
   let data;
   try { data = JSON.parse(jsonStr); } catch { return; }
   const { inputTokens = 0, outputTokens = 0, contextWindow = 0, numTurns = 0,
-          stopReason = '', subtype = '', cacheReadTokens = 0, cacheCreatedTokens = 0 } = data;
+          stopReason = '', subtype = '', cacheReadTokens = 0, cacheCreatedTokens = 0, userMessageId } = data;
+
+  if (userMessageId) {
+    const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      lastUserMsg.userMessageId = userMessageId;
+    }
+    const lastAsstMsg = [...state.messages].reverse().find(m => m.role === 'assistant');
+    if (lastAsstMsg) {
+      lastAsstMsg.precedingUserMessageId = userMessageId;
+      const lastAsstEl = DOM.messages.querySelector(`[data-msg-id="${lastAsstMsg.id}"]`);
+      if (lastAsstEl) {
+        updateRewindBar(lastAsstEl, lastAsstMsg);
+      }
+    }
+  }
 
   // Stamp token + stop-reason + cache badge on the last assistant message
   const lastAsstEl = [...DOM.messages.querySelectorAll('[data-msg-id]')].reverse()
@@ -2022,17 +2120,9 @@ function wireEvents() {
   }
   if (DOM.runOptsToggle) {
     DOM.runOptsToggle.addEventListener('click', () => {
-      const visible = DOM.runOptionsRow.style.display !== 'none';
-      DOM.runOptionsRow.style.display = visible ? 'none' : '';
-      DOM.systemPromptRow.style.display = visible ? 'none' : '';
-      if (DOM.toolControlsRow) {
-        DOM.toolControlsRow.style.display = visible ? 'none' : '';
-      }
-      if (DOM.mcpPanel) {
-        DOM.mcpPanel.style.display = visible ? 'none' : '';
-      }
-      if (DOM.agentsPanel) {
-        DOM.agentsPanel.style.display = visible ? 'none' : '';
+      const visible = DOM.settingsScrollContainer && DOM.settingsScrollContainer.style.display !== 'none';
+      if (DOM.settingsScrollContainer) {
+        DOM.settingsScrollContainer.style.display = visible ? 'none' : 'flex';
       }
       DOM.runOptsToggle.classList.toggle('run-opts-active', !visible);
     });
@@ -2068,11 +2158,11 @@ function wireEvents() {
     DOM.mcpServerList.innerHTML = '';
     Object.entries(mcpServers).forEach(([name, cfg]) => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px';
+      row.className = 'mcp-server-item';
       row.textContent = `${name}: ${cfg.command} ${(cfg.args || []).join(' ')}`;
       const rm = document.createElement('button');
+      rm.className = 'mcp-rm-btn';
       rm.textContent = '×';
-      rm.style.cssText = 'margin-left:8px;padding:0 6px;cursor:pointer';
       rm.addEventListener('click', () => {
         delete mcpServers[name];
         renderMcpList();
@@ -2106,11 +2196,11 @@ function wireEvents() {
     DOM.agentList.innerHTML = '';
     Object.entries(customAgents).forEach(([name, cfg]) => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px';
+      row.className = 'agent-item';
       row.textContent = `${name}: ${cfg.description}`;
       const rm = document.createElement('button');
+      rm.className = 'agent-rm-btn';
       rm.textContent = '×';
-      rm.style.cssText = 'margin-left:8px;padding:0 6px;cursor:pointer';
       rm.addEventListener('click', () => {
         delete customAgents[name];
         renderAgentList();
@@ -2582,6 +2672,7 @@ function wireBridgeSignals() {
   });
   bridge.sessionForked.connect((newSessionId) => {
     bridge.requestSessions();
+    bridge.loadSession(newSessionId);
     showToast('Session forked — continuing from here in a new session.');
   });
   bridge.agentNotification.connect((message, notificationType) => {
@@ -2596,6 +2687,24 @@ function wireBridgeSignals() {
         ? `Rewound ${restored.length} file(s). Failed: ${failed.join(', ')}`
         : `Rewound ${restored.length} file(s) successfully.`;
       showToast(msg);
+
+      const undoingBtns = DOM.messages.querySelectorAll('.turn-rewind-btn');
+      undoingBtns.forEach(btn => {
+        if (btn.textContent === 'Undoing...') {
+          if (failed.length === 0) {
+            btn.textContent = 'Undone!';
+            btn.classList.add('undone');
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.textContent = 'Undo Changes';
+              btn.classList.remove('undone');
+            }, 3000);
+          } else {
+            btn.disabled = false;
+            btn.textContent = 'Undo Changes';
+          }
+        }
+      });
     } catch {}
   });
   bridge.accountInfoReceived.connect((json) => {

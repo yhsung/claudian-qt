@@ -398,31 +398,100 @@ html, body {
 .msg-assistant:hover .msg-regenerate { display: inline-flex; }
 .msg-regenerate:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── Message copy button ──────────────────────────────────────────────────── */
-.msg-copy-btn {
+/* ── Message hover actions group ────────────────────────────────────────── */
+.msg-actions {
   position: absolute;
   top: 6px;
   right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+}
+.msg-user:hover .msg-actions,
+.msg-assistant:hover .msg-actions {
+  opacity: 1;
+}
+.msg-action-btn {
   background: transparent;
   border: none;
   color: var(--text-faint);
   cursor: pointer;
   padding: 4px;
   border-radius: var(--radius-sm);
-  opacity: 0;
-  transition: opacity 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  transition: all 0.15s ease;
 }
-.msg-user:hover .msg-copy-btn,
-.msg-assistant:hover .msg-copy-btn {
-  opacity: 1;
-}
-.msg-copy-btn:hover {
+.msg-action-btn:hover:not(:disabled) {
   color: var(--text-muted);
   background: var(--bg-surface);
+}
+.msg-action-btn:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ── Turn Rewind Timeline Bar ───────────────────────────────────────────── */
+.turn-rewind-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  margin-top: 10px;
+  align-self: flex-start;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slide-up 0.25s ease-out;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.turn-rewind-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.turn-rewind-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+  font-size: 11px;
+}
+
+.turn-rewind-btn:hover:not(:disabled) {
+  background: rgba(124, 106, 247, 0.15);
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.turn-rewind-btn:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.turn-rewind-btn.undone {
+  color: #10b981;
 }
 
 /* ── Per-turn meta badge ───────────────────────────────────────────────── */
@@ -1241,4 +1310,200 @@ mark.search-highlight.current {
   border-color: var(--accent);
   background: rgba(124, 106, 247, 0.08);
 }
+
+/* ── Settings Panel Premium Styling ─────────────────────────────────────── */
+#settings-scroll-container {
+  max-height: 38vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 6px;
+  margin-top: 6px !important;
+  scrollbar-width: thin;
+}
+
+#settings-scroll-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+#run-options-row,
+#system-prompt-row,
+#tool-controls-row,
+#mcp-panel,
+#agents-panel {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  padding: 14px 16px !important;
+  margin-top: 6px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+}
+
+#run-options-row {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.run-opt-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex: 1;
+  min-width: 140px;
+}
+
+.run-opt-label input,
+.run-opt-label select,
+#mcp-panel input,
+#agents-panel input,
+#agents-panel textarea,
+#system-prompt-input {
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 7px 10px !important;
+  font-size: 12px !important;
+  font-family: var(--font-ui) !important;
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.run-opt-label input:hover,
+.run-opt-label select:hover,
+#mcp-panel input:hover,
+#agents-panel input:hover,
+#agents-panel textarea:hover,
+#system-prompt-input:hover {
+  border-color: rgba(124, 106, 247, 0.4) !important;
+}
+
+.run-opt-label input:focus,
+.run-opt-label select:focus,
+#mcp-panel input:focus,
+#agents-panel input:focus,
+#agents-panel textarea:focus,
+#system-prompt-input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(124, 106, 247, 0.15) !important;
+}
+
+#apply-run-options-btn,
+#apply-tool-controls-btn,
+#mcp-add-btn,
+#agent-add-btn {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 7px 16px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  align-self: flex-end;
+  transition: all 0.15s ease;
+}
+
+#apply-run-options-btn:hover,
+#apply-tool-controls-btn:hover,
+#mcp-add-btn:hover,
+#agent-add-btn:hover {
+  background: var(--accent-hover) !important;
+  transform: translateY(-1px);
+}
+
+#apply-run-options-btn:active,
+#apply-tool-controls-btn:active,
+#mcp-add-btn:active,
+#agent-add-btn:active {
+  transform: translateY(0);
+}
+
+#system-prompt-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 12px;
+}
+
+#system-prompt-input {
+  flex: 1;
+  min-height: 34px;
+  height: 34px;
+  resize: none;
+}
+
+/* Tool controls styling updates */
+#tool-controls-row {
+  flex-direction: row !important;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+/* MCP Panel list & items styling */
+#mcp-server-list,
+#agent-list {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+
+.mcp-server-item,
+.agent-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.mcp-server-item:last-child,
+.agent-item:last-child {
+  border-bottom: none;
+}
+
+.mcp-rm-btn,
+.agent-rm-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.mcp-rm-btn:hover,
+.agent-rm-btn:hover {
+  color: var(--red);
+  border-color: rgba(255, 69, 58, 0.2);
+  background: rgba(255, 69, 58, 0.08);
+}
+
 

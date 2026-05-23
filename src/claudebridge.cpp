@@ -78,7 +78,8 @@ ClaudeBridge::ClaudeBridge(QObject *parent)
             {"stopReason",       result["stop_reason"].toString()},
             {"subtype",          result["subtype"].toString()},
             {"cacheReadTokens",  result["cacheReadTokens"].toInt(0)},
-            {"cacheCreatedTokens", result["cacheCreatedTokens"].toInt(0)}
+            {"cacheCreatedTokens", result["cacheCreatedTokens"].toInt(0)},
+            {"userMessageId",    result["userMessageId"].toString()}
         };
         emit usageUpdated(
             QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact))
@@ -357,8 +358,12 @@ void ClaudeBridge::setRunOptions(int maxTurns, double maxBudgetUsd,
     m_daemon->sendCommand(cmd);
 }
 
-void ClaudeBridge::forkSession() {
-    m_daemon->sendCommand(QJsonObject{{"type", "fork_session"}});
+void ClaudeBridge::forkSession(const QString &upToMessageId) {
+    QJsonObject cmd{{"type", "fork_session"}};
+    if (!upToMessageId.isEmpty()) {
+        cmd["upToMessageId"] = upToMessageId;
+    }
+    m_daemon->sendCommand(cmd);
 }
 
 void ClaudeBridge::setToolControls(const QString &allowedJson, const QString &disallowedJson) {

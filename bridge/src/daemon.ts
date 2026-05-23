@@ -1,12 +1,12 @@
 import * as readline from "readline";
 import * as os from "os";
-import { readFile } from "fs/promises";
-import { query, startup, AbortError } from "@anthropic-ai/claude-agent-sdk";
+import { readFile, mkdir, writeFile } from "fs/promises";
+import { query, startup, AbortError, forkSession } from "@anthropic-ai/claude-agent-sdk";
 import type { CanUseTool, HookCallback, HookCallbackMatcher, HookEvent, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
-import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn } from "./attachment-store.js";
+import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn, loadAttachmentManifest } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
 import { archiveSession, deleteSession, exportSession, getExportedSiblingStems, listSessions, loadSessionHistory, renameSession, searchSessions, tagSession, truncateForPrompt, updateSessionMeta } from "./session-history.js";
-import { join } from "path";
+import { join, dirname } from "path";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment, AskUserQuestionItem } from "./protocol.js";
 
 function emit(event: DaemonEvent): void {
@@ -223,6 +223,24 @@ function buildRunOptions(): Record<string, unknown> {
   return opts;
 }
 
+async function getQueryForRewind(): Promise<any> {
+  if (activeQuery) {
+    return activeQuery;
+  }
+  if (!state.sessionId) {
+    throw new Error("No active session ID.");
+  }
+  return query({
+    prompt: (async function* () { /* empty */ })(),
+    options: {
+      cwd: state.cwd,
+      resume: state.sessionId,
+      maxTurns: 0,
+      allowDangerouslySkipPermissions: true,
+    },
+  });
+}
+
 async function handleSend(prompt: string, attachments: OutboundAttachment[], model?: string, yolo?: boolean): Promise<void> {
   if (currentAbort) currentAbort.abort();
 
@@ -235,6 +253,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
   // Cache token accumulator for this turn (captured from message_delta stream events).
   let turnCacheRead = 0;
   let turnCacheCreated = 0;
+  let firstUserUuid: string | undefined = undefined;
 
   try {
     const userMessage = await buildUserMessage(prompt, attachments);
@@ -368,6 +387,9 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
         }
 
       } else if (m.type === "user") {
+        if (!firstUserUuid && typeof m.uuid === "string") {
+          firstUserUuid = m.uuid;
+        }
         // Tool results returned to Claude after tool execution.
         const msgObj = m.message as Record<string, unknown> | undefined;
         const content = msgObj?.content as Array<Record<string, unknown>> | undefined;
@@ -399,7 +421,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
           emit({ type: "error", msg });
         } else {
           successful = true;
-          emit({ type: "result", data: { ...m, cacheReadTokens: turnCacheRead, cacheCreatedTokens: turnCacheCreated } });
+          emit({ type: "result", data: { ...m, cacheReadTokens: turnCacheRead, cacheCreatedTokens: turnCacheCreated, userMessageId: firstUserUuid } });
         }
 
       } else if (m.type === "rate_limit") {
@@ -685,9 +707,39 @@ ${sessionText}</session>`;
       state.agents = cmd.agents as Record<string, unknown>;
       break;
 
-    case "fork_session":
-      state.forkNext = true;
+    case "fork_session": {
+      if (cmd.upToMessageId && state.sessionId) {
+        try {
+          const res = await forkSession(state.sessionId, { upToMessageId: cmd.upToMessageId });
+          const newSessionId = res.sessionId;
+
+          // Copy attachment manifest
+          try {
+            const rootDir = attachmentRoot();
+            const originalManifest = await loadAttachmentManifest(rootDir, state.sessionId);
+            const newTurns = await loadSessionHistory(state.cwd, newSessionId);
+            const userTurnsCount = newTurns.filter(t => t.role === "user").length;
+            const newManifest = originalManifest.filter(t => t.turnIndex < userTurnsCount);
+
+            if (newManifest.length > 0) {
+              const path = join(rootDir, "sessions", newSessionId, "manifest.json");
+              await mkdir(dirname(path), { recursive: true });
+              await writeFile(path, JSON.stringify(newManifest, null, 2));
+            }
+          } catch (attErr) {
+            // Non-fatal if attachment copy fails
+            console.error("Failed to copy attachment manifest for fork:", attErr);
+          }
+
+          emit({ type: "session_forked", newSessionId });
+        } catch (err) {
+          emit({ type: "error", msg: `Failed to fork session: ${err instanceof Error ? err.message : String(err)}` });
+        }
+      } else {
+        state.forkNext = true;
+      }
       break;
+    }
 
     case "request_models": {
       try {
@@ -745,12 +797,9 @@ ${sessionText}</session>`;
     }
 
     case "rewind_files": {
-      if (!activeQuery) {
-        emit({ type: "error", msg: "No active session to rewind." });
-        break;
-      }
       try {
-        const qWithRewind = activeQuery as unknown as {
+        const qObj = await getQueryForRewind();
+        const qWithRewind = qObj as unknown as {
           rewindFiles: (userMessageId: string, opts?: { dryRun?: boolean }) => Promise<{
             changedFiles?: string[];
             restoredFiles?: string[];

@@ -234,12 +234,19 @@ export async function loadSessionHistory(
   const filePath = join(claudeProjectDir(cwd, home), sessionId + ".jsonl");
   const turns: HistoryTurn[] = [];
   let pendingAssistant = "";
+  let pendingToolCalls: any[] = [];
   let userTurnIndex = -1;
 
   const flushAssistant = (): void => {
-    if (!pendingAssistant.trim()) return;
-    turns.push({ role: "assistant", text: pendingAssistant.trim(), attachments: [] });
+    if (!pendingAssistant.trim() && pendingToolCalls.length === 0) return;
+    turns.push({
+      role: "assistant",
+      text: pendingAssistant.trim(),
+      attachments: [],
+      toolCalls: pendingToolCalls.length > 0 ? pendingToolCalls : undefined,
+    });
     pendingAssistant = "";
+    pendingToolCalls = [];
   };
 
   let stream: fs.ReadStream;
@@ -285,12 +292,22 @@ export async function loadSessionHistory(
           role: "user",
           text: text.trim(),
           attachments: attachmentsByTurn.get(userTurnIndex) ?? [],
+          uuid: (obj.uuid as string) ?? undefined,
         });
       }
     } else if (obj.type === "assistant") {
       const content = (obj.message as Record<string, unknown>).content as Array<Record<string, unknown>>;
       for (const block of content ?? []) {
-        if (block.type === "text") pendingAssistant += block.text as string;
+        if (block.type === "text") {
+          pendingAssistant += block.text as string;
+        } else if (block.type === "tool_use") {
+          pendingToolCalls.push({
+            id: block.id,
+            name: block.name,
+            inputJson: JSON.stringify(block.input),
+            status: "done",
+          });
+        }
       }
     }
   }

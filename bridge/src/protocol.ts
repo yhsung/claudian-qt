@@ -26,6 +26,16 @@ export interface HistoryTurn {
   role: "user" | "assistant";
   text: string;
   attachments: HistoryAttachment[];
+  uuid?: string;
+  toolCalls?: Array<{
+    id?: string;
+    name: string;
+    inputJson: string;
+    status: "running" | "done" | "error";
+    elapsedSeconds?: number;
+    result?: string;
+    isError?: boolean;
+  }>;
 }
 
 export interface AskUserQuestionItem {
@@ -84,7 +94,7 @@ export type DaemonCommand =
   | { type: "set_thinking"; thinkingType: "disabled" | "adaptive" | "enabled"; budgetTokens?: number }
   | { type: "set_run_options"; maxTurns?: number; maxBudgetUsd?: number; effort?: "low" | "medium" | "high" | "xhigh" | "max"; systemPrompt?: string }
   | { type: "set_tool_controls"; allowedTools?: string[]; disallowedTools?: string[] }
-  | { type: "fork_session" }
+  | { type: "fork_session"; upToMessageId?: string }
   | { type: "request_models" }
   | { type: "request_account_info" }
   | { type: "set_mcp_servers"; servers: Record<string, McpServerSpec> }

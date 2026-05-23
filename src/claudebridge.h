@@ -64,7 +64,7 @@ public slots:
     void setToolControls(const QString &allowedJson, const QString &disallowedJson);
     void setMcpServers(const QString &serversJson);
     void setAgents(const QString &agentsJson);
-    void forkSession();
+    void forkSession(const QString &upToMessageId = "");
     void rewindFiles(const QString &userMessageId, bool dryRun = false);
     void requestAccountInfo();
 
