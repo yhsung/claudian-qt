@@ -244,6 +244,7 @@ async function getQueryForRewind(): Promise<any> {
       cwd: state.cwd,
       resume: state.sessionId,
       allowDangerouslySkipPermissions: true,
+      enableFileCheckpointing: true,
     },
   });
 
