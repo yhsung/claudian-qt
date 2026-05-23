@@ -131,7 +131,12 @@ describe('GUI Interactivity Simulation', () => {
 
     // Simulate DOM element list
     const buttons = [
-      { textContent: 'Undoing...', className: 'turn-rewind-btn', disabled: true, classList: new Set<string>() }
+      {
+        title: 'Undoing changes...',
+        className: 'msg-action-btn rewind-btn',
+        disabled: true,
+        classList: new Set<string>(['undoing']),
+      }
     ];
 
     // Simulate rewindResult callback dispatch
@@ -142,18 +147,18 @@ describe('GUI Interactivity Simulation', () => {
 
     // Process buttons like in chat.js
     buttons.forEach(btn => {
-      if (btn.textContent === 'Undoing...') {
+      if (btn.classList.has('undoing')) {
+        btn.classList.delete('undoing');
+        btn.disabled = false;
+        btn.title = 'Undo file changes made in this turn';
         if (failed.length === 0) {
-          btn.textContent = 'Undone!';
           btn.classList.add('undone');
-        } else {
-          btn.disabled = false;
-          btn.textContent = 'Undo Changes';
         }
       }
     });
 
-    expect(buttons[0].textContent).toBe('Undone!');
+    expect(buttons[0].classList.has('undoing')).toBe(false);
     expect(buttons[0].classList.has('undone')).toBe(true);
+    expect(buttons[0].disabled).toBe(false);
   });
 });

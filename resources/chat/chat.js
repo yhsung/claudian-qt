@@ -2704,20 +2704,17 @@ function wireBridgeSignals() {
       const msg = buildRewindStatusMsg(restored.length, failed);
       showToast(msg);
 
-      const undoingBtns = DOM.messages.querySelectorAll('.turn-rewind-btn');
+      const undoingBtns = DOM.messages.querySelectorAll('.rewind-btn');
       undoingBtns.forEach(btn => {
-        if (btn.textContent === 'Undoing...') {
+        if (btn.classList.contains('undoing')) {
+          btn.classList.remove('undoing');
+          btn.disabled = false;
+          btn.title = 'Undo file changes made in this turn';
           if (failed.length === 0) {
-            btn.textContent = 'Undone!';
             btn.classList.add('undone');
             setTimeout(() => {
-              btn.disabled = false;
-              btn.textContent = 'Undo Changes';
               btn.classList.remove('undone');
             }, 3000);
-          } else {
-            btn.disabled = false;
-            btn.textContent = 'Undo Changes';
           }
         }
       });
