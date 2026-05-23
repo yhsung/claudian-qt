@@ -7,6 +7,7 @@ import { computeUserScrolled, shouldAutoScroll } from './chat-scroll.js';
 import { navigateUp, navigateDown } from './chat-nav.js';
 import { buildMsgCopyText, buildToolGroupCopyText } from './chat-copy.js';
 import { escHtml, relativeTime, shortModelName } from './chat-format.js';
+import { shouldShowRewind, buildRewindStatusMsg } from './chat-rewind.js';
 
 // ── State ──────────────────────────────────────────────────────────────────
 const state = {
@@ -432,7 +433,7 @@ function renderMsgActions(outer, msg) {
 
 function updateRewindBar(msgEl, msg) {
   if (msg.role !== 'assistant') return;
-  const hasEdits = msg.toolCalls && msg.toolCalls.some(tc => tc.name === 'write_file' || tc.name === 'replace_file_content');
+  const hasEdits = shouldShowRewind(msg);
   if (!hasEdits) return;
 
   let bar = msgEl.querySelector('.turn-rewind-bar');
@@ -2683,9 +2684,7 @@ function wireBridgeSignals() {
     try {
       const restored = JSON.parse(restoredJson);
       const failed   = JSON.parse(failedJson);
-      const msg = failed.length
-        ? `Rewound ${restored.length} file(s). Failed: ${failed.join(', ')}`
-        : `Rewound ${restored.length} file(s) successfully.`;
+      const msg = buildRewindStatusMsg(restored.length, failed);
       showToast(msg);
 
       const undoingBtns = DOM.messages.querySelectorAll('.turn-rewind-btn');

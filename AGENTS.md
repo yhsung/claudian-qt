@@ -32,7 +32,7 @@ PRs should include: concise summary, rationale, test evidence (`ctest` / `npm te
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **claudian-qt** (1515 symbols, 2366 relationships, 94 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **claudian-qt** (1546 symbols, 2416 relationships, 95 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
