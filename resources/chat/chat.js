@@ -432,8 +432,15 @@ function renderMsgActions(outer, msg) {
 }
 
 function updateRewindBar(msgEl, msg) {
-  if (msg.role !== 'assistant') return;
-  const hasEdits = shouldShowRewind(msg);
+  if (msg.role !== 'user') return;
+
+  // Find corresponding assistant message in state.messages
+  const idx = state.messages.findIndex(m => m.id === msg.id);
+  if (idx === -1 || idx + 1 >= state.messages.length) return;
+  const nextMsg = state.messages[idx + 1];
+  if (!nextMsg || nextMsg.role !== 'assistant') return;
+
+  const hasEdits = shouldShowRewind(nextMsg);
   if (!hasEdits) return;
 
   let bar = msgEl.querySelector('.turn-rewind-bar');
@@ -450,25 +457,20 @@ function updateRewindBar(msgEl, msg) {
     btn.textContent = 'Undo Changes';
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!msg.precedingUserMessageId) {
-        showToast('No preceding turn ID found to rollback changes.');
+      if (!msg.userMessageId) {
+        showToast('No turn ID found to rollback changes.');
         return;
       }
       btn.disabled = true;
       btn.textContent = 'Undoing...';
-      bridge.rewindFiles(msg.precedingUserMessageId, false);
+      bridge.rewindFiles(msg.userMessageId, false);
     });
 
     bar.appendChild(info);
     bar.appendChild(document.createTextNode(' · '));
     bar.appendChild(btn);
 
-    const content = msgEl.querySelector('.msg-content');
-    if (content) {
-      content.after(bar);
-    } else {
-      msgEl.appendChild(bar);
-    }
+    msgEl.appendChild(bar);
   } else {
     const btn = bar.querySelector('.turn-rewind-btn');
     if (btn && btn.textContent !== 'Undo Changes' && btn.textContent !== 'Undoing...') {
@@ -1000,7 +1002,13 @@ function appendToolResult(toolUseId, content, isError) {
   // Auto-expand the group when a result arrives so output is visible
   const group = itemEl.closest('.tool-group');
   if (group) group.classList.add('expanded');
-  updateRewindBar(msgEl, msg);
+  const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
+  if (lastUserMsg) {
+    const userMsgEl = DOM.messages.querySelector(`[data-msg-id="${lastUserMsg.id}"]`);
+    if (userMsgEl) {
+      updateRewindBar(userMsgEl, lastUserMsg);
+    }
+  }
 }
 
 function appendSubAgentMessage(parentToolUseId, text) {
@@ -1957,14 +1965,14 @@ function onUsageUpdated(jsonStr) {
     const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
     if (lastUserMsg) {
       lastUserMsg.userMessageId = userMessageId;
+      const lastUserEl = DOM.messages.querySelector(`[data-msg-id="${lastUserMsg.id}"]`);
+      if (lastUserEl) {
+        updateRewindBar(lastUserEl, lastUserMsg);
+      }
     }
     const lastAsstMsg = [...state.messages].reverse().find(m => m.role === 'assistant');
     if (lastAsstMsg) {
       lastAsstMsg.precedingUserMessageId = userMessageId;
-      const lastAsstEl = DOM.messages.querySelector(`[data-msg-id="${lastAsstMsg.id}"]`);
-      if (lastAsstEl) {
-        updateRewindBar(lastAsstEl, lastAsstMsg);
-      }
     }
   }
 

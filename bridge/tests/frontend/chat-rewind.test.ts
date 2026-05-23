@@ -88,7 +88,7 @@ describe('GUI Interactivity Simulation', () => {
     };
 
     const msg = {
-      precedingUserMessageId: 'user-msg-uuid-123'
+      userMessageId: 'user-msg-uuid-123'
     };
 
     // Simulate DOM elements and events
@@ -110,10 +110,10 @@ describe('GUI Interactivity Simulation', () => {
     // Register click event handler like in chat.js
     button.addEventListener('click', (e: any) => {
       e.stopPropagation();
-      if (!msg.precedingUserMessageId) return;
+      if (!msg.userMessageId) return;
       button.disabled = true;
       button.textContent = 'Undoing...';
-      mockBridge.rewindFiles(msg.precedingUserMessageId, false);
+      mockBridge.rewindFiles(msg.userMessageId, false);
     });
 
     // Fire the click action
