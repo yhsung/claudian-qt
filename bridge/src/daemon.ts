@@ -230,15 +230,25 @@ async function getQueryForRewind(): Promise<any> {
   if (!state.sessionId) {
     throw new Error("No active session ID.");
   }
-  return query({
-    prompt: (async function* () { /* empty */ })(),
+
+  let resolvePromptGenerator: (() => void) | undefined;
+  const promptPromise = new Promise<void>((resolve) => {
+    resolvePromptGenerator = resolve;
+  });
+
+  const q = query({
+    prompt: (async function* () {
+      await promptPromise;
+    })(),
     options: {
       cwd: state.cwd,
       resume: state.sessionId,
-      maxTurns: 0,
       allowDangerouslySkipPermissions: true,
     },
   });
+
+  (q as any)._resolvePrompt = resolvePromptGenerator;
+  return q;
 }
 
 async function handleSend(prompt: string, attachments: OutboundAttachment[], model?: string, yolo?: boolean): Promise<void> {
@@ -798,6 +808,7 @@ ${sessionText}</session>`;
 
     case "rewind_files": {
       try {
+        const isResumed = !activeQuery;
         const qObj = await getQueryForRewind();
         const qWithRewind = qObj as unknown as {
           rewindFiles: (userMessageId: string, opts?: { dryRun?: boolean }) => Promise<{
@@ -805,6 +816,8 @@ ${sessionText}</session>`;
             restoredFiles?: string[];
             failedFiles?: string[];
           }>;
+          close?: () => Promise<void>;
+          _resolvePrompt?: () => void;
         };
         const result = await qWithRewind.rewindFiles(cmd.userMessageId, { dryRun: cmd.dryRun ?? false });
         emit({
@@ -813,6 +826,16 @@ ${sessionText}</session>`;
           restoredFiles: result.restoredFiles ?? [],
           failedFiles:   result.failedFiles   ?? [],
         });
+
+        // Only cleanup if we started a fresh query for the rewind
+        if (isResumed) {
+          if (qWithRewind._resolvePrompt) {
+            qWithRewind._resolvePrompt();
+          }
+          if (qWithRewind.close) {
+            await qWithRewind.close().catch(() => {});
+          }
+        }
       } catch (err) {
         emit({ type: "error", msg: `Rewind failed: ${err instanceof Error ? err.message : String(err)}` });
       }
