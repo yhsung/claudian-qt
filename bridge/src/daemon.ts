@@ -822,16 +822,31 @@ ${sessionText}</session>`;
         };
 
         if (isResumed) {
+          let resolveInit: (() => void) | undefined;
+          const initPromise = new Promise<void>((resolve) => {
+            resolveInit = resolve;
+          });
+
           // Start iterating in background to spawn transport and load checkpoints
           (async () => {
             try {
-              for await (const _ of qWithRewind as any) {
-                // Consume events to keep generator moving
+              for await (const message of qWithRewind as any) {
+                const m = message as Record<string, unknown>;
+                if (m.type === "system" && m.subtype === "init") {
+                  if (resolveInit) {
+                    resolveInit();
+                    resolveInit = undefined;
+                  }
+                }
               }
             } catch { /* ignore */ }
           })();
-          // Wait 1000ms for process initialization and checkpoint hydration
-          await new Promise((r) => setTimeout(r, 1000));
+
+          // Wait for system/init to resolve or a fallback timeout of 10s
+          await Promise.race([
+            initPromise,
+            new Promise((r) => setTimeout(r, 10000)),
+          ]);
         }
 
         const result = await qWithRewind.rewindFiles(cmd.userMessageId, { dryRun: cmd.dryRun ?? false });
