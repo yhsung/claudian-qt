@@ -2087,7 +2087,16 @@ function wireEvents() {
     clearDraft();
   });
   document.getElementById('fork-session-btn')?.addEventListener('click', () => {
-    if (bridge && state.activeSessionId) bridge.forkSession();
+    if (bridge && state.activeSessionId) {
+      const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user');
+      const lastMsgId = lastUserMsg ? lastUserMsg.userMessageId : null;
+      if (lastMsgId) {
+        bridge.forkSession(lastMsgId);
+        showToast('Forking conversation...');
+      } else {
+        bridge.forkSession();
+      }
+    }
   });
   DOM.modelBtn.addEventListener('click', e => {
     e.stopPropagation();

@@ -43,6 +43,26 @@ describe('shouldShowRewind', () => {
     };
     expect(shouldShowRewind(msg)).toBe(true);
   });
+
+  it('returns true for assistant messages containing Write tool call', () => {
+    const msg = {
+      role: 'assistant',
+      toolCalls: [
+        { name: 'Write', inputJson: '{"file_path": "foo.txt"}' }
+      ]
+    };
+    expect(shouldShowRewind(msg)).toBe(true);
+  });
+
+  it('returns true for assistant messages containing Edit tool call', () => {
+    const msg = {
+      role: 'assistant',
+      toolCalls: [
+        { name: 'Edit', inputJson: '{"file_path": "foo.txt"}' }
+      ]
+    };
+    expect(shouldShowRewind(msg)).toBe(true);
+  });
 });
 
 describe('buildRewindStatusMsg', () => {
