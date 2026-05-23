@@ -37,6 +37,10 @@ MainWindow::MainWindow(QWidget *parent)
         true
     );
     m_webView->settings()->setAttribute(
+        QWebEngineSettings::LocalContentCanAccessRemoteUrls,
+        true
+    );
+    m_webView->settings()->setAttribute(
         QWebEngineSettings::JavascriptCanAccessClipboard,
         true
     );

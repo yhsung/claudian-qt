@@ -47,6 +47,7 @@ const state = {
   activePreviewMsgId: null,
   activePreviewBlockIdx: -1,
   mermaidLoaded: false,
+  _userClosedPreviewMsgId: null,
 };
 
 let bridge = null;
@@ -560,6 +561,18 @@ function postProcessCodeBlocks(el) {
         openPreview(text, lang);
       });
       wrapper.appendChild(previewBtn);
+
+      // Auto-open logic during active streaming if not explicitly closed by user
+      if (state.streaming && msgId === state.currentMsgId && !state.activePreviewMsgId && state._userClosedPreviewMsgId !== msgId) {
+        const text = codeEl ? codeEl.textContent : '';
+        const blocks = msgEl ? Array.from(msgEl.querySelectorAll('pre')) : [];
+        const blockIdx = blocks.indexOf(pre);
+        
+        state.activePreviewMsgId = msgId;
+        state.activePreviewBlockIdx = blockIdx;
+        
+        openPreview(text, lang);
+      }
     }
   });
 }
@@ -623,9 +636,9 @@ function initPreviewPane() {
       if (newWin) {
         newWin.document.open();
         if (state.activePreviewLang === 'svg') {
-          newWin.document.write(`<!DOCTYPE html><html><head><title>SVG Preview</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#1e1e2e;}</style></head><body>\${state.activePreviewCode}</body></html>`);
+          newWin.document.write(`<!DOCTYPE html><html><head><title>SVG Preview</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#1e1e2e;}</style></head><body>${state.activePreviewCode}</body></html>`);
         } else if (state.activePreviewLang === 'mermaid') {
-          newWin.document.write(`<!DOCTYPE html><html><head><title>Mermaid Diagram</title><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs'; mermaid.initialize({startOnLoad:true,theme:'dark'});</script><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#1e1e2e;color:#cdd6f4;font-family:sans-serif;}</style></head><body><pre class="mermaid">\${state.activePreviewCode}</pre></body></html>`);
+          newWin.document.write(`<!DOCTYPE html><html><head><title>Mermaid Diagram</title><script type="module">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs'; mermaid.initialize({startOnLoad:true,theme:'dark'});</script><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#1e1e2e;color:#cdd6f4;font-family:sans-serif;}</style></head><body><pre class="mermaid">${state.activePreviewCode}</pre></body></html>`);
         } else {
           newWin.document.write(state.activePreviewCode);
         }
@@ -650,7 +663,7 @@ function switchPreviewTab(targetTab) {
   
   const contents = DOM.previewPane.querySelectorAll('.preview-tab-content');
   contents.forEach(content => {
-    const active = content.id === `preview-tab-content-\${targetTab}`;
+    const active = content.id === `preview-tab-content-${targetTab}`;
     content.classList.toggle('active', active);
   });
   
@@ -671,6 +684,9 @@ function openPreview(content, lang) {
 function closePreviewPane() {
   DOM.previewPane.style.display = 'none';
   DOM.previewResizer.style.display = 'none';
+  if (state.activePreviewMsgId) {
+    state._userClosedPreviewMsgId = state.activePreviewMsgId;
+  }
   state.activePreviewMsgId = null;
   state.activePreviewBlockIdx = -1;
 }
@@ -696,22 +712,86 @@ function renderActivePreview() {
     DOM.previewIframe.style.display = 'block';
     DOM.previewMermaidContainer.style.display = 'none';
     
-    const svgHtml = `<!DOCTYPE html><html><head><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1e1e2e; overflow: auto; } svg { max-width: 95vw; max-height: 95vh; display: block; }</style></head><body>\${state.activePreviewCode}</body></html>`;
+    const svgHtml = `<!DOCTYPE html><html><head><style>body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1e1e2e; overflow: auto; } svg { max-width: 95vw; max-height: 95vh; display: block; }</style></head><body>${state.activePreviewCode}</body></html>`;
     DOM.previewIframe.srcdoc = svgHtml;
   } else if (state.activePreviewLang === 'mermaid') {
-    DOM.previewIframe.style.display = 'none';
-    DOM.previewMermaidContainer.style.display = 'flex';
-    renderMermaidDiagram(state.activePreviewCode);
-  }
-}
+    DOM.previewIframe.style.display = 'block';
+    DOM.previewMermaidContainer.style.display = 'none';
+    
+    const escapedCode = state.activePreviewCode
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
 
-async function renderMermaidDiagram(code) {
-  DOM.previewMermaidContainer.innerHTML = '<div style="color:var(--text-muted);font-size:12px;display:flex;align-items:center;gap:8px;">⏳ Rendering diagram...</div>';
-  try {
-    if (!state.mermaidLoaded) {
-      const module = await import('https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs');
-      window.mermaid = module.default;
-      window.mermaid.initialize({
+    const mermaidHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: sans-serif;
+      overflow: auto;
+      box-sizing: border-box;
+    }
+    #loading {
+      color: #a6adc8;
+      font-size: 13px;
+      font-family: sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #error-container {
+      color: #f38ba8;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      border: 1px solid rgba(243, 139, 168, 0.2);
+      background: rgba(243, 139, 168, 0.05);
+      border-radius: 6px;
+      max-width: 90%;
+      box-sizing: border-box;
+      display: none;
+    }
+    .mermaid {
+      visibility: hidden;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    .mermaid svg {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+  </style>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    
+    window.addEventListener('error', (event) => {
+      showError(event.message || 'An error occurred during Mermaid initialization');
+    });
+
+    function showError(msg) {
+      document.getElementById('loading').style.display = 'none';
+      const errEl = document.getElementById('error-container');
+      errEl.style.display = 'block';
+      errEl.textContent = '⚠️ Mermaid Error:\\n' + msg;
+    }
+
+    try {
+      mermaid.initialize({
         startOnLoad: false,
         theme: 'dark',
         securityLevel: 'loose',
@@ -724,21 +804,32 @@ async function renderMermaidDiagram(code) {
           textColor: '#cdd6f4',
         }
       });
-      state.mermaidLoaded = true;
+
+      const mermaidEl = document.querySelector('.mermaid');
+      const code = mermaidEl.textContent.trim();
+      
+      const { svg } = await mermaid.render('mermaid-svg', code);
+      document.getElementById('loading').style.display = 'none';
+      mermaidEl.innerHTML = svg;
+      mermaidEl.style.visibility = 'visible';
+    } catch (err) {
+      showError(err.message || String(err));
     }
-    const elementId = 'mermaid-' + mkId();
-    const { svg, bindFunctions } = await window.mermaid.render(elementId, code);
-    DOM.previewMermaidContainer.innerHTML = `<div class="mermaid" style="width:100%">${svg}</div>`;
-    if (bindFunctions) bindFunctions(DOM.previewMermaidContainer);
-  } catch (err) {
-    console.error('Mermaid render error:', err);
-    DOM.previewMermaidContainer.innerHTML = `<div style="color:var(--red); padding:16px; font-family:var(--font-mono); font-size:12px; white-space:pre-wrap;">⚠️ Mermaid rendering failed:<br>\${escHtml(err.message || String(err))}</div>`;
+  </script>
+</head>
+<body>
+  <div id="loading">⏳ Rendering diagram...</div>
+  <div id="error-container"></div>
+  <pre class="mermaid">${escapedCode}</pre>
+</body>
+</html>`;
+    DOM.previewIframe.srcdoc = mermaidHtml;
   }
 }
 
 function syncActivePreviewIfStreaming(updatedMsgId) {
   if (!state.activePreviewMsgId || state.activePreviewMsgId !== updatedMsgId) return;
-  const msgEl = DOM.messages.querySelector(`[data-msg-id="\${updatedMsgId}"]`);
+  const msgEl = DOM.messages.querySelector(`[data-msg-id="${updatedMsgId}"]`);
   if (!msgEl) return;
   
   const blocks = Array.from(msgEl.querySelectorAll('pre'));
@@ -868,6 +959,7 @@ function appendSubAgentMessage(parentToolUseId, text) {
 
 function startStreaming() {
   state.streaming = true;
+  state._userClosedPreviewMsgId = null;
   if (DOM.rateLimitBanner) DOM.rateLimitBanner.classList.remove('visible');
   const msg = { id: mkId(), role: 'assistant', content: '', toolCalls: [], timestamp: new Date().toISOString() };
   state.messages.push(msg);

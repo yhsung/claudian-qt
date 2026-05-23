@@ -92,3 +92,8 @@ tmp/
 .env.*
 !.env.example
 .gstack/
+
+# Agent & Code Intelligence Cache / Coverage
+.codex/
+coverage/
+
