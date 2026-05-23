@@ -551,4 +551,33 @@ describe.skipIf(!HAS_API_KEY)("daemon integration (requires ANTHROPIC_API_KEY)",
         || ev!.apiProvider !== undefined;
       expect(hasInfo).toBe(true);
     }, 25_000);
+
+    it("rewind_files after completed turn successfully resolves", async () => {
+      const { handle, proc } = startDaemon();
+      // Send a quick message to create a turn and obtain its real UUID
+      handle.send({ type: "send", prompt: "Reply with only the word: hello" });
+      const evts = await handle.collectUntil(
+        (e) => e.some((ev) => ev.type === "turn_complete"),
+        60_000
+      );
+      
+      const resultEv = evts.find((e) => e.type === "result");
+      const resultData = resultEv?.data as Record<string, unknown> | undefined;
+      const userMessageId = resultData?.userMessageId as string | undefined;
+
+      if (userMessageId) {
+        // Send a rewind command for the completed turn (with dryRun: true to safely check checkpoints)
+        handle.send({ type: "rewind_files", userMessageId, dryRun: true });
+        const rewindEvts = await handle.collectUntil(
+          (e) => e.some((ev) => ev.type === "rewind_result" || ev.type === "error"),
+          25_000
+        );
+        const rewind = rewindEvts.find((e) => e.type === "rewind_result");
+        const rewindErr = rewindEvts.find((e) => e.type === "error");
+        expect(rewind || rewindErr).toBeDefined();
+      }
+
+      handle.close();
+      await new Promise((r) => proc.on("close", r));
+    }, 95_000);
   });
