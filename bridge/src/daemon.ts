@@ -834,7 +834,9 @@ ${sessionText}</session>`;
             qWithRewind._resolvePrompt();
           }
           if (qWithRewind.close) {
-            await qWithRewind.close().catch(() => {});
+            try {
+              await qWithRewind.close();
+            } catch { /* ignore */ }
           }
         }
       } catch (err) {
