@@ -40,6 +40,15 @@ let warmQueryPromise: Promise<WarmQuery | null> | null = null;
 let activeQuery: ReturnType<typeof query> | null = null;
 const inFlightSummaries = new Set<string>();
 
+async function closeActiveQuery(): Promise<void> {
+  if (activeQuery) {
+    try {
+      await (activeQuery as any).close();
+    } catch { /* ignore */ }
+    activeQuery = null;
+  }
+}
+
 // Pending permission promises keyed by requestId
 const pendingPermissions = new Map<string, {
   resolve: (result: PermissionResult) => void;
@@ -279,6 +288,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
       } catch { /* warm query close failures are non-fatal */ }
       warmQueryPromise = null;
     }
+    await closeActiveQuery();
     scheduleWarmup();
 
     const wasForking = state.forkNext;
@@ -490,7 +500,6 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
     }
   } finally {
     if (currentAbort === abortController) currentAbort = null;
-    activeQuery = null;
     emit({ type: "turn_complete" });
   }
 }
@@ -532,6 +541,7 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
       break;
 
     case "new_session":
+      await closeActiveQuery();
       state.sessionId          = "";
       state.turnIndex          = -1;
       state.sessionPermissions = {};
@@ -545,6 +555,7 @@ async function handleCommand(cmd: DaemonCommand): Promise<void> {
     }
 
     case "load_session": {
+      await closeActiveQuery();
       state.sessionId = cmd.sessionId;
       const history = await loadSessionHistory(state.cwd, cmd.sessionId);
       state.turnIndex = history.filter((t) => t.role === "user").length - 1;
