@@ -1264,6 +1264,7 @@ function startStreaming() {
   state.streaming = true;
   state._userClosedPreviewMsgId = null;
   if (DOM.rateLimitBanner) DOM.rateLimitBanner.classList.remove('visible');
+  DOM.messages.querySelector('.session-empty')?.remove();
   const msg = { id: mkId(), role: 'assistant', content: '', toolCalls: [], timestamp: new Date().toISOString() };
   state.messages.push(msg);
   state.currentMsgId = msg.id;
@@ -1341,6 +1342,7 @@ function sendMessage() {
   const text = DOM.textarea.value.trim();
   if ((!text && !state.pendingAttachments.length) || state.streaming || !bridge) return;
 
+  DOM.messages.querySelector('.session-empty')?.remove();
   const attachments = state.pendingAttachments.slice();
   const msg = {
     id: mkId(),
@@ -2060,11 +2062,17 @@ function clearSearchResults() {
 function renderSearchResults(results) {
   if (!DOM.searchResults) return;
   DOM.searchResults.innerHTML = '';
-  if (!results || !results.length) {
+  const project = currentProject();
+  const scopedResults = (results || []).filter(result => {
+    if (!project) return true;
+    const session = state.sessions.find(entry => entry.id === result.sessionId);
+    return !!session && (session.cwd || '') === (project.cwd || '');
+  });
+  if (!scopedResults.length) {
     DOM.searchResults.style.display = 'none';
     return;
   }
-  results.forEach(r => {
+  scopedResults.forEach(r => {
     const item = document.createElement('div');
     item.className = 'search-result-item';
     const name = document.createElement('div');
