@@ -1308,14 +1308,20 @@ mark.search-highlight.current {
   background: rgba(255,255,255,0.04);
 }
 
-#advanced-toggle-btn {
+#run-opts-toggle {
   background: rgba(217,119,87,0.12) !important;
   border-color: rgba(217,119,87,0.35) !important;
   color: #ffd8c8 !important;
 }
 
-#advanced-toggle-btn:hover {
+#run-opts-toggle:hover {
   background: rgba(217,119,87,0.18) !important;
+}
+
+#run-opts-toggle.run-opts-active {
+  background: rgba(217,119,87,0.22) !important;
+  border-color: rgba(217,119,87,0.55) !important;
+  color: #fff3ed !important;
 }
 
 #capture-layout {
@@ -1394,6 +1400,10 @@ mark.search-highlight.current {
 }
 
 .advanced-drawer.open {
+  transform: translateX(0);
+}
+
+.advanced-drawer:has(#settings-scroll-container[style*="display: flex"]) {
   transform: translateX(0);
 }
 
@@ -1862,4 +1872,3 @@ mark.search-highlight.current {
   border-color: rgba(255, 69, 58, 0.2);
   background: rgba(255, 69, 58, 0.08);
 }
-
