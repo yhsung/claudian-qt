@@ -1385,6 +1385,95 @@ mark.search-highlight.current {
   background: rgba(255,255,255,0.02);
 }
 
+.record-promote-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.record-promote-btn,
+.knowledge-state-btn {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.record-promote-btn:hover:not(:disabled),
+.knowledge-state-btn:hover:not(:disabled) {
+  border-color: rgba(124,106,247,0.45);
+  background: rgba(124,106,247,0.12);
+  color: var(--text);
+}
+
+.record-promote-btn:disabled,
+.knowledge-state-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.knowledge-record-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.knowledge-record-group h3 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.knowledge-record-card {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.025);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knowledge-record-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.knowledge-record-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+.knowledge-record-body {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.knowledge-record-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.knowledge-state-btn.is-active {
+  border-color: rgba(124,106,247,0.5);
+  background: rgba(124,106,247,0.18);
+  color: var(--text);
+}
+
 .advanced-drawer {
   position: fixed;
   inset: 0 0 0 auto;

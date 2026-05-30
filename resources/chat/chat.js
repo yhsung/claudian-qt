@@ -12,6 +12,7 @@ import {
   saveProjects,
 } from './chat-projects.js';
 import {
+  RECORD_STATES,
   buildSourceRef,
   groupRecordsByType,
   loadRecords,
@@ -90,6 +91,7 @@ const SECTION_RECORD_TYPES = {
   questions: ['question', 'issue', 'next step'],
   people: ['person', 'people'],
 };
+const PROMOTABLE_RECORD_TYPES = ['decision', 'artifact', 'issue', 'next step'];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function mkId() {
@@ -407,6 +409,72 @@ function renderProjectShell() {
   });
 }
 
+function formatRecordLabel(value) {
+  return String(value || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildRecordTitle(type, body) {
+  const prefix = formatRecordLabel(type);
+  const snippet = (body || '').replace(/\s+/g, ' ').trim().slice(0, 48);
+  return snippet ? `${prefix}: ${snippet}` : `${prefix}: Untitled`;
+}
+
+function buildRecordSourceLabel(record) {
+  const sourceSessionId = record.source?.sessionId || 'draft';
+  const sourceRole = record.source?.role || 'note';
+  const turnIndex = Number.isFinite(record.source?.index) ? ` · #${record.source.index + 1}` : '';
+  return `${sourceSessionId} · ${sourceRole}${turnIndex}`;
+}
+
+function buildPromoteActions(msg, index) {
+  if (state.viewMode === 'summary' || !state.activeProjectId) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'record-promote-actions';
+  const body = String(msg.content || '').trim();
+  const source = buildSourceRef(
+    state.activeSessionId,
+    msg.userMessageId || msg.id || '',
+    msg.role,
+    index
+  );
+
+  PROMOTABLE_RECORD_TYPES.forEach(type => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'record-promote-btn';
+    btn.textContent = `+ ${type}`;
+    btn.disabled = !body;
+    if (!body) btn.title = 'Only message turns with text can be promoted';
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (!body) return;
+      const now = new Date().toISOString();
+      const record = {
+        id: `${type}:${msg.id || index}:${now}`,
+        type,
+        title: buildRecordTitle(type, body),
+        body,
+        createdAt: now,
+        updatedAt: now,
+        source,
+      };
+      state.selectedSourceRef = source;
+      state.records = promoteRecord(state.records, record);
+      saveRecords(state.activeProjectId, state.records);
+      renderProjectShell();
+      renderKnowledgeRail();
+    });
+    wrap.appendChild(btn);
+  });
+
+  return wrap;
+}
+
 function renderKnowledgeRail() {
   if (!DOM.knowledgeRailCount || !DOM.knowledgeSuggestions || !DOM.knowledgeRecords) return;
 
@@ -424,7 +492,7 @@ function renderKnowledgeRail() {
   DOM.knowledgeSuggestions.innerHTML = `
     <div class="knowledge-tip">
       ${state.activeSection === 'worklog'
-        ? 'Work Log keeps the live thread and promoted knowledge in the same project context.'
+        ? 'Promote important turns from the live work log into durable project knowledge.'
         : 'Promoted records stay scoped to this workspace project and its sessions.'}
     </div>
     <div class="knowledge-tip">
@@ -448,27 +516,29 @@ function renderKnowledgeRail() {
     .forEach(([type, records]) => {
       const section = document.createElement('section');
       section.className = 'knowledge-record-group';
-      section.innerHTML = `<h3>${escHtml(type)}</h3>`;
+      section.innerHTML = `<h3>${escHtml(formatRecordLabel(type))}</h3>`;
       records
         .slice()
         .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''))
         .forEach(record => {
           const card = document.createElement('article');
           card.className = 'knowledge-record-card';
-          const sourceSessionId = record.source?.sessionId || 'draft';
           card.innerHTML = `
-            <div class="knowledge-record-title">${escHtml(record.title || type)}</div>
-            <div class="knowledge-record-meta">${escHtml(record.state || 'raw')} · ${escHtml(sourceSessionId)}</div>
+            <div class="knowledge-record-title">${escHtml(record.title || formatRecordLabel(type))}</div>
+            <div class="knowledge-record-meta">${escHtml(formatRecordLabel(record.state || 'raw'))} · ${escHtml(buildRecordSourceLabel(record))}</div>
             <div class="knowledge-record-body">${escHtml(record.body || '')}</div>
           `;
 
           const stateRow = document.createElement('div');
           stateRow.className = 'knowledge-record-states';
-          ['raw', 'reviewed', 'canonical', 'stale'].forEach(nextState => {
+          RECORD_STATES.forEach(nextState => {
             const btn = document.createElement('button');
             btn.className = 'knowledge-state-btn';
-            btn.textContent = nextState;
-            btn.disabled = (record.state || 'raw') === nextState;
+            btn.type = 'button';
+            btn.textContent = formatRecordLabel(nextState);
+            const isActive = (record.state || 'raw') === nextState;
+            btn.disabled = isActive;
+            btn.classList.toggle('is-active', isActive);
             btn.addEventListener('click', () => {
               state.records = transitionRecordState(state.records, record.id, nextState);
               saveRecords(state.activeProjectId, state.records);
@@ -591,10 +661,10 @@ function makeRewindBtn(msg) {
 
 function renderMessage(msg) {
   const outer = document.createElement('div');
+  const index = state.messages.findIndex(entry => entry.id === msg.id);
   outer.dataset.msgId = msg.id;
   outer.addEventListener('click', (event) => {
     if (event.target.closest('button, a, input, textarea, select, label')) return;
-    const index = state.messages.findIndex(entry => entry.id === msg.id);
     state.selectedSourceRef = buildSourceRef(
       state.activeSessionId,
       msg.userMessageId || msg.id,
@@ -614,6 +684,8 @@ function renderMessage(msg) {
     bubble.className = 'msg-bubble';
     bubble.textContent = msg.content;
     outer.appendChild(bubble);
+    const promoteActions = buildPromoteActions(msg, Math.max(index, 0));
+    if (promoteActions) outer.appendChild(promoteActions);
     renderMsgActions(outer, msg);
     if (msg.timestamp) {
       const ts = document.createElement('div');
@@ -634,6 +706,8 @@ function renderMessage(msg) {
       postProcessCodeBlocks(contentDiv);
     }
     outer.appendChild(contentDiv);
+    const promoteActions = buildPromoteActions(msg, Math.max(index, 0));
+    if (promoteActions) outer.appendChild(promoteActions);
     renderMsgActions(outer, msg);
     if (msg.toolCalls && msg.toolCalls.length > 0 && state.viewMode !== 'summary') {
       const toolEl = renderToolCalls(msg.toolCalls);
