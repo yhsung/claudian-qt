@@ -97,3 +97,5 @@ tmp/
 .codex/
 coverage/
 
+# Superpowers brainstorm runtime state
+.superpowers/brainstorm/*/state/

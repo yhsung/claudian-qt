@@ -1,0 +1,170 @@
+<h2>GUI Overhaul Directions</h2>
+<p class="subtitle">Engineer-first organizational brain, with directors and GMs layered on later</p>
+
+<div class="section">
+  <div class="label">Recommendation</div>
+  <p><strong>Option A</strong> is the best day-1 posture: make the app feel like a <strong>project-scoped capture workspace</strong>, not a raw operator console or a leadership dashboard.</p>
+</div>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. Project-Scoped Capture Workspace</div>
+        <div class="mockup-body">
+          <div class="mock-nav">Project Switcher | Search | Capture | Review</div>
+          <div style="display:flex; gap:12px; min-height:280px;">
+            <div class="mock-sidebar" style="width:24%;">
+              Inbox<br><br>
+              Work Log<br>
+              Decisions<br>
+              Artifacts<br>
+              Open Questions<br>
+              People / Owners
+            </div>
+            <div class="mock-content" style="width:46%;">
+              <strong>Fast Capture Composer</strong><br><br>
+              Session transcript with structured chips:<br>
+              decision / artifact / issue / next step<br><br>
+              Latest work record stays central.
+            </div>
+            <div class="placeholder" style="width:30%;">
+              Knowledge extraction rail<br><br>
+              Decision summary<br>
+              Linked files<br>
+              Reusable notes<br>
+              Trust markers
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Project-Scoped Capture Workspace</h3>
+      <p>Open directly into capture, but always within a selected project. Sessions become part of a structured project work log.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Best match for project-first information architecture</li>
+            <li>Improves trust and navigation together</li>
+            <li>Lets directors and GMs consume the same knowledge later</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>Requires introducing project metadata and extracted record types</li>
+            <li>Needs stronger session-to-artifact linking than today</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. Global Capture Inbox</div>
+        <div class="mockup-body">
+          <div class="mock-nav">Inbox | Triage | Assign Project | Archive</div>
+          <div style="display:flex; gap:12px; min-height:280px;">
+            <div class="mock-sidebar" style="width:26%;">
+              Unsorted captures<br><br>
+              Recent imports<br>
+              Failed runs<br>
+              Draft notes
+            </div>
+            <div class="mock-content" style="width:48%;">
+              <strong>Universal capture stream</strong><br><br>
+              Drop in prompts, outputs, links, notes, files.<br><br>
+              Project assignment happens later.
+            </div>
+            <div class="placeholder" style="width:26%;">
+              Triage actions<br><br>
+              assign owner<br>
+              assign project<br>
+              mark canonical
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Global Capture Inbox</h3>
+      <p>Optimize for speed of capture above all else, with organization delayed until after the fact.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Fastest possible ingestion path</li>
+            <li>Low friction for engineers dropping in raw material</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>Trust decays if sorting does not happen reliably</li>
+            <li>Navigation remains weak longer</li>
+            <li>Directors and GMs get value later, not sooner</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. Role Dashboard with Project Drill-Down</div>
+        <div class="mockup-body">
+          <div class="mock-nav">Engineer | Director | GM</div>
+          <div style="display:flex; gap:12px; min-height:280px;">
+            <div class="mock-sidebar" style="width:24%;">
+              Portfolio<br><br>
+              Risks<br>
+              Dependencies<br>
+              Weekly digest
+            </div>
+            <div class="mock-content" style="width:50%;">
+              <strong>Top-level dashboard</strong><br><br>
+              Status cards, summaries, organizational metrics.<br><br>
+              Drill into projects for detail.
+            </div>
+            <div class="placeholder" style="width:26%;">
+              Alerts<br><br>
+              decisions pending<br>
+              teams blocked<br>
+              stale knowledge
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Role Dashboard with Project Drill-Down</h3>
+      <p>Design for leadership visibility from the start, with engineer capture as one part of a broader operational dashboard.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Strong long-term story for directors and GMs</li>
+            <li>Makes organizational summaries first-class</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>Too abstract for day-1 engineer adoption</li>
+            <li>High risk of becoming a superficial dashboard on weak data</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">What changes in all options</div>
+  <p>The current visible operator controls move behind an <strong>Advanced</strong> layer. The main surface becomes about <strong>capture, provenance, structure, and retrieval</strong>, not model knobs.</p>
+</div>

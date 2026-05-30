@@ -3,6 +3,23 @@ import {
   restoreDraft as _restoreDraft,
   clearDraft as _clearDraft,
 } from './chat-draft.js';
+import {
+  buildProjectSummary,
+  ensureProjectForCwd,
+  loadActiveProjectId,
+  loadProjects,
+  saveActiveProjectId,
+  saveProjects,
+} from './chat-projects.js';
+import {
+  RECORD_STATES,
+  buildSourceRef,
+  groupRecordsByType,
+  loadRecords,
+  promoteRecord,
+  saveRecords,
+  transitionRecordState,
+} from './chat-records.js';
 import { computeUserScrolled, shouldAutoScroll } from './chat-scroll.js';
 import { navigateUp, navigateDown } from './chat-nav.js';
 import { buildMsgCopyText, buildToolGroupCopyText } from './chat-copy.js';
@@ -15,6 +32,12 @@ const state = {
   streaming: false,
   currentMsgId: null,
   sessions: [],
+  projects: [],
+  activeProjectId: '',
+  activeSection: 'inbox',
+  records: [],
+  selectedSourceRef: null,
+  advancedOpen: false,
   activeSessionId: '',
   cwd: '',
   model: '',
@@ -54,6 +77,21 @@ const state = {
 let bridge = null;
 let DOM = {};
 const pendingImports = new Map();
+const SECTION_LABELS = {
+  inbox: 'Inbox / Capture',
+  worklog: 'Work Log',
+  decisions: 'Decisions',
+  artifacts: 'Artifacts',
+  questions: 'Open Questions',
+  people: 'People',
+};
+const SECTION_RECORD_TYPES = {
+  decisions: ['decision'],
+  artifacts: ['artifact'],
+  questions: ['question', 'issue', 'next step'],
+  people: ['person', 'people'],
+};
+const PROMOTABLE_RECORD_TYPES = ['decision', 'artifact', 'issue', 'next step'];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function mkId() {
@@ -163,6 +201,9 @@ let _pendingPermissionRequestId = null;
 // ── DOM refs ───────────────────────────────────────────────────────────────
 function initDOM() {
   DOM = {
+    projectSwitcher:     document.getElementById('project-switcher'),
+    projectSections:     document.getElementById('project-sections'),
+    projectSummaryCards: document.getElementById('project-summary-cards'),
     sessionList:        document.getElementById('session-list'),
     newSessionBtn:      document.getElementById('new-session-btn'),
     messages:           document.getElementById('messages'),
@@ -195,6 +236,8 @@ function initDOM() {
     searchInput:        document.getElementById('search-input'),
     searchResults:      document.getElementById('search-results'),
     archivedToggle:     document.getElementById('archived-toggle'),
+    projectName:        document.getElementById('project-name'),
+    projectSubtitle:    document.getElementById('project-subtitle'),
     exportBtn:          document.getElementById('export-btn'),
     viewSelectorBtn:    document.getElementById('view-selector-btn'),
     viewSelectorLabel:  document.getElementById('view-selector-label'),
@@ -226,6 +269,11 @@ function initDOM() {
     thinkingSelect:       document.getElementById('thinking-select'),
     autoSummaryToggle:    document.getElementById('auto-summary-toggle'),
     autoExportToggle:     document.getElementById('auto-export-toggle'),
+    advancedToggleBtn:    document.getElementById('advanced-toggle-btn') || document.getElementById('run-opts-toggle'),
+    advancedDrawer:       document.getElementById('advanced-drawer'),
+    knowledgeRailCount:   document.getElementById('knowledge-rail-count'),
+    knowledgeSuggestions: document.getElementById('knowledge-suggestions'),
+    knowledgeRecords:     document.getElementById('knowledge-records'),
     runOptsToggle:        document.getElementById('run-opts-toggle'),
     settingsScrollContainer: document.getElementById('settings-scroll-container'),
     runOptionsRow:        document.getElementById('run-options-row'),
@@ -261,6 +309,249 @@ function initDOM() {
     previewOpenExternal:  document.getElementById('preview-open-external'),
     previewEmpty:         document.getElementById('preview-empty'),
   };
+}
+
+function formatSectionLabel(section) {
+  return SECTION_LABELS[section] || section || 'Inbox / Capture';
+}
+
+function formatDisplayPath(path) {
+  const homeMatch = (path || '').match(/^\/(?:Users|home)\/[^/]+/);
+  return homeMatch ? path.replace(homeMatch[0], '~') : (path || '');
+}
+
+function currentProject() {
+  return state.projects.find(project => project.id === state.activeProjectId) || state.projects[0] || null;
+}
+
+function setAdvancedDrawerOpen(open) {
+  state.advancedOpen = !!open;
+  if (DOM.advancedDrawer) {
+    DOM.advancedDrawer.classList.toggle('open', state.advancedOpen);
+  }
+  if (DOM.settingsScrollContainer) {
+    DOM.settingsScrollContainer.style.display = state.advancedOpen ? 'flex' : 'none';
+  }
+  if (DOM.advancedToggleBtn) {
+    DOM.advancedToggleBtn.classList.toggle('run-opts-active', state.advancedOpen);
+    DOM.advancedToggleBtn.setAttribute('aria-expanded', String(state.advancedOpen));
+  }
+}
+
+function sessionsForActiveProject() {
+  const project = currentProject();
+  if (!project) return [];
+  return state.sessions.filter(session => (session.cwd || '') === (project.cwd || ''));
+}
+
+function bootProjects() {
+  const loadedProjects = loadProjects();
+  const { projects, project } = ensureProjectForCwd(loadedProjects, state.cwd);
+  const storedActiveProjectId = loadActiveProjectId();
+  const storedActiveProject = projects.find(entry => entry.id === storedActiveProjectId);
+  const activeProject = storedActiveProject && (storedActiveProject.cwd || '') === (state.cwd || '')
+    ? storedActiveProject
+    : project;
+
+  state.projects = projects;
+  state.activeProjectId = activeProject?.id || '';
+  state.records = state.activeProjectId ? loadRecords(state.activeProjectId) : [];
+  if (!SECTION_LABELS[state.activeSection]) state.activeSection = 'inbox';
+
+  saveProjects(projects);
+  if (state.activeProjectId) {
+    saveActiveProjectId(state.activeProjectId);
+  }
+}
+
+function renderProjectShell() {
+  const project = currentProject();
+  if (!project) return;
+
+  const summary = buildProjectSummary(project, state.sessions, state.records);
+  const visibleSessions = sessionsForActiveProject().filter(session => state.showArchived || !session.archived);
+  const archivedSessions = sessionsForActiveProject().filter(session => session.archived).length;
+  const subtitle = formatSectionLabel(state.activeSection);
+
+  if (DOM.projectName) DOM.projectName.textContent = project.name || 'Workspace';
+  if (DOM.projectSubtitle) DOM.projectSubtitle.textContent = subtitle;
+
+  const switcherLabel = DOM.projectSwitcher?.querySelector('.project-switcher-label');
+  if (switcherLabel) switcherLabel.textContent = project.name || 'Workspace';
+  const switcherHint = DOM.projectSwitcher?.querySelector('.project-switcher-hint');
+  if (switcherHint) {
+    const scopeLabel = formatDisplayPath(project.cwd) || 'Current workspace';
+    switcherHint.textContent = `${scopeLabel} · ${visibleSessions.length} active`;
+  }
+
+  if (DOM.projectSummaryCards) {
+    DOM.projectSummaryCards.innerHTML = `
+      <article class="project-summary-card">
+        <span class="project-summary-label">Sessions</span>
+        <strong>${summary.sessionCount}</strong>
+        <p>${summary.exportedCount} exported${archivedSessions ? ` · ${archivedSessions} archived` : ''}</p>
+      </article>
+      <article class="project-summary-card">
+        <span class="project-summary-label">Knowledge</span>
+        <strong>${summary.recordCount}</strong>
+        <p>${summary.canonicalCount} canonical${summary.staleCount ? ` · ${summary.staleCount} stale` : ''}</p>
+      </article>
+      <article class="project-summary-card">
+        <span class="project-summary-label">Section</span>
+        <strong>${subtitle}</strong>
+        <p>${state.activeSection === 'worklog' ? 'Review current session evidence and promoted notes.' : 'Project-scoped sessions stay grouped by workspace.'}</p>
+      </article>
+    `;
+  }
+
+  DOM.projectSections?.querySelectorAll('.project-section-btn').forEach(btn => {
+    btn.classList.toggle('active', (btn.dataset.section || 'inbox') === state.activeSection);
+  });
+}
+
+function formatRecordLabel(value) {
+  return String(value || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildRecordTitle(type, body) {
+  const prefix = formatRecordLabel(type);
+  const snippet = (body || '').replace(/\s+/g, ' ').trim().slice(0, 48);
+  return snippet ? `${prefix}: ${snippet}` : `${prefix}: Untitled`;
+}
+
+function buildRecordSourceLabel(record) {
+  const sourceSessionId = record.source?.sessionId || 'draft';
+  const sourceRole = record.source?.role || 'note';
+  const turnIndex = Number.isFinite(record.source?.index) ? ` · #${record.source.index + 1}` : '';
+  return `${sourceSessionId} · ${sourceRole}${turnIndex}`;
+}
+
+function buildPromoteActions(msg, index) {
+  if (state.viewMode === 'summary' || !state.activeProjectId) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'record-promote-actions';
+  const body = String(msg.content || '').trim();
+  const source = buildSourceRef(
+    state.activeSessionId,
+    msg.userMessageId || msg.id || '',
+    msg.role,
+    index
+  );
+
+  PROMOTABLE_RECORD_TYPES.forEach(type => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'record-promote-btn';
+    btn.textContent = `+ ${type}`;
+    btn.disabled = !body;
+    if (!body) btn.title = 'Only message turns with text can be promoted';
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (!body) return;
+      const now = new Date().toISOString();
+      const record = {
+        id: `${type}:${msg.id || index}:${now}`,
+        type,
+        title: buildRecordTitle(type, body),
+        body,
+        createdAt: now,
+        updatedAt: now,
+        source,
+      };
+      state.selectedSourceRef = source;
+      state.records = promoteRecord(state.records, record);
+      saveRecords(state.activeProjectId, state.records);
+      renderProjectShell();
+      renderKnowledgeRail();
+    });
+    wrap.appendChild(btn);
+  });
+
+  return wrap;
+}
+
+function renderKnowledgeRail() {
+  if (!DOM.knowledgeRailCount || !DOM.knowledgeSuggestions || !DOM.knowledgeRecords) return;
+
+  const sectionTypes = SECTION_RECORD_TYPES[state.activeSection];
+  const visibleRecords = sectionTypes
+    ? state.records.filter(record => sectionTypes.includes(record.type))
+    : state.records.slice();
+  const grouped = groupRecordsByType(visibleRecords);
+
+  DOM.knowledgeRailCount.textContent = `${visibleRecords.length} record${visibleRecords.length === 1 ? '' : 's'}`;
+
+  const selectedSourceText = state.selectedSourceRef
+    ? `${state.selectedSourceRef.role} · ${state.selectedSourceRef.sessionId.slice(0, 8)} · #${state.selectedSourceRef.index + 1}`
+    : 'Select a message to anchor notes to the current conversation.';
+  DOM.knowledgeSuggestions.innerHTML = `
+    <div class="knowledge-tip">
+      ${state.activeSection === 'worklog'
+        ? 'Promote important turns from the live work log into durable project knowledge.'
+        : 'Promoted records stay scoped to this workspace project and its sessions.'}
+    </div>
+    <div class="knowledge-tip">
+      Source focus: ${escHtml(selectedSourceText)}
+    </div>
+  `;
+
+  DOM.knowledgeRecords.innerHTML = '';
+  if (!visibleRecords.length) {
+    const empty = document.createElement('div');
+    empty.className = 'knowledge-tip';
+    empty.textContent = state.activeSection === 'inbox'
+      ? 'No promoted records yet for this project.'
+      : `No ${formatSectionLabel(state.activeSection).toLowerCase()} records yet.`;
+    DOM.knowledgeRecords.appendChild(empty);
+    return;
+  }
+
+  Object.entries(grouped)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .forEach(([type, records]) => {
+      const section = document.createElement('section');
+      section.className = 'knowledge-record-group';
+      section.innerHTML = `<h3>${escHtml(formatRecordLabel(type))}</h3>`;
+      records
+        .slice()
+        .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''))
+        .forEach(record => {
+          const card = document.createElement('article');
+          card.className = 'knowledge-record-card';
+          card.innerHTML = `
+            <div class="knowledge-record-title">${escHtml(record.title || formatRecordLabel(type))}</div>
+            <div class="knowledge-record-meta">${escHtml(formatRecordLabel(record.state || 'raw'))} · ${escHtml(buildRecordSourceLabel(record))}</div>
+            <div class="knowledge-record-body">${escHtml(record.body || '')}</div>
+          `;
+
+          const stateRow = document.createElement('div');
+          stateRow.className = 'knowledge-record-states';
+          RECORD_STATES.forEach(nextState => {
+            const btn = document.createElement('button');
+            btn.className = 'knowledge-state-btn';
+            btn.type = 'button';
+            btn.textContent = formatRecordLabel(nextState);
+            const isActive = (record.state || 'raw') === nextState;
+            btn.disabled = isActive;
+            btn.classList.toggle('is-active', isActive);
+            btn.addEventListener('click', () => {
+              state.records = transitionRecordState(state.records, record.id, nextState);
+              saveRecords(state.activeProjectId, state.records);
+              renderProjectShell();
+              renderKnowledgeRail();
+            });
+            stateRow.appendChild(btn);
+          });
+          card.appendChild(stateRow);
+          section.appendChild(card);
+        });
+      DOM.knowledgeRecords.appendChild(section);
+    });
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────
@@ -370,7 +661,18 @@ function makeRewindBtn(msg) {
 
 function renderMessage(msg) {
   const outer = document.createElement('div');
+  const index = state.messages.findIndex(entry => entry.id === msg.id);
   outer.dataset.msgId = msg.id;
+  outer.addEventListener('click', (event) => {
+    if (event.target.closest('button, a, input, textarea, select, label')) return;
+    state.selectedSourceRef = buildSourceRef(
+      state.activeSessionId,
+      msg.userMessageId || msg.id,
+      msg.role,
+      Math.max(index, 0)
+    );
+    renderKnowledgeRail();
+  });
   if (msg.role === 'user') {
     outer.className = 'msg-user';
     outer.style.flexDirection = 'column';
@@ -382,6 +684,8 @@ function renderMessage(msg) {
     bubble.className = 'msg-bubble';
     bubble.textContent = msg.content;
     outer.appendChild(bubble);
+    const promoteActions = buildPromoteActions(msg, Math.max(index, 0));
+    if (promoteActions) outer.appendChild(promoteActions);
     renderMsgActions(outer, msg);
     if (msg.timestamp) {
       const ts = document.createElement('div');
@@ -402,6 +706,8 @@ function renderMessage(msg) {
       postProcessCodeBlocks(contentDiv);
     }
     outer.appendChild(contentDiv);
+    const promoteActions = buildPromoteActions(msg, Math.max(index, 0));
+    if (promoteActions) outer.appendChild(promoteActions);
     renderMsgActions(outer, msg);
     if (msg.toolCalls && msg.toolCalls.length > 0 && state.viewMode !== 'summary') {
       const toolEl = renderToolCalls(msg.toolCalls);
@@ -467,6 +773,15 @@ function renderMessages() {
   hideSummaryView();
   clearFocusedMsg();
   DOM.messages.innerHTML = '';
+  if (!state.messages.length) {
+    const empty = document.createElement('div');
+    empty.className = 'session-empty';
+    empty.textContent = state.activeSection === 'inbox'
+      ? 'Choose a session for this project or start a new one.'
+      : `${formatSectionLabel(state.activeSection)} stays tied to the active project session context.`;
+    DOM.messages.appendChild(empty);
+    return;
+  }
   state.messages.forEach(msg => DOM.messages.appendChild(renderMessage(msg)));
   applyFontSize();
   DOM.messages.scrollTop = DOM.messages.scrollHeight;
@@ -1023,6 +1338,7 @@ function startStreaming() {
   state.streaming = true;
   state._userClosedPreviewMsgId = null;
   if (DOM.rateLimitBanner) DOM.rateLimitBanner.classList.remove('visible');
+  DOM.messages.querySelector('.session-empty')?.remove();
   const msg = { id: mkId(), role: 'assistant', content: '', toolCalls: [], timestamp: new Date().toISOString() };
   state.messages.push(msg);
   state.currentMsgId = msg.id;
@@ -1100,6 +1416,7 @@ function sendMessage() {
   const text = DOM.textarea.value.trim();
   if ((!text && !state.pendingAttachments.length) || state.streaming || !bridge) return;
 
+  DOM.messages.querySelector('.session-empty')?.remove();
   const attachments = state.pendingAttachments.slice();
   const msg = {
     id: mkId(),
@@ -1168,9 +1485,10 @@ function makeSessionItem(s) {
     if (!confirm('Delete this session? This cannot be undone.')) return;
     if (s.id === state.activeSessionId) {
       state.messages = [];
+      state.selectedSourceRef = null;
       state.activeSessionId = '';
-      DOM.messages.innerHTML = '';
-      hideSummaryView();
+      renderMessages();
+      renderKnowledgeRail();
       resetStatusline();
     }
     bridge.deleteSession(s.id);
@@ -1478,23 +1796,30 @@ function startSessionRename(sessionId, previewEl) {
 }
 
 function renderSessions(sessions) {
-  state.sessions = (sessions || []).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  state.sessions = Array.isArray(sessions)
+    ? [...sessions].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+    : [];
   DOM.sessionList.innerHTML = '';
-  const archivedCount = state.sessions.filter(s => s.archived).length;
+  const projectSessions = sessionsForActiveProject();
+  const archivedCount = projectSessions.filter(s => s.archived).length;
   if (DOM.archivedToggle) {
     DOM.archivedToggle.textContent = state.showArchived
       ? 'Hide archived'
       : `Show archived (${archivedCount})`;
     DOM.archivedToggle.style.display = archivedCount > 0 ? '' : 'none';
   }
-  const visible = state.sessions.filter(s => state.showArchived || !s.archived);
+  const visible = projectSessions
+    .filter(s => state.showArchived || !s.archived)
+    .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
   if (!visible.length) {
     DOM.sessionList.innerHTML = '<div class="session-empty">No conversations yet</div>';
+    renderProjectShell();
     return;
   }
   visible.forEach(s => {
     DOM.sessionList.appendChild(makeSessionItem(s));
   });
+  renderProjectShell();
 }
 
 function loadSessionHistory(turns) {
@@ -1518,7 +1843,18 @@ function loadSessionHistory(turns) {
     }
   });
 
+  const lastMessage = state.messages[state.messages.length - 1];
+  state.selectedSourceRef = lastMessage
+    ? buildSourceRef(
+      state.activeSessionId,
+      lastMessage.userMessageId || lastMessage.id,
+      lastMessage.role,
+      Math.max(state.messages.length - 1, 0)
+    )
+    : null;
+
   renderMessages();
+  renderKnowledgeRail();
 }
 
 // ── View popup ─────────────────────────────────────────────────────────────
@@ -1800,11 +2136,17 @@ function clearSearchResults() {
 function renderSearchResults(results) {
   if (!DOM.searchResults) return;
   DOM.searchResults.innerHTML = '';
-  if (!results || !results.length) {
+  const project = currentProject();
+  const scopedResults = (results || []).filter(result => {
+    if (!project) return true;
+    const session = state.sessions.find(entry => entry.id === result.sessionId);
+    return !!session && (session.cwd || '') === (project.cwd || '');
+  });
+  if (!scopedResults.length) {
     DOM.searchResults.style.display = 'none';
     return;
   }
-  results.forEach(r => {
+  scopedResults.forEach(r => {
     const item = document.createElement('div');
     item.className = 'search-result-item';
     const name = document.createElement('div');
@@ -1906,8 +2248,7 @@ function syncPermMode(mode) {
 
 function syncCwd(path) {
   state.cwd = path || '';
-  const homeMatch = state.cwd.match(/^\/(?:Users|home)\/[^/]+/);
-  const display = homeMatch ? state.cwd.replace(homeMatch[0], '~') : state.cwd;
+  const display = formatDisplayPath(state.cwd);
   DOM.cwdBtn.textContent = display || '~/';
   DOM.cwdBtn.title = state.cwd;
 }
@@ -2030,7 +2371,9 @@ function clearDraft() {
 
 // ── Events ─────────────────────────────────────────────────────────────────
 function wireEvents() {
-  DOM.sidebarToggle.addEventListener('click', toggleSidebar);
+  if (DOM.sidebarToggle) {
+    DOM.sidebarToggle.addEventListener('click', toggleSidebar);
+  }
 
   DOM.textarea.addEventListener('input', () => {
     DOM.textarea.style.height = 'auto';
@@ -2068,8 +2411,9 @@ function wireEvents() {
       }
     }
     Object.assign(state, { messages: [], activeSessionId: '', tokenCount: 0, toolCallCount: 0, summaryData: null });
-    DOM.messages.innerHTML = '';
-    hideSummaryView();
+    state.selectedSourceRef = null;
+    renderMessages();
+    renderKnowledgeRail();
     DOM.sessionList.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
     state.pendingAttachments = [];
     renderPendingAttachments();
@@ -2118,13 +2462,19 @@ function wireEvents() {
       localStorage.setItem('autoExportEnabled', String(state.autoExportEnabled));
     });
   }
-  if (DOM.runOptsToggle) {
-    DOM.runOptsToggle.addEventListener('click', () => {
-      const visible = DOM.settingsScrollContainer && DOM.settingsScrollContainer.style.display !== 'none';
-      if (DOM.settingsScrollContainer) {
-        DOM.settingsScrollContainer.style.display = visible ? 'none' : 'flex';
-      }
-      DOM.runOptsToggle.classList.toggle('run-opts-active', !visible);
+  if (DOM.advancedToggleBtn) {
+    DOM.advancedToggleBtn.addEventListener('click', () => {
+      setAdvancedDrawerOpen(!state.advancedOpen);
+    });
+  }
+  if (DOM.projectSections) {
+    DOM.projectSections.querySelectorAll('.project-section-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.activeSection = btn.dataset.section || 'inbox';
+        renderProjectShell();
+        renderKnowledgeRail();
+        renderMessages();
+      });
     });
   }
   if (DOM.applyRunOptsBtn) {
@@ -2226,21 +2576,29 @@ function wireEvents() {
     });
   }
 
-  DOM.permModeBtn.addEventListener('click', () => {
-    const idx = PERM_MODES.findIndex(m => m.value === state.permissionMode);
-    syncPermMode(PERM_MODES[(idx + 1) % PERM_MODES.length].value);
-  });
-  DOM.viewSelectorBtn.addEventListener('click', e => { e.stopPropagation(); toggleViewPopup(); });
-  document.addEventListener('click', () => DOM.viewPopup.classList.remove('open'));
-  DOM.viewPopup.addEventListener('click', e => e.stopPropagation());
-  VIEW_MODES.forEach(({ key }) => {
-    DOM.viewPopup.querySelector(`[data-view="${key}"]`)?.addEventListener('click', () => { setViewMode(key); DOM.viewPopup.classList.remove('open'); });
-  });
-  ['sm', 'md', 'lg'].forEach(k => {
-    DOM.viewPopup.querySelector(`[data-font="${k}"]`)?.addEventListener('click', () => setFontSize(k));
-  });
-  DOM.generateSummaryBtn.addEventListener('click', generateSummary);
-  DOM.exitSummaryBtn.addEventListener('click', () => setViewMode('normal'));
+  if (DOM.permModeBtn) {
+    DOM.permModeBtn.addEventListener('click', () => {
+      const idx = PERM_MODES.findIndex(m => m.value === state.permissionMode);
+      syncPermMode(PERM_MODES[(idx + 1) % PERM_MODES.length].value);
+    });
+  }
+  if (DOM.viewSelectorBtn && DOM.viewPopup) {
+    DOM.viewSelectorBtn.addEventListener('click', e => { e.stopPropagation(); toggleViewPopup(); });
+    document.addEventListener('click', () => DOM.viewPopup.classList.remove('open'));
+    DOM.viewPopup.addEventListener('click', e => e.stopPropagation());
+    VIEW_MODES.forEach(({ key }) => {
+      DOM.viewPopup.querySelector(`[data-view="${key}"]`)?.addEventListener('click', () => { setViewMode(key); DOM.viewPopup.classList.remove('open'); });
+    });
+    ['sm', 'md', 'lg'].forEach(k => {
+      DOM.viewPopup.querySelector(`[data-font="${k}"]`)?.addEventListener('click', () => setFontSize(k));
+    });
+  }
+  if (DOM.generateSummaryBtn) {
+    DOM.generateSummaryBtn.addEventListener('click', generateSummary);
+  }
+  if (DOM.exitSummaryBtn) {
+    DOM.exitSummaryBtn.addEventListener('click', () => setViewMode('normal'));
+  }
 
   // Search
   DOM.searchBtn.addEventListener('click', () => _search.active ? closeSearch() : openSearch());
@@ -2270,6 +2628,7 @@ function wireEvents() {
     DOM.archivedToggle.addEventListener('click', () => {
       state.showArchived = !state.showArchived;
       renderSessions(state.sessions);
+      renderProjectShell();
     });
   }
 
@@ -2310,6 +2669,7 @@ function wireEvents() {
     if (e.key === 'Escape') {
       if (DOM.imagePreviewModal.classList.contains('visible')) { DOM.imagePreviewModal.classList.remove('visible'); return; }
       if (DOM.permissionModal.classList.contains('visible'))   { respondPermission(false, false); return; }
+      if (state.advancedOpen)                                  { setAdvancedDrawerOpen(false); return; }
       if (_search.active)                                       { closeSearch(); return; }
       if (state.viewMode === 'summary')                        { setViewMode('normal'); return; }
     }
@@ -2576,7 +2936,11 @@ function wireBridgeSignals() {
   });
   bridge.sessionArchived.connect((sessionId, archived) => {
     const s = state.sessions.find(s => s.id === sessionId);
-    if (s) { s.archived = archived; renderSessions(state.sessions); }
+    if (s) {
+      s.archived = archived;
+      renderSessions(state.sessions);
+      renderProjectShell();
+    }
   });
   bridge.searchResults.connect((requestId, json) => {
     if (Number(requestId) !== state.latestSearchId) return;
@@ -2593,10 +2957,20 @@ function wireBridgeSignals() {
   });
   bridge.sessionReady.connect(id => {
     state.activeSessionId = id;
+    state.selectedSourceRef = null;
     if (!id) { resetStatusline(); } else { bridge.requestSessions(); }
     restoreDraft();
+    renderProjectShell();
+    renderKnowledgeRail();
   });
-  bridge.sessionsListed.connect(json => { try { renderSessions(JSON.parse(json)); } catch {} });
+  bridge.sessionsListed.connect(json => {
+    try {
+      bootProjects();
+      renderSessions(JSON.parse(json));
+      renderProjectShell();
+      renderKnowledgeRail();
+    } catch {}
+  });
   bridge.sessionHistoryLoaded.connect(json => {
     try {
       loadSessionHistory(JSON.parse(json));
@@ -2628,7 +3002,23 @@ function wireBridgeSignals() {
       }
     } catch {}
   });
-  bridge.cwdChanged.connect(path => { syncCwd(path); state.activeSessionId = ''; resetStatusline(); clearDraft(); DOM.textarea.value = ''; DOM.textarea.style.height = ''; bridge.requestSessions(); });
+  bridge.cwdChanged.connect(path => {
+    syncCwd(path);
+    state.activeSessionId = '';
+    state.messages = [];
+    state.summaryData = null;
+    state.selectedSourceRef = null;
+    resetStatusline();
+    clearDraft();
+    DOM.textarea.value = '';
+    DOM.textarea.style.height = '';
+    bootProjects();
+    renderProjectShell();
+    renderSessions(state.sessions);
+    renderKnowledgeRail();
+    renderMessages();
+    bridge.requestSessions();
+  });
   bridge.vaultFolderChosen.connect((path) => {
     localStorage.setItem('obsidianExportPath', path);
     showToast(`Vault set to ${path}`);
@@ -2712,6 +3102,11 @@ function wireBridgeSignals() {
     } catch {}
   });
   syncCwd(bridge.cwd);
+  bootProjects();
+  renderProjectShell();
+  renderSessions(state.sessions);
+  renderKnowledgeRail();
+  setAdvancedDrawerOpen(false);
   syncModel(bridge.model);
   syncStatuslineModel(bridge.model);
   syncYolo(bridge.yolo);
