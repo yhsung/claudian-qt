@@ -7,14 +7,20 @@ export function recordsStorageKey(projectId) {
 export function loadRecords(projectId, storage = localStorage) {
   try {
     const raw = storage.getItem(recordsStorageKey(projectId));
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
 export function saveRecords(projectId, records, storage = localStorage) {
-  storage.setItem(recordsStorageKey(projectId), JSON.stringify(records));
+  try {
+    storage.setItem(recordsStorageKey(projectId), JSON.stringify(records));
+  } catch {
+    // Ignore storage quota / access failures.
+  }
 }
 
 export function buildSourceRef(sessionId, messageId, role, index) {
