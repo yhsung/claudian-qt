@@ -2371,7 +2371,9 @@ function clearDraft() {
 
 // ── Events ─────────────────────────────────────────────────────────────────
 function wireEvents() {
-  DOM.sidebarToggle.addEventListener('click', toggleSidebar);
+  if (DOM.sidebarToggle) {
+    DOM.sidebarToggle.addEventListener('click', toggleSidebar);
+  }
 
   DOM.textarea.addEventListener('input', () => {
     DOM.textarea.style.height = 'auto';
@@ -2574,21 +2576,29 @@ function wireEvents() {
     });
   }
 
-  DOM.permModeBtn.addEventListener('click', () => {
-    const idx = PERM_MODES.findIndex(m => m.value === state.permissionMode);
-    syncPermMode(PERM_MODES[(idx + 1) % PERM_MODES.length].value);
-  });
-  DOM.viewSelectorBtn.addEventListener('click', e => { e.stopPropagation(); toggleViewPopup(); });
-  document.addEventListener('click', () => DOM.viewPopup.classList.remove('open'));
-  DOM.viewPopup.addEventListener('click', e => e.stopPropagation());
-  VIEW_MODES.forEach(({ key }) => {
-    DOM.viewPopup.querySelector(`[data-view="${key}"]`)?.addEventListener('click', () => { setViewMode(key); DOM.viewPopup.classList.remove('open'); });
-  });
-  ['sm', 'md', 'lg'].forEach(k => {
-    DOM.viewPopup.querySelector(`[data-font="${k}"]`)?.addEventListener('click', () => setFontSize(k));
-  });
-  DOM.generateSummaryBtn.addEventListener('click', generateSummary);
-  DOM.exitSummaryBtn.addEventListener('click', () => setViewMode('normal'));
+  if (DOM.permModeBtn) {
+    DOM.permModeBtn.addEventListener('click', () => {
+      const idx = PERM_MODES.findIndex(m => m.value === state.permissionMode);
+      syncPermMode(PERM_MODES[(idx + 1) % PERM_MODES.length].value);
+    });
+  }
+  if (DOM.viewSelectorBtn && DOM.viewPopup) {
+    DOM.viewSelectorBtn.addEventListener('click', e => { e.stopPropagation(); toggleViewPopup(); });
+    document.addEventListener('click', () => DOM.viewPopup.classList.remove('open'));
+    DOM.viewPopup.addEventListener('click', e => e.stopPropagation());
+    VIEW_MODES.forEach(({ key }) => {
+      DOM.viewPopup.querySelector(`[data-view="${key}"]`)?.addEventListener('click', () => { setViewMode(key); DOM.viewPopup.classList.remove('open'); });
+    });
+    ['sm', 'md', 'lg'].forEach(k => {
+      DOM.viewPopup.querySelector(`[data-font="${k}"]`)?.addEventListener('click', () => setFontSize(k));
+    });
+  }
+  if (DOM.generateSummaryBtn) {
+    DOM.generateSummaryBtn.addEventListener('click', generateSummary);
+  }
+  if (DOM.exitSummaryBtn) {
+    DOM.exitSummaryBtn.addEventListener('click', () => setViewMode('normal'));
+  }
 
   // Search
   DOM.searchBtn.addEventListener('click', () => _search.active ? closeSearch() : openSearch());
