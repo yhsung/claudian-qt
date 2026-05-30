@@ -20,14 +20,20 @@ export function createDefaultProject(cwd) {
 export function loadProjects(storage = localStorage) {
   try {
     const raw = storage.getItem(PROJECTS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
 export function saveProjects(projects, storage = localStorage) {
-  storage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  try {
+    storage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  } catch {
+    // Ignore storage quota / access failures.
+  }
 }
 
 export function ensureProjectForCwd(projects, cwd) {
@@ -39,11 +45,19 @@ export function ensureProjectForCwd(projects, cwd) {
 }
 
 export function loadActiveProjectId(storage = localStorage) {
-  return storage.getItem(ACTIVE_PROJECT_KEY) || '';
+  try {
+    return storage.getItem(ACTIVE_PROJECT_KEY) || '';
+  } catch {
+    return '';
+  }
 }
 
 export function saveActiveProjectId(projectId, storage = localStorage) {
-  storage.setItem(ACTIVE_PROJECT_KEY, projectId);
+  try {
+    storage.setItem(ACTIVE_PROJECT_KEY, projectId);
+  } catch {
+    // Ignore storage quota / access failures.
+  }
 }
 
 export function buildProjectSummary(project, sessions, records) {
