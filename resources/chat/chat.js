@@ -349,6 +349,25 @@ function copyMsgContent(msg, btnEl) {
   setTimeout(() => { btnEl.innerHTML = original; }, 1500);
 }
 
+function makeRewindBtn(msg) {
+  const btn = document.createElement('button');
+  btn.className = 'msg-action-btn rewind-btn';
+  btn.title = 'Undo file changes made in this turn';
+  // Counterclockwise curved-arrow (undo) icon
+  btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.89"/></svg>';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!msg.userMessageId) {
+      showToast('No checkpoint ID found for this turn.');
+      return;
+    }
+    btn.disabled = true;
+    btn.classList.add('undoing');
+    bridge.rewindFiles(msg.userMessageId, false);
+  });
+  return btn;
+}
+
 function renderMessage(msg) {
   const outer = document.createElement('div');
   outer.dataset.msgId = msg.id;
@@ -370,6 +389,7 @@ function renderMessage(msg) {
       ts.textContent = relativeTime(msg.timestamp);
       outer.appendChild(ts);
     }
+    updateRewindBar(outer, msg);
   } else {
     outer.className = 'msg-assistant';
     if (msg.thinking) {
@@ -393,7 +413,6 @@ function renderMessage(msg) {
       ts.textContent = relativeTime(msg.timestamp);
       outer.appendChild(ts);
     }
-    updateRewindBar(outer, msg);
   }
   return outer;
 }
@@ -433,51 +452,14 @@ function renderMsgActions(outer, msg) {
 
 function updateRewindBar(msgEl, msg) {
   if (msg.role !== 'user') return;
-
-  // Find corresponding assistant message in state.messages
   const idx = state.messages.findIndex(m => m.id === msg.id);
   if (idx === -1 || idx + 1 >= state.messages.length) return;
   const nextMsg = state.messages[idx + 1];
   if (!nextMsg || nextMsg.role !== 'assistant') return;
-
-  const hasEdits = shouldShowRewind(nextMsg);
-  if (!hasEdits) return;
-
-  let bar = msgEl.querySelector('.turn-rewind-bar');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.className = 'turn-rewind-bar';
-    
-    const info = document.createElement('span');
-    info.className = 'turn-rewind-info';
-    info.innerHTML = '⏪ Files were changed in this turn';
-
-    const btn = document.createElement('button');
-    btn.className = 'turn-rewind-btn';
-    btn.textContent = 'Undo Changes';
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!msg.userMessageId) {
-        showToast('No turn ID found to rollback changes.');
-        return;
-      }
-      btn.disabled = true;
-      btn.textContent = 'Undoing...';
-      bridge.rewindFiles(msg.userMessageId, false);
-    });
-
-    bar.appendChild(info);
-    bar.appendChild(document.createTextNode(' · '));
-    bar.appendChild(btn);
-
-    msgEl.appendChild(bar);
-  } else {
-    const btn = bar.querySelector('.turn-rewind-btn');
-    if (btn && btn.textContent !== 'Undo Changes' && btn.textContent !== 'Undoing...') {
-      btn.disabled = false;
-      btn.textContent = 'Undo Changes';
-    }
-  }
+  if (!shouldShowRewind(nextMsg)) return;
+  const actionsGroup = msgEl.querySelector('.msg-actions');
+  if (!actionsGroup || actionsGroup.querySelector('.rewind-btn')) return;
+  actionsGroup.appendChild(makeRewindBtn(msg));
 }
 
 function renderMessages() {

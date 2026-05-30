@@ -38,6 +38,9 @@ const state = {
 let currentAbort: AbortController | null = null;
 let warmQueryPromise: Promise<WarmQuery | null> | null = null;
 let activeQuery: ReturnType<typeof query> | null = null;
+// Holds the query from the last completed turn so rewindFiles() can reach its in-memory checkpoints.
+// Cleared and closed when the next turn begins.
+let lastCompletedQuery: ReturnType<typeof query> | null = null;
 const inFlightSummaries = new Set<string>();
 
 // Pending permission promises keyed by requestId
@@ -224,9 +227,10 @@ function buildRunOptions(): Record<string, unknown> {
 }
 
 async function getQueryForRewind(): Promise<any> {
-  if (activeQuery) {
-    return activeQuery;
-  }
+  if (activeQuery) return activeQuery;
+  // Use the original completed query — it still holds the in-memory checkpoints
+  if (lastCompletedQuery) return lastCompletedQuery;
+  // Fallback: create a new resumed query (no in-memory checkpoints from prior turn)
   if (!state.sessionId) {
     throw new Error("No active session ID.");
   }
@@ -254,6 +258,12 @@ async function getQueryForRewind(): Promise<any> {
 
 async function handleSend(prompt: string, attachments: OutboundAttachment[], model?: string, yolo?: boolean): Promise<void> {
   if (currentAbort) currentAbort.abort();
+
+  // Release the previous turn's query so its subprocess can exit
+  if (lastCompletedQuery) {
+    try { await (lastCompletedQuery as any).close?.(); } catch {}
+    lastCompletedQuery = null;
+  }
 
   const abortController = new AbortController();
   currentAbort = abortController;
@@ -490,6 +500,7 @@ async function handleSend(prompt: string, attachments: OutboundAttachment[], mod
     }
   } finally {
     if (currentAbort === abortController) currentAbort = null;
+    lastCompletedQuery = activeQuery;  // preserve for rewind before nulling
     activeQuery = null;
     emit({ type: "turn_complete" });
   }
@@ -809,40 +820,39 @@ ${sessionText}</session>`;
 
     case "rewind_files": {
       try {
-        const isResumed = !activeQuery;
+        const useExisting = !!(activeQuery || lastCompletedQuery);
         const qObj = await getQueryForRewind();
         const qWithRewind = qObj as unknown as {
           rewindFiles: (userMessageId: string, opts?: { dryRun?: boolean }) => Promise<{
-            changedFiles?: string[];
-            restoredFiles?: string[];
-            failedFiles?: string[];
+            canRewind?: boolean;
+            error?: string;
+            filesChanged?: string[];
+            insertions?: number;
+            deletions?: number;
           }>;
           close?: () => Promise<void>;
           _resolvePrompt?: () => void;
         };
 
-        if (isResumed) {
+        if (!useExisting) {
+          // Fresh resumed query — need to wait for system/init before calling rewindFiles
           let resolveInit: (() => void) | undefined;
           const initPromise = new Promise<void>((resolve) => {
             resolveInit = resolve;
           });
 
-          // Start iterating in background to spawn transport and load checkpoints
           (async () => {
             try {
               for await (const message of qWithRewind as any) {
                 const m = message as Record<string, unknown>;
                 if (m.type === "system" && m.subtype === "init") {
-                  if (resolveInit) {
-                    resolveInit();
-                    resolveInit = undefined;
-                  }
+                  resolveInit?.();
+                  resolveInit = undefined;
                 }
               }
             } catch { /* ignore */ }
           })();
 
-          // Wait for system/init to resolve or a fallback timeout of 10s
           await Promise.race([
             initPromise,
             new Promise((r) => setTimeout(r, 10000)),
@@ -850,23 +860,22 @@ ${sessionText}</session>`;
         }
 
         const result = await qWithRewind.rewindFiles(cmd.userMessageId, { dryRun: cmd.dryRun ?? false });
+
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        const filesChanged = result.filesChanged ?? [];
         emit({
           type: "rewind_result",
-          changedFiles:  result.changedFiles  ?? [],
-          restoredFiles: result.restoredFiles ?? [],
-          failedFiles:   result.failedFiles   ?? [],
+          changedFiles:  filesChanged,
+          restoredFiles: filesChanged,
+          failedFiles:   [],
         });
 
-        // Only cleanup if we started a fresh query for the rewind
-        if (isResumed) {
-          if (qWithRewind._resolvePrompt) {
-            qWithRewind._resolvePrompt();
-          }
-          if (qWithRewind.close) {
-            try {
-              await qWithRewind.close();
-            } catch { /* ignore */ }
-          }
+        if (!useExisting) {
+          qWithRewind._resolvePrompt?.();
+          try { await qWithRewind.close?.(); } catch { /* ignore */ }
         }
       } catch (err) {
         emit({ type: "error", msg: `Rewind failed: ${err instanceof Error ? err.message : String(err)}` });
