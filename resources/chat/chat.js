@@ -109,6 +109,13 @@ const SECTION_RECORD_TYPES = {
   people: ['person', 'people'],
 };
 const PROMOTABLE_RECORD_TYPES = ['decision', 'artifact', 'issue', 'next step'];
+const runtimeHooks = {
+  refreshActiveProjectRecords: () => refreshActiveProjectRecords(),
+  renderProjectShell: () => renderProjectShell(),
+  renderKnowledgeRail: () => renderKnowledgeRail(),
+  renderMessages: () => renderMessages(),
+  saveActiveProjectId: (projectId) => saveActiveProjectId(projectId),
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function mkId() {
@@ -441,15 +448,20 @@ function openRetrievalPreview(result) {
   renderKnowledgeRail();
 }
 
+function buildRetrievalLink(result) {
+  const params = new URLSearchParams();
+  if (result.projectCwd) params.set('project', result.projectCwd);
+  if (result.projectId) params.set('projectId', result.projectId);
+  params.set('kind', result.kind || 'record');
+  if (result.id) params.set('resultId', result.id);
+  if (result.sessionId) params.set('sessionId', result.sessionId);
+  if (result.messageId) params.set('messageId', result.messageId);
+  if (Number.isInteger(result.source?.index)) params.set('sourceIndex', String(result.source.index));
+  return `claudian://retrieval?${params.toString()}`;
+}
+
 function copyRetrievalLink(result) {
-  const payload = [
-    result.projectName || 'Workspace',
-    result.kind === 'record' ? result.type : 'session',
-    result.sessionId || result.id,
-    result.messageId || '',
-    result.title || '',
-  ].filter(Boolean).join(' :: ');
-  copyToClipboard(payload);
+  copyToClipboard(buildRetrievalLink(result));
   showToast('Copied!');
 }
 
@@ -457,13 +469,13 @@ function finishOpenProjectResult(result) {
   const targetProject = projectForCwd(result.projectCwd) || currentProject();
   if (targetProject) {
     state.activeProjectId = targetProject.id;
-    saveActiveProjectId(targetProject.id);
+    runtimeHooks.saveActiveProjectId(targetProject.id);
   }
-  refreshActiveProjectRecords();
+  runtimeHooks.refreshActiveProjectRecords();
   state.activeSection = resultSectionForType(result);
-  renderProjectShell();
-  renderKnowledgeRail();
-  renderMessages();
+  runtimeHooks.renderProjectShell();
+  runtimeHooks.renderKnowledgeRail();
+  runtimeHooks.renderMessages();
 }
 
 function finishOpenSourceResult(result) {
@@ -474,18 +486,20 @@ function finishOpenSourceResult(result) {
   const targetProject = projectForCwd(result.projectCwd) || currentProject();
   if (targetProject) {
     state.activeProjectId = targetProject.id;
-    saveActiveProjectId(targetProject.id);
+    runtimeHooks.saveActiveProjectId(targetProject.id);
   }
-  refreshActiveProjectRecords();
+  runtimeHooks.refreshActiveProjectRecords();
   state.activeSection = 'worklog';
   state.pendingSearch = {
     sessionId: result.sessionId,
+    messageId: result.messageId || result.source?.messageId || '',
+    sourceIndex: Number.isInteger(result.source?.index) ? result.source.index : null,
     excerpt: String(result.snippet || result.title || '').slice(0, 100),
   };
   state.activeSessionId = result.sessionId;
-  renderProjectShell();
-  renderKnowledgeRail();
-  renderMessages();
+  runtimeHooks.renderProjectShell();
+  runtimeHooks.renderKnowledgeRail();
+  runtimeHooks.renderMessages();
   bridge.loadSession(result.sessionId);
 }
 
@@ -3346,19 +3360,27 @@ function wireBridgeSignals() {
       loadSessionHistory(JSON.parse(json));
       restoreDraft();
       if (state.pendingSearch?.sessionId === state.activeSessionId) {
-        const { excerpt } = state.pendingSearch;
+        const { excerpt, messageId, sourceIndex } = state.pendingSearch;
         state.pendingSearch = null;
         requestAnimationFrame(() => {
           const msgEls = DOM.messages.querySelectorAll('[data-msg-id]');
-          for (const el of msgEls) {
-            const cd = el.querySelector('.msg-content, .msg-bubble');
-            if (cd && cd.textContent.includes(excerpt)) {
-              el.classList.add('search-highlight');
-              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              setTimeout(() => el.classList.remove('search-highlight'), 3000);
-              break;
-            }
+          let target = null;
+          if (messageId) {
+            target = Array.from(msgEls).find(el => el.dataset.msgId === messageId) || null;
           }
+          if (!target && Number.isInteger(sourceIndex)) {
+            target = msgEls[sourceIndex] || null;
+          }
+          if (!target && excerpt) {
+            target = Array.from(msgEls).find(el => {
+              const cd = el.querySelector('.msg-content, .msg-bubble');
+              return !!(cd && cd.textContent.includes(excerpt));
+            }) || null;
+          }
+          if (!target) return;
+          target.classList.add('search-highlight');
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => target.classList.remove('search-highlight'), 3000);
         });
       }
       if (state.pendingExportCopy?.sessionId === state.activeSessionId) {
@@ -3487,7 +3509,7 @@ function wireBridgeSignals() {
 }
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
-(function bootstrap() {
+function bootstrap() {
   if (window.marked) window.marked.use({ gfm: true, breaks: true });
   initDOM();
   initSidebarState();
@@ -3500,4 +3522,27 @@ function wireBridgeSignals() {
     syncFastMode('off');
     wireBridgeSignals();
   });
-})();
+}
+
+if (!globalThis.__CHAT_DISABLE_BOOTSTRAP__) {
+  bootstrap();
+}
+
+export const __testHooks = {
+  state,
+  setDom(nextDom) {
+    DOM = nextDom;
+  },
+  setBridge(nextBridge) {
+    bridge = nextBridge;
+  },
+  setRuntimeHooks(overrides) {
+    Object.assign(runtimeHooks, overrides || {});
+  },
+  syncCwd,
+  renderExploreResults,
+  renderKnowledgeRail,
+  flushPendingResultNavigation,
+  openRetrievalPreview,
+  buildRetrievalLink,
+};
