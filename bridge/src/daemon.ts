@@ -5,7 +5,7 @@ import { query, startup, AbortError, forkSession } from "@anthropic-ai/claude-ag
 import type { CanUseTool, HookCallback, HookCallbackMatcher, HookEvent, PermissionResult, WarmQuery } from "@anthropic-ai/claude-agent-sdk";
 import { appendManifestTurn, attachmentRoot, finalizeAttachmentsForTurn, loadAttachmentManifest } from "./attachment-store.js";
 import { buildUserMessage } from "./message-input.js";
-import { archiveSession, deleteSession, exportSession, getExportedSiblingStems, listSessions, loadSessionHistory, renameSession, searchSessions, tagSession, truncateForPrompt, updateSessionMeta } from "./session-history.js";
+import { archiveSession, deleteSession, exportSession, getExportedSiblingStems, listSessions, loadSessionHistory, renameSession, searchSessions, searchSessionsAcrossProjects, tagSession, truncateForPrompt, updateSessionMeta } from "./session-history.js";
 import { join, dirname } from "path";
 import type { DaemonCommand, DaemonEvent, OutboundAttachment, AskUserQuestionItem } from "./protocol.js";
 
@@ -696,6 +696,12 @@ ${sessionText}</session>`;
 
     case "search_sessions": {
       const results = await searchSessions(state.cwd, cmd.query);
+      emit({ type: "search_results", requestId: cmd.requestId, json: JSON.stringify(results) });
+      break;
+    }
+
+    case "search_sessions_across_projects": {
+      const results = await searchSessionsAcrossProjects(cmd.cwds, cmd.query);
       emit({ type: "search_results", requestId: cmd.requestId, json: JSON.stringify(results) });
       break;
     }

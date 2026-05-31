@@ -9,6 +9,7 @@ import {
   listSessions,
   renameSession,
   searchSessions,
+  searchSessionsAcrossProjects,
   tagSession,
   updateSessionMeta,
 } from "../src/session-history.js";
@@ -208,6 +209,51 @@ describe("searchSessions", () => {
     await writeFile(join(dir, "orphan.name"), JSON.stringify({ name: "Mentions sapphire" }));
 
     expect(await searchSessions(cwd, "sapphire", home)).toEqual([]);
+  });
+});
+
+describe("searchSessionsAcrossProjects", () => {
+  it("returns empty results for an empty cwd list", async () => {
+    const home = await makeHome("claudian-c2-search-multi-empty-");
+
+    expect(await searchSessionsAcrossProjects([], "sapphire", home)).toEqual([]);
+  });
+
+  it("returns hits from multiple project cwd values", async () => {
+    const home = await makeHome("claudian-c2-search-multi-hit-");
+    const alphaCwd = "/search/multi/alpha";
+    const betaCwd = "/search/multi/beta";
+
+    await writeJsonlSession(home, alphaCwd, "alpha-session", [
+      JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text: "Use the sapphire cache key" }] } }),
+    ]);
+    await writeJsonlSession(home, betaCwd, "beta-session", [
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "sapphire appears twice sapphire" }] } }),
+    ]);
+
+    const results = await searchSessionsAcrossProjects([alphaCwd, betaCwd], "sapphire", home);
+
+    expect(results).toHaveLength(2);
+    expect(results.map((result) => result.cwd).sort()).toEqual([alphaCwd, betaCwd].sort());
+  });
+
+  it("keeps hit-count ordering across projects", async () => {
+    const home = await makeHome("claudian-c2-search-multi-order-");
+    const alphaCwd = "/search/multi/order-alpha";
+    const betaCwd = "/search/multi/order-beta";
+
+    await writeJsonlSession(home, alphaCwd, "alpha-session", [
+      JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text: "needle once" }] } }),
+    ]);
+    await writeJsonlSession(home, betaCwd, "beta-session", [
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "needle first hit" }] } }),
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "needle second hit" }] } }),
+    ]);
+
+    const results = await searchSessionsAcrossProjects([alphaCwd, betaCwd], "needle", home);
+
+    expect(results[0]).toMatchObject({ sessionId: "beta-session", cwd: betaCwd });
+    expect(results[0].hitCount).toBeGreaterThan(results[1].hitCount);
   });
 });
 
