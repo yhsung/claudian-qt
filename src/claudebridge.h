@@ -56,6 +56,7 @@ public slots:
     Q_INVOKABLE void tagSession(const QString &sessionId, const QString &tagsJson);
     Q_INVOKABLE void archiveSession(const QString &sessionId, bool archived);
     Q_INVOKABLE void searchSessions(const QString &query, const QString &requestId);
+    Q_INVOKABLE void searchSessionsAcrossProjects(const QString &query, const QString &cwdsJson, const QString &requestId);
     void setPermissionMode(const QString &mode);
     void copyToClipboard(const QString &text);
     void requestModels();

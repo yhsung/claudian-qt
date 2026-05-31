@@ -12,6 +12,7 @@
     <file alias="chat-format.js">chat/chat-format.js</file>
     <file alias="chat-projects.js">chat/chat-projects.js</file>
     <file alias="chat-records.js">chat/chat-records.js</file>
+    <file alias="chat-retrieval.js">chat/chat-retrieval.js</file>
     <file alias="chat-rewind.js">chat/chat-rewind.js</file>
   </qresource>
 </RCC>

@@ -26,7 +26,7 @@
       </div>
     </div>
     <div id="workspace-rail-search">
-      <input id="search-input" class="sidebar-search-input" type="search" placeholder="Search sessions…" autocomplete="off">
+      <input id="search-input" class="sidebar-search-input" type="search" placeholder="Search all projects…" autocomplete="off">
       <div id="search-results" class="search-results-panel" style="display:none"></div>
     </div>
     <nav id="project-sections">
@@ -36,6 +36,7 @@
       <button class="project-section-btn" data-section="artifacts">Artifacts</button>
       <button class="project-section-btn" data-section="questions">Open Questions</button>
       <button class="project-section-btn" data-section="people">People</button>
+      <button class="project-section-btn" data-section="explore">Explore</button>
     </nav>
     <div id="project-summary-cards">
       <article class="project-summary-card">
@@ -62,6 +63,15 @@
           <span id="project-name">Workspace</span>
           <span id="project-subtitle">Inbox / Capture</span>
         </div>
+        <label id="global-search-bar">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input id="global-search-input" type="search" placeholder="Search across projects…" autocomplete="off">
+          <button id="global-search-clear" type="button" title="Clear search" hidden>×</button>
+        </label>
         <div id="workspace-actions">
           <button id="sidebar-toggle" title="Toggle workspace rail">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"

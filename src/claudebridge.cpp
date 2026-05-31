@@ -283,6 +283,15 @@ void ClaudeBridge::searchSessions(const QString &query, const QString &requestId
     });
 }
 
+void ClaudeBridge::searchSessionsAcrossProjects(const QString &query, const QString &cwdsJson, const QString &requestId) {
+    m_daemon->sendCommand(QJsonObject{
+        {"type",      "search_sessions_across_projects"},
+        {"query",     query},
+        {"cwds",      QJsonDocument::fromJson(cwdsJson.toUtf8()).array()},
+        {"requestId", requestId}
+    });
+}
+
 void ClaudeBridge::setPermissionMode(const QString &mode) {
     m_daemon->sendCommand(QJsonObject{{"type", "set_permission_mode"}, {"mode", mode}});
 }

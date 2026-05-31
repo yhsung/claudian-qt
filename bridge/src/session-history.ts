@@ -34,6 +34,11 @@ interface SearchResult {
   excerpt: string;
 }
 
+export interface CrossProjectSearchResult extends SearchResult {
+  cwd: string;
+  timestamp?: string;
+}
+
 // Legacy alias kept for backward compatibility within this file
 type TurnEntry = HistoryTurn;
 
@@ -549,6 +554,32 @@ export async function searchSessions(
   }
 
   return results.sort((a, b) => b.hitCount - a.hitCount);
+}
+
+export async function searchSessionsAcrossProjects(
+  cwds: string[],
+  query: string,
+  home = os.homedir(),
+): Promise<CrossProjectSearchResult[]> {
+  const uniqueCwds = [...new Set((cwds || []).filter(Boolean))];
+  if (!query.trim() || !uniqueCwds.length) return [];
+
+  const nested = await Promise.all(
+    uniqueCwds.map(async (cwd) => {
+      const hits = await searchSessions(cwd, query, home);
+      const sessions = await listSessions(cwd, home);
+      const timestamps = new Map(sessions.map((session) => [session.id, session.timestamp]));
+      return hits.map((hit) => ({
+        ...hit,
+        cwd,
+        timestamp: timestamps.get(hit.sessionId) || "",
+      }));
+    }),
+  );
+
+  return nested
+    .flat()
+    .sort((a, b) => b.hitCount - a.hitCount || a.sessionId.localeCompare(b.sessionId));
 }
 
 export async function tagSession(cwd: string, sessionId: string, tags: string[], home = os.homedir()): Promise<void> {

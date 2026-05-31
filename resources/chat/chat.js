@@ -20,6 +20,13 @@ import {
   saveRecords,
   transitionRecordState,
 } from './chat-records.js';
+import {
+  buildResultPreview,
+  collectRecordResults,
+  collectSessionResults,
+  groupResults,
+  rankResults,
+} from './chat-retrieval.js';
 import { computeUserScrolled, shouldAutoScroll } from './chat-scroll.js';
 import { navigateUp, navigateDown } from './chat-nav.js';
 import { buildMsgCopyText, buildToolGroupCopyText } from './chat-copy.js';
@@ -72,6 +79,15 @@ const state = {
   activePreviewBlockIdx: -1,
   mermaidLoaded: false,
   _userClosedPreviewMsgId: null,
+  retrievalQuery: '',
+  retrievalRecordResults: [],
+  retrievalSessionResults: [],
+  retrievalResults: [],
+  retrievalGroups: [],
+  retrievalPreview: null,
+  retrievalOpen: false,
+  retrievalLoading: false,
+  pendingResultNavigation: null,
 };
 
 let bridge = null;
@@ -84,6 +100,7 @@ const SECTION_LABELS = {
   artifacts: 'Artifacts',
   questions: 'Open Questions',
   people: 'People',
+  explore: 'Explore',
 };
 const SECTION_RECORD_TYPES = {
   decisions: ['decision'],
@@ -238,6 +255,8 @@ function initDOM() {
     archivedToggle:     document.getElementById('archived-toggle'),
     projectName:        document.getElementById('project-name'),
     projectSubtitle:    document.getElementById('project-subtitle'),
+    globalSearchInput:  document.getElementById('global-search-input'),
+    globalSearchClear:  document.getElementById('global-search-clear'),
     exportBtn:          document.getElementById('export-btn'),
     viewSelectorBtn:    document.getElementById('view-selector-btn'),
     viewSelectorLabel:  document.getElementById('view-selector-label'),
@@ -271,6 +290,7 @@ function initDOM() {
     autoExportToggle:     document.getElementById('auto-export-toggle'),
     advancedToggleBtn:    document.getElementById('advanced-toggle-btn') || document.getElementById('run-opts-toggle'),
     advancedDrawer:       document.getElementById('advanced-drawer'),
+    statusline:           document.getElementById('statusline'),
     knowledgeRailCount:   document.getElementById('knowledge-rail-count'),
     knowledgeSuggestions: document.getElementById('knowledge-suggestions'),
     knowledgeRecords:     document.getElementById('knowledge-records'),
@@ -322,6 +342,181 @@ function formatDisplayPath(path) {
 
 function currentProject() {
   return state.projects.find(project => project.id === state.activeProjectId) || state.projects[0] || null;
+}
+
+function projectForCwd(cwd) {
+  return state.projects.find(project => (project.cwd || '') === (cwd || '')) || null;
+}
+
+function refreshActiveProjectRecords() {
+  state.records = state.activeProjectId ? loadRecords(state.activeProjectId) : [];
+}
+
+function syncRetrievalInputs(query) {
+  const value = String(query || '');
+  if (DOM.globalSearchInput && DOM.globalSearchInput.value !== value) {
+    DOM.globalSearchInput.value = value;
+  }
+  if (DOM.searchInput && DOM.searchInput.value !== value) {
+    DOM.searchInput.value = value;
+  }
+  if (DOM.globalSearchClear) {
+    DOM.globalSearchClear.hidden = !value;
+  }
+}
+
+function syncWorkspaceMode() {
+  const isExplore = state.activeSection === 'explore';
+  if (DOM.inputArea) DOM.inputArea.style.display = isExplore ? 'none' : '';
+  if (DOM.attachmentTray) DOM.attachmentTray.style.display = isExplore ? 'none' : '';
+  if (DOM.typingIndicator) DOM.typingIndicator.style.display = isExplore ? 'none' : '';
+  if (DOM.statusline) DOM.statusline.style.display = isExplore ? 'none' : '';
+  if (DOM.scrollToBottomBtn) DOM.scrollToBottomBtn.style.display = isExplore ? 'none' : '';
+  if (isExplore && DOM.searchBar) DOM.searchBar.classList.remove('visible');
+}
+
+function resultSectionForType(result) {
+  if (!result || result.kind === 'session') return 'worklog';
+  if (result.type === 'decision') return 'decisions';
+  if (result.type === 'artifact') return 'artifacts';
+  if (['question', 'issue', 'next step'].includes(result.type)) return 'questions';
+  if (['person', 'people', 'owner'].includes(result.type)) return 'people';
+  return 'worklog';
+}
+
+function applyRetrievalResults() {
+  state.retrievalResults = rankResults([
+    ...state.retrievalRecordResults,
+    ...state.retrievalSessionResults,
+  ]);
+  state.retrievalGroups = groupResults(state.retrievalResults);
+}
+
+function requestGlobalRetrieval(query, { activateExplore = true } = {}) {
+  const normalizedQuery = String(query || '').trim();
+  state.retrievalQuery = normalizedQuery;
+  state.retrievalPreview = null;
+  state.retrievalOpen = !!normalizedQuery;
+  syncRetrievalInputs(normalizedQuery);
+  clearSearchResults();
+
+  state.retrievalRecordResults = normalizedQuery
+    ? collectRecordResults(state.projects, normalizedQuery)
+    : [];
+  state.retrievalSessionResults = [];
+  state.retrievalLoading = !!normalizedQuery;
+  applyRetrievalResults();
+
+  if (activateExplore && normalizedQuery) {
+    state.activeSection = 'explore';
+  }
+
+  renderProjectShell();
+  renderKnowledgeRail();
+  renderMessages();
+
+  if (!normalizedQuery || !bridge) {
+    state.retrievalLoading = false;
+    renderKnowledgeRail();
+    renderMessages();
+    return;
+  }
+
+  const requestId = Date.now();
+  state.latestSearchId = requestId;
+  const cwds = state.projects.map(project => project.cwd).filter(Boolean);
+
+  if (typeof bridge.searchSessionsAcrossProjects === 'function') {
+    bridge.searchSessionsAcrossProjects(normalizedQuery, JSON.stringify(cwds), String(requestId));
+  } else {
+    bridge.searchSessions(normalizedQuery, String(requestId));
+  }
+}
+
+function openRetrievalPreview(result) {
+  state.retrievalPreview = {
+    result,
+    details: buildResultPreview(result),
+  };
+  renderKnowledgeRail();
+}
+
+function copyRetrievalLink(result) {
+  const payload = [
+    result.projectName || 'Workspace',
+    result.kind === 'record' ? result.type : 'session',
+    result.sessionId || result.id,
+    result.messageId || '',
+    result.title || '',
+  ].filter(Boolean).join(' :: ');
+  copyToClipboard(payload);
+  showToast('Copied!');
+}
+
+function finishOpenProjectResult(result) {
+  const targetProject = projectForCwd(result.projectCwd) || currentProject();
+  if (targetProject) {
+    state.activeProjectId = targetProject.id;
+    saveActiveProjectId(targetProject.id);
+  }
+  refreshActiveProjectRecords();
+  state.activeSection = resultSectionForType(result);
+  renderProjectShell();
+  renderKnowledgeRail();
+  renderMessages();
+}
+
+function finishOpenSourceResult(result) {
+  if (!result.sessionId) {
+    showToast('No source session available');
+    return;
+  }
+  const targetProject = projectForCwd(result.projectCwd) || currentProject();
+  if (targetProject) {
+    state.activeProjectId = targetProject.id;
+    saveActiveProjectId(targetProject.id);
+  }
+  refreshActiveProjectRecords();
+  state.activeSection = 'worklog';
+  state.pendingSearch = {
+    sessionId: result.sessionId,
+    excerpt: String(result.snippet || result.title || '').slice(0, 100),
+  };
+  state.activeSessionId = result.sessionId;
+  renderProjectShell();
+  renderKnowledgeRail();
+  renderMessages();
+  bridge.loadSession(result.sessionId);
+}
+
+function openProjectForResult(result) {
+  if (result.projectCwd && result.projectCwd !== state.cwd && bridge) {
+    state.pendingResultNavigation = { mode: 'project', result };
+    bridge.setCwd(result.projectCwd);
+    return;
+  }
+  finishOpenProjectResult(result);
+}
+
+function openSourceForResult(result) {
+  if (result.projectCwd && result.projectCwd !== state.cwd && bridge) {
+    state.pendingResultNavigation = { mode: 'source', result };
+    bridge.setCwd(result.projectCwd);
+    return;
+  }
+  finishOpenSourceResult(result);
+}
+
+function flushPendingResultNavigation() {
+  const pending = state.pendingResultNavigation;
+  if (!pending) return;
+  if ((pending.result?.projectCwd || '') !== (state.cwd || '')) return;
+  state.pendingResultNavigation = null;
+  if (pending.mode === 'project') {
+    finishOpenProjectResult(pending.result);
+  } else {
+    finishOpenSourceResult(pending.result);
+  }
 }
 
 function setAdvancedDrawerOpen(open) {
@@ -399,7 +594,11 @@ function renderProjectShell() {
       <article class="project-summary-card">
         <span class="project-summary-label">Section</span>
         <strong>${subtitle}</strong>
-        <p>${state.activeSection === 'worklog' ? 'Review current session evidence and promoted notes.' : 'Project-scoped sessions stay grouped by workspace.'}</p>
+        <p>${state.activeSection === 'worklog'
+          ? 'Review current session evidence and promoted notes.'
+          : state.activeSection === 'explore'
+            ? 'Search across projects, inspect trust signals, then jump into the right context.'
+            : 'Project-scoped sessions stay grouped by workspace.'}</p>
       </article>
     `;
   }
@@ -475,8 +674,137 @@ function buildPromoteActions(msg, index) {
   return wrap;
 }
 
+function renderExploreResults() {
+  DOM.messages.innerHTML = '';
+
+  const shell = document.createElement('div');
+  shell.className = 'explore-results';
+
+  const header = document.createElement('div');
+  header.className = 'explore-results-header';
+  header.innerHTML = `
+    <div>
+      <div class="explore-results-label">Cross-project retrieval</div>
+      <h2>${escHtml(state.retrievalQuery || 'Explore')}</h2>
+    </div>
+    <div class="explore-results-count">${state.retrievalResults.length} result${state.retrievalResults.length === 1 ? '' : 's'}</div>
+  `;
+  shell.appendChild(header);
+
+  if (!state.retrievalQuery) {
+    const empty = document.createElement('div');
+    empty.className = 'explore-empty';
+    empty.textContent = 'Search across projects to find trusted records first, then related raw session hits.';
+    shell.appendChild(empty);
+    DOM.messages.appendChild(shell);
+    return;
+  }
+
+  if (state.retrievalLoading && !state.retrievalResults.length) {
+    const loading = document.createElement('div');
+    loading.className = 'explore-empty';
+    loading.textContent = 'Searching projects and sessions…';
+    shell.appendChild(loading);
+    DOM.messages.appendChild(shell);
+    return;
+  }
+
+  if (!state.retrievalGroups.length) {
+    const empty = document.createElement('div');
+    empty.className = 'explore-empty';
+    empty.textContent = 'No cross-project matches yet. Try a broader term or promote more durable records.';
+    shell.appendChild(empty);
+    DOM.messages.appendChild(shell);
+    return;
+  }
+
+  state.retrievalGroups.forEach(group => {
+    const section = document.createElement('section');
+    section.className = 'explore-group';
+    section.innerHTML = `<div class="explore-group-title">${escHtml(group.label)}</div>`;
+
+    group.items.forEach(result => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'explore-result-card';
+      button.addEventListener('click', () => openRetrievalPreview(result));
+      button.innerHTML = `
+        <div class="explore-result-top">
+          <span class="explore-result-state">${escHtml(formatRecordLabel(result.kind === 'session' ? 'raw session' : result.state || 'raw'))}</span>
+          <span class="explore-result-project">${escHtml(result.projectName || 'Workspace')}</span>
+        </div>
+        <div class="explore-result-title">${escHtml(result.title || '')}</div>
+        <div class="explore-result-meta">${escHtml(result.kind === 'session' ? 'Session hit' : formatRecordLabel(result.type || 'record'))}${result.timestamp ? ` · ${escHtml(relativeTime(result.timestamp))}` : ''}</div>
+        <div class="explore-result-snippet">${escHtml(result.snippet || '')}</div>
+      `;
+      section.appendChild(button);
+    });
+
+    shell.appendChild(section);
+  });
+
+  DOM.messages.appendChild(shell);
+}
+
 function renderKnowledgeRail() {
   if (!DOM.knowledgeRailCount || !DOM.knowledgeSuggestions || !DOM.knowledgeRecords) return;
+
+  if (state.activeSection === 'explore') {
+    DOM.knowledgeRailCount.textContent = `${state.retrievalResults.length} result${state.retrievalResults.length === 1 ? '' : 's'}`;
+    DOM.knowledgeSuggestions.innerHTML = `
+      <div class="knowledge-tip">
+        ${state.retrievalLoading ? 'Searching records and raw session history across projects.' : 'Inspect the preview before switching project or transcript context.'}
+      </div>
+      <div class="knowledge-tip">
+        Ranking: canonical, reviewed, other records, then raw session hits.
+      </div>
+    `;
+    DOM.knowledgeRecords.innerHTML = '';
+
+    if (!state.retrievalPreview) {
+      const empty = document.createElement('div');
+      empty.className = 'explore-empty';
+      empty.textContent = 'Select a result to inspect its trust state, provenance, and navigation options.';
+      DOM.knowledgeRecords.appendChild(empty);
+      return;
+    }
+
+    const { result, details } = state.retrievalPreview;
+    const card = document.createElement('article');
+    card.className = 'explore-preview-card';
+    card.innerHTML = `
+      <div class="explore-preview-label">${escHtml(details.kindLabel)}</div>
+      <div class="explore-preview-title">${escHtml(details.title)}</div>
+      <div class="explore-preview-meta">${escHtml(details.stateLabel)} · ${escHtml(details.projectLabel)}</div>
+      ${details.timestampLabel ? `<div class="explore-preview-submeta">${escHtml(relativeTime(details.timestampLabel))}</div>` : ''}
+      ${details.sourceLabel ? `<div class="explore-preview-submeta">${escHtml(details.sourceLabel)}</div>` : ''}
+      <div class="explore-preview-snippet">${escHtml(details.snippet)}</div>
+    `;
+
+    const actions = document.createElement('div');
+    actions.className = 'explore-preview-actions';
+
+    const openSourceBtn = document.createElement('button');
+    openSourceBtn.type = 'button';
+    openSourceBtn.textContent = 'Open source';
+    openSourceBtn.disabled = !result.sessionId;
+    openSourceBtn.addEventListener('click', () => openSourceForResult(result));
+
+    const openProjectBtn = document.createElement('button');
+    openProjectBtn.type = 'button';
+    openProjectBtn.textContent = 'Open project';
+    openProjectBtn.addEventListener('click', () => openProjectForResult(result));
+
+    const copyLinkBtn = document.createElement('button');
+    copyLinkBtn.type = 'button';
+    copyLinkBtn.textContent = 'Copy link';
+    copyLinkBtn.addEventListener('click', () => copyRetrievalLink(result));
+
+    actions.append(openSourceBtn, openProjectBtn, copyLinkBtn);
+    card.appendChild(actions);
+    DOM.knowledgeRecords.appendChild(card);
+    return;
+  }
 
   const sectionTypes = SECTION_RECORD_TYPES[state.activeSection];
   const visibleRecords = sectionTypes
@@ -769,10 +1097,15 @@ function updateRewindBar(msgEl, msg) {
 }
 
 function renderMessages() {
-  if (state.viewMode === 'summary') { showSummaryView(); return; }
+  if (state.viewMode === 'summary' && state.activeSection !== 'explore') { showSummaryView(); return; }
   hideSummaryView();
   clearFocusedMsg();
+  syncWorkspaceMode();
   DOM.messages.innerHTML = '';
+  if (state.activeSection === 'explore') {
+    renderExploreResults();
+    return;
+  }
   if (!state.messages.length) {
     const empty = document.createElement('div');
     empty.className = 'session-empty';
@@ -2477,6 +2810,36 @@ function wireEvents() {
       });
     });
   }
+  const scheduleGlobalRetrieval = (query, activateExplore = true) => {
+    clearTimeout(_searchDebounce);
+    syncRetrievalInputs(query);
+    _searchDebounce = setTimeout(() => {
+      requestGlobalRetrieval(query, { activateExplore });
+    }, 220);
+  };
+  if (DOM.globalSearchInput) {
+    DOM.globalSearchInput.addEventListener('input', () => {
+      scheduleGlobalRetrieval(DOM.globalSearchInput.value, true);
+    });
+    DOM.globalSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        requestGlobalRetrieval(DOM.globalSearchInput.value, { activateExplore: true });
+      }
+      if (e.key === 'Escape' && !DOM.globalSearchInput.value) {
+        state.activeSection = 'inbox';
+        renderProjectShell();
+        renderKnowledgeRail();
+        renderMessages();
+      }
+    });
+  }
+  if (DOM.globalSearchClear) {
+    DOM.globalSearchClear.addEventListener('click', () => {
+      requestGlobalRetrieval('', { activateExplore: state.activeSection === 'explore' });
+      if (DOM.globalSearchInput) DOM.globalSearchInput.focus();
+    });
+  }
   if (DOM.applyRunOptsBtn) {
     DOM.applyRunOptsBtn.addEventListener('click', () => {
       if (!bridge) return;
@@ -2614,14 +2977,13 @@ function wireEvents() {
   DOM.searchClose.addEventListener('click', closeSearch);
   if (DOM.searchInput) {
     DOM.searchInput.addEventListener('input', () => {
-      clearTimeout(_searchDebounce);
-      const q = DOM.searchInput.value.trim();
-      if (!q) { clearSearchResults(); return; }
-      _searchDebounce = setTimeout(() => {
-        const id = Date.now();
-        state.latestSearchId = id;
-        bridge.searchSessions(q, String(id));
-      }, 300);
+      scheduleGlobalRetrieval(DOM.searchInput.value, true);
+    });
+    DOM.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        requestGlobalRetrieval(DOM.searchInput.value, { activateExplore: true });
+      }
     });
   }
   if (DOM.archivedToggle) {
@@ -2946,7 +3308,14 @@ function wireBridgeSignals() {
     if (Number(requestId) !== state.latestSearchId) return;
     try {
       const results = JSON.parse(json);
-      renderSearchResults(results);
+      const normalized = Array.isArray(results)
+        ? results.map(result => result.cwd ? result : { ...result, cwd: currentProject()?.cwd || state.cwd, timestamp: result.timestamp || '' })
+        : [];
+      state.retrievalSessionResults = collectSessionResults(state.projects, state.sessions, normalized);
+      state.retrievalLoading = false;
+      applyRetrievalResults();
+      renderKnowledgeRail();
+      renderMessages();
     } catch {}
   });
   bridge.errorOccurred.connect(msg => {
@@ -2969,6 +3338,7 @@ function wireBridgeSignals() {
       renderSessions(JSON.parse(json));
       renderProjectShell();
       renderKnowledgeRail();
+      flushPendingResultNavigation();
     } catch {}
   });
   bridge.sessionHistoryLoaded.connect(json => {

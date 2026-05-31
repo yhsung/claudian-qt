@@ -90,6 +90,7 @@ export type DaemonCommand =
   | { type: "tag_session"; sessionId: string; tags: string[] }
   | { type: "archive_session"; sessionId: string; archived: boolean }
   | { type: "search_sessions"; query: string; requestId: string }
+  | { type: "search_sessions_across_projects"; query: string; cwds: string[]; requestId: string }
   | { type: "set_permission_mode"; mode: string }
   | { type: "set_thinking"; thinkingType: "disabled" | "adaptive" | "enabled"; budgetTokens?: number }
   | { type: "set_run_options"; maxTurns?: number; maxBudgetUsd?: number; effort?: "low" | "medium" | "high" | "xhigh" | "max"; systemPrompt?: string }
